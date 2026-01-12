@@ -214,14 +214,14 @@ function worldToScreen(x, y) {
     const isoX = (x - y) * (TILE_WIDTH / 2);
     const isoY = (x + y) * (TILE_HEIGHT / 2);
     return {
-        x: isoX - game.camera.x + canvas.width / 2,
-        y: isoY - game.camera.y + canvas.height / 2
+        x: isoX - game.camera.x + canvas.offsetWidth / 2,
+        y: isoY - game.camera.y + canvas.offsetHeight / 2
     };
 }
 
 function screenToWorld(sx, sy) {
-    const x = sx + game.camera.x - canvas.width / 2;
-    const y = sy + game.camera.y - canvas.height / 2;
+    const x = sx + game.camera.x - canvas.offsetWidth / 2;
+    const y = sy + game.camera.y - canvas.offsetHeight / 2;
     const worldX = (x / (TILE_WIDTH / 2) + y / (TILE_HEIGHT / 2)) / 2;
     const worldY = (y / (TILE_HEIGHT / 2) - x / (TILE_WIDTH / 2)) / 2;
     return { x: worldX, y: worldY };
@@ -238,11 +238,11 @@ function tileToWorld(tx, ty) {
 function render() {
     // Clear
     ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
     // Determine visible tiles
     const startTile = screenToWorld(0, 0);
-    const endTile = screenToWorld(canvas.width, canvas.height);
+    const endTile = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
 
     const minX = Math.max(0, Math.floor(startTile.x) - 2);
     const maxX = Math.min(MAP_SIZE, Math.ceil(endTile.x) + 4);
@@ -798,7 +798,7 @@ function renderMinimap() {
 
     // Draw camera viewport
     const viewStart = screenToWorld(0, 0);
-    const viewEnd = screenToWorld(canvas.width, canvas.height);
+    const viewEnd = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
     minimapCtx.strokeStyle = '#fff';
     minimapCtx.lineWidth = 1;
     minimapCtx.strokeRect(
