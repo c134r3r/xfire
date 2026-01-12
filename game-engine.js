@@ -10,6 +10,8 @@ if (isMac) {
 // ============================================
 
 let canvas, ctx, minimapCanvas, minimapCtx;
+let assetLoader;
+let useSprites = true; // Toggle between sprite-based and procedural graphics
 const dpr = window.devicePixelRatio || 1;
 
 // Initialize canvas when DOM is ready
@@ -39,6 +41,16 @@ function initializeCanvases() {
 
     minimapCanvas = document.getElementById('minimap');
     minimapCtx = minimapCanvas.getContext('2d');
+
+    // Initialize asset loader with placeholder graphics
+    if (typeof AssetLoader !== 'undefined') {
+        assetLoader = new AssetLoader();
+        assetLoader.createPlaceholders();
+        console.log('Asset loader initialized with placeholder sprites');
+    } else {
+        console.warn('AssetLoader not available - using procedural graphics only');
+        useSprites = false;
+    }
 
     return true;
 }
@@ -379,6 +391,11 @@ function drawTile(tx, ty) {
 }
 
 function drawBuilding(building) {
+    // Try sprite-based rendering first, fall back to procedural if not available
+    if (useSprites && assetLoader && drawBuildingSprite(building)) {
+        return;
+    }
+
     const type = BUILDING_TYPES[building.type];
     const screen = worldToScreen(building.x, building.y);
     const player = game.players[building.playerId];
@@ -550,6 +567,154 @@ function drawBuilding(building) {
     }
 }
 
+/**
+ * Draw unit using sprite graphics if available, otherwise use procedural graphics
+ */
+function drawUnitSprite(unit) {
+    const type = UNIT_TYPES[unit.type];
+    const screen = worldToScreen(unit.x, unit.y);
+    const sprite = assetLoader?.getAsset('units', unit.type);
+
+    if (!sprite) {
+        return false; // Fall back to procedural drawing
+    }
+
+    // Check visibility
+    const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
+    if (fog < 2 && unit.playerId !== 0) return true; // Hide enemy units in fog
+
+    // Shadow with blur effect
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(screen.x, screen.y + 8, type.size * 1.2, type.size * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw sprite at unit position, scaled appropriately
+    const spriteWidth = sprite.width || 48;
+    const spriteHeight = sprite.height || 48;
+    const scale = (type.size * 2) / spriteWidth;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+
+    // Rotate if needed
+    if (unit.angle) {
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(unit.angle);
+        ctx.drawImage(sprite, -spriteWidth * scale / 2, -spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
+        ctx.restore();
+    } else {
+        ctx.drawImage(sprite, screen.x - spriteWidth * scale / 2, screen.y - spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
+        ctx.restore();
+    }
+
+    // Health bar
+    const hpPercent = unit.hp / type.hp;
+    if (hpPercent < 1) {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(screen.x - 12, screen.y - type.size - 18, 24, 3);
+        ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
+        ctx.fillRect(screen.x - 12, screen.y - type.size - 18, 24 * hpPercent, 3);
+    }
+
+    // Selection indicator
+    if (game.selection.includes(unit)) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, type.size + 8, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Harvester cargo indicator
+    if (unit.type === 'harvester' && unit.cargo > 0) {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(screen.x - 10, screen.y + 12, 20, 3);
+        ctx.fillStyle = '#fa0';
+        ctx.fillRect(screen.x - 10, screen.y + 12, 20 * (unit.cargo / type.capacity), 3);
+    }
+
+    return true;
+}
+
+/**
+ * Draw building using sprite graphics if available, otherwise use procedural graphics
+ */
+function drawBuildingSprite(building) {
+    const type = BUILDING_TYPES[building.type];
+    const screen = worldToScreen(building.x, building.y);
+    const sprite = assetLoader?.getAsset('buildings', building.type);
+
+    if (!sprite) {
+        return false; // Fall back to procedural drawing
+    }
+
+    // Check visibility
+    const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
+    if (fog < 2 && building.playerId !== 0) return true; // Hide enemy buildings in fog
+
+    // Shadow with blur effect
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(screen.x, screen.y + 12, type.size * 18, type.size * 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw sprite at building position
+    const spriteWidth = sprite.width || 64;
+    const spriteHeight = sprite.height || 64;
+    const scale = (type.size * 25) / spriteWidth;
+
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.drawImage(sprite, screen.x - spriteWidth * scale / 2, screen.y - spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
+    ctx.restore();
+
+    // Health bar
+    const hpPercent = building.hp / type.hp;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(screen.x - 20, screen.y - type.size * 20 - 20, 40, 4);
+    ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
+    ctx.fillRect(screen.x - 20, screen.y - type.size * 20 - 20, 40 * hpPercent, 4);
+
+    // Selection indicator
+    if (game.selection.includes(building)) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screen.x - spriteWidth * scale / 2 - 3, screen.y - spriteHeight * scale / 2 - 3, spriteWidth * scale + 6, spriteHeight * scale + 6);
+    }
+
+    // Production progress
+    if (building.producing) {
+        const progress = building.produceProgress / building.produceTime;
+        ctx.fillStyle = '#555';
+        ctx.fillRect(screen.x - 15, screen.y + 8, 30, 3);
+        ctx.fillStyle = '#0ff';
+        ctx.fillRect(screen.x - 15, screen.y + 8, 30 * progress, 3);
+    }
+
+    return true;
+}
+
 function drawUnitGlow(unit) {
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
@@ -570,6 +735,11 @@ function drawUnitGlow(unit) {
 }
 
 function drawUnit(unit) {
+    // Try sprite-based rendering first, fall back to procedural if not available
+    if (useSprites && assetLoader && drawUnitSprite(unit)) {
+        return;
+    }
+
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
     const player = game.players[unit.playerId];
