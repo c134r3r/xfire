@@ -2374,4 +2374,4 @@ try {
 }
 
 console.log('XFire RTS Engine loaded!');
-console.log('Controls:
+console.log('Controls: WASD to move, Q to build structure, E to select unit');
