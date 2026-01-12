@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XFire - Skirmish RTS</title>
+    <script src="https://pixijs.download/v8.0.0/pixi.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -283,7 +284,19 @@ if (isMac) {
 // ============================================
 
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false, antialias: true });
+
+// High-DPI canvas setup for crisp graphics
+const dpr = window.devicePixelRatio || 1;
+canvas.width = canvas.offsetWidth * dpr;
+canvas.height = canvas.offsetHeight * dpr;
+ctx.scale(dpr, dpr);
+canvas.style.width = (canvas.width / dpr) + 'px';
+canvas.style.height = (canvas.height / dpr) + 'px';
+
+// Enable image smoothing for better rendering
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 
@@ -509,6 +522,10 @@ function render() {
     // Draw units (sorted by y for depth)
     const sortedUnits = [...game.units].sort((a, b) => a.y - b.y);
     for (const unit of sortedUnits) {
+        // Draw glow for selected units
+        if (game.selection.includes(unit)) {
+            drawUnitGlow(unit);
+        }
         drawUnit(unit);
     }
 
@@ -576,10 +593,20 @@ function drawTile(tx, ty) {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Tile border (minimal, almost invisible)
-    ctx.strokeStyle = shadeColor(color, -10);
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.2;
+    // Tile highlight (top edge)
+    ctx.strokeStyle = shadeColor(color, 30);
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(screen.x, screen.y - TILE_HEIGHT / 2);
+    ctx.lineTo(screen.x + TILE_WIDTH / 2, screen.y);
+    ctx.stroke();
+
+    // Tile shadow (bottom edge)
+    ctx.strokeStyle = shadeColor(color, -30);
+    ctx.beginPath();
+    ctx.moveTo(screen.x + TILE_WIDTH / 2, screen.y);
+    ctx.lineTo(screen.x, screen.y + TILE_HEIGHT / 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
 
@@ -617,11 +644,21 @@ function drawBuilding(building) {
     const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
     if (fog < 2 && building.playerId !== 0) return; // Hide enemy buildings in fog
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    // Shadow with blur effect
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(screen.x + 5, screen.y + 10, type.size * 15, type.size * 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(screen.x, screen.y + 10, type.size * 15, type.size * 8, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
     const size = type.size * 20;
 
@@ -770,6 +807,25 @@ function drawBuilding(building) {
     }
 }
 
+function drawUnitGlow(unit) {
+    const type = UNIT_TYPES[unit.type];
+    const screen = worldToScreen(unit.x, unit.y);
+
+    // Glow effect for selected units
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#00ff00';
+    ctx.shadowColor = '#00ff00';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, type.size * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+}
+
 function drawUnit(unit) {
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
@@ -779,11 +835,21 @@ function drawUnit(unit) {
     const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
     if (fog < 2 && unit.playerId !== 0) return; // Hide enemy units in fog
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    // Shadow with blur effect
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
-    ctx.ellipse(screen.x + 3, screen.y + 3, type.size * 0.8, type.size * 0.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(screen.x, screen.y, type.size * 0.8, type.size * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
     const angle = unit.angle || 0;
     const cosA = Math.cos(angle);
@@ -926,11 +992,21 @@ function drawProjectile(proj) {
 
 function drawParticle(particle) {
     const screen = worldToScreen(particle.x, particle.y);
-    ctx.globalAlpha = particle.life;
+    ctx.globalAlpha = Math.max(0, particle.life) * 0.8;
     ctx.fillStyle = particle.color;
+
+    // Particle glow for explosion effects
+    if (particle.type === 'explosion') {
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 8;
+    }
+
     ctx.beginPath();
     ctx.arc(screen.x, screen.y - particle.z, particle.size, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 }
 
@@ -1820,7 +1896,8 @@ function createExplosion(x, y, big = false) {
             vz: Math.random() * 0.7 + 0.3,
             color: colors[Math.floor(Math.random() * colors.length)],
             size: Math.random() * 6 + 3,
-            life: 1
+            life: 1,
+            type: 'explosion'
         });
     }
 
