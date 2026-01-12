@@ -141,9 +141,89 @@
             color: #ff6b35;
             font-size: 10px;
         }
+        #welcomeScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #eee;
+        }
+        #welcomeScreen.hidden {
+            display: none;
+        }
+        .welcome-container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #ff6b35;
+            border-radius: 10px;
+            max-width: 600px;
+        }
+        .ascii-title {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            letter-spacing: 2px;
+            line-height: 1.2;
+            margin-bottom: 30px;
+            color: #ff6b35;
+            text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+            white-space: pre;
+        }
+        .welcome-subtitle {
+            font-size: 18px;
+            color: #aaa;
+            margin-bottom: 40px;
+            letter-spacing: 1px;
+        }
+        .newgame-btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            background: linear-gradient(180deg, #ff6b35 0%, #d94a1f 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+        }
+        .newgame-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 107, 53, 0.8);
+        }
+        .newgame-btn:active {
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body>
+    <div id="welcomeScreen">
+        <div class="welcome-container">
+            <div class="ascii-title">  ___   ___   ____   ___  ____
+ | \ | |  | |  _ \ | ____
+ |  \| | |  | | |_) | |_
+ | |\  | |__| |  _ <  | _|
+ | | \ |      | |_) | | |___
+ |_|  \|____| |____/  |_____|
+            </div>
+            <h1 style="margin: 0; font-size: 28px; color: #ff6b35; margin-bottom: 10px;">XFIRE</h1>
+            <p style="margin: 0; font-size: 14px; color: #999;">RTS Strategy Game Engine</p>
+            <p style="margin: 20px 0 0 0; font-size: 12px; color: #666;">by c134r3r</p>
+            <div class="welcome-subtitle" style="margin-top: 40px;">
+                Skirmish Mode - Command Your Army
+            </div>
+            <button class="newgame-btn" onclick="startNewGame()">New Game</button>
+        </div>
+    </div>
     <div id="header">
         <h1>XFIRE</h1>
         <div id="gameStatus">
@@ -241,10 +321,10 @@ const UNIT_TYPES = {
     },
     tank: {
         name: 'Tank', icon: '&#9820;', cost: 350, hp: 250, speed: 1,
-        range: 150, damage: 30, attackSpeed: 1200, sight: 180, size: 16
+        range: 130, damage: 30, attackSpeed: 1200, sight: 180, size: 16
     },
     harvester: {
-        name: 'Harvester', icon: '&#9819;', cost: 450, hp: 150, speed: 0.8,
+        name: 'Harvester', icon: '&#9819;', cost: 450, hp: 150, speed: 0.5,
         range: 0, damage: 0, attackSpeed: 0, sight: 120, size: 18, capacity: 500
     },
     artillery: {
@@ -325,6 +405,29 @@ function generateMap() {
                 game.map[y][x].height = -1;
             } else if (noise > 0.3 && noise < 0.5) {
                 game.map[y][x].type = 'sand';
+            }
+        }
+    }
+
+    // Add hill areas (small mountain clusters for cover)
+    const hillCount = 3 + Math.floor(Math.random() * 3);
+    for (let h = 0; h < hillCount; h++) {
+        const centerX = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const centerY = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const hillSize = 3 + Math.floor(Math.random() * 4);
+
+        for (let y = centerY - hillSize; y <= centerY + hillSize; y++) {
+            for (let x = centerX - hillSize; x <= centerX + hillSize; x++) {
+                if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+                const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                if (dist <= hillSize) {
+                    const tile = game.map[y][x];
+                    // Only add hills to grass/sand
+                    if (tile.type === 'grass' || tile.type === 'sand') {
+                        tile.type = 'hill';
+                        tile.height = 2; // Higher elevation
+                    }
+                }
             }
         }
     }
@@ -442,7 +545,8 @@ function drawTile(tx, ty) {
         grass: '#3d5c3d',
         sand: '#a08050',
         rock: '#606060',
-        water: '#304060'
+        water: '#304060',
+        hill: '#5d7c4d'
     };
 
     let color = colors[tile.type] || colors.grass;
@@ -465,10 +569,12 @@ function drawTile(tx, ty) {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Tile border
-    ctx.strokeStyle = shadeColor(color, -15);
-    ctx.lineWidth = 1;
+    // Tile border (minimal, almost invisible)
+    ctx.strokeStyle = shadeColor(color, -10);
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.2;
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // Draw oil deposit
     if (tile.oil && fog >= 1) {
@@ -482,14 +588,17 @@ function drawTile(tx, ty) {
         ctx.fill();
     }
 
-    // Fog of war overlay
+    // Fog of war overlay - terrain always visible
     if (fog === 0) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        // Unseen areas: very dark
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fill();
     } else if (fog === 1) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        // Seen but not visible: very subtle
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
         ctx.fill();
     }
+    // fog === 2: fully visible, no overlay
 }
 
 function drawBuilding(building) {
@@ -497,24 +606,138 @@ function drawBuilding(building) {
     const screen = worldToScreen(building.x, building.y);
     const player = game.players[building.playerId];
 
+    // Check visibility
+    const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
+    if (fog < 2 && building.playerId !== 0) return; // Hide enemy buildings in fog
+
     // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.beginPath();
     ctx.ellipse(screen.x + 5, screen.y + 10, type.size * 15, type.size * 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Building base
     const size = type.size * 20;
-    ctx.fillStyle = shadeColor(player.color, -30);
-    ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
 
-    // Building top (pseudo-3D)
-    ctx.fillStyle = player.color;
-    ctx.fillRect(screen.x - size/2, screen.y - size - 10, size, size);
+    // Building-specific designs
+    if (building.type === 'hq') {
+        // HQ: prominent command center
+        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillRect(screen.x - size/2, screen.y - size - 5, size, size);
 
-    // Roof highlight
-    ctx.fillStyle = shadeColor(player.color, 30);
-    ctx.fillRect(screen.x - size/2 + 4, screen.y - size - 6, size - 8, 4);
+        // Main structure
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 3, size - 4, size - 4);
+
+        // Command antenna
+        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.x + 2, screen.y - size);
+        ctx.lineTo(screen.x + 2, screen.y - size - 12);
+        ctx.stroke();
+
+        // Command light
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(screen.x + 2, screen.y - size - 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+    } else if (building.type === 'turret') {
+        // Turret: aggressive gun emplacement
+        ctx.fillStyle = shadeColor(player.color, -40);
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - size/2, size/2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - size/2, size/2 - 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gun barrel
+        ctx.strokeStyle = shadeColor(player.color, -60);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screen.x - 2, screen.y - size/2);
+        ctx.lineTo(screen.x - size/2 - 2, screen.y - size/2 - 3);
+        ctx.stroke();
+
+    } else if (building.type === 'factory') {
+        // Factory: industrial complex
+        ctx.fillStyle = shadeColor(player.color, -35);
+        ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
+
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
+
+        // Production lines
+        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(screen.x - size/2 + 6, screen.y - size + 6 + i * 4);
+            ctx.lineTo(screen.x + size/2 - 6, screen.y - size + 6 + i * 4);
+            ctx.stroke();
+        }
+
+    } else if (building.type === 'barracks') {
+        // Barracks: training facility
+        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillRect(screen.x - size/2, screen.y - size + 3, size, size - 6);
+
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - size/2 + 2, screen.y - size + 5, size - 4, size - 10);
+
+        // Training yard lines
+        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(screen.x - size/4, screen.y - size/2 + 3);
+        ctx.lineTo(screen.x - size/4, screen.y + size/2 - 3);
+        ctx.stroke();
+
+    } else if (building.type === 'derrick') {
+        // Oil derrick: tall pump structure
+        ctx.strokeStyle = shadeColor(player.color, -40);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y - size);
+        ctx.lineTo(screen.x - 4, screen.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y - size);
+        ctx.lineTo(screen.x + 4, screen.y);
+        ctx.stroke();
+
+        // Pump head
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - 6, screen.y - size + 4, 12, 8);
+
+        // Oil base
+        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y + 2, 10, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+    } else {
+        // PowerPlant and default: rectangular structure
+        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
+
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
+
+        // Details
+        ctx.fillStyle = shadeColor(player.color, -50);
+        ctx.fillRect(screen.x - size/2 + 5, screen.y - size + 3, size/3 - 7, 4);
+        ctx.fillRect(screen.x + size/6, screen.y - size + 3, size/3 - 7, 4);
+    }
+
+    // Roof highlight (shared)
+    ctx.fillStyle = shadeColor(player.color, 40);
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(screen.x - size/2 + 3, screen.y - size - 7, size - 6, 3);
+    ctx.globalAlpha = 1;
 
     // Health bar
     const hpPercent = building.hp / type.hp;
@@ -545,37 +768,109 @@ function drawUnit(unit) {
     const screen = worldToScreen(unit.x, unit.y);
     const player = game.players[unit.playerId];
 
+    // Check visibility
+    const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
+    if (fog < 2 && unit.playerId !== 0) return; // Hide enemy units in fog
+
     // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.beginPath();
     ctx.ellipse(screen.x + 3, screen.y + 3, type.size * 0.8, type.size * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Unit body
-    ctx.fillStyle = player.color;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y - type.size / 2, type.size, 0, Math.PI * 2);
-    ctx.fill();
+    const angle = unit.angle || 0;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
 
-    // Unit highlight (pseudo-3D)
-    ctx.fillStyle = shadeColor(player.color, 40);
-    ctx.beginPath();
-    ctx.arc(screen.x - 2, screen.y - type.size / 2 - 2, type.size * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+    // Unit-specific rendering
+    if (unit.type === 'tank') {
+        // Tank: larger rect with turret
+        ctx.fillStyle = player.color;
+        ctx.fillRect(screen.x - type.size * 0.7, screen.y - type.size * 0.5, type.size * 1.4, type.size);
 
-    // Direction indicator
-    if (unit.targetX !== undefined || unit.attackTarget) {
-        const angle = unit.angle || 0;
-        ctx.strokeStyle = shadeColor(player.color, -30);
+        // Turret
+        ctx.fillStyle = shadeColor(player.color, -20);
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Turret barrel
+        ctx.strokeStyle = shadeColor(player.color, -40);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y - type.size / 2);
+        ctx.lineTo(
+            screen.x + cosA * type.size * 1.3,
+            screen.y - type.size / 2 + sinA * type.size * 1.3
+        );
+        ctx.stroke();
+    } else if (unit.type === 'harvester') {
+        // Harvester: rounded shape
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y - type.size / 2, type.size * 0.9, type.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Storage capacity indicator
+        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillRect(screen.x - type.size * 0.7, screen.y + 2, type.size * 1.4, 3);
+    } else if (unit.type === 'artillery') {
+        // Artillery: smaller base, long barrel
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Long barrel
+        ctx.strokeStyle = shadeColor(player.color, -40);
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(screen.x, screen.y - type.size / 2);
         ctx.lineTo(
-            screen.x + Math.cos(angle) * type.size * 1.2,
-            screen.y - type.size / 2 + Math.sin(angle) * type.size * 1.2
+            screen.x + cosA * type.size * 1.6,
+            screen.y - type.size / 2 + sinA * type.size * 1.6
         );
         ctx.stroke();
+    } else if (unit.type === 'scout') {
+        // Scout: small and fast-looking
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Speed lines
+        ctx.strokeStyle = shadeColor(player.color, 30);
+        ctx.lineWidth = 1;
+        for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.moveTo(screen.x + cosA * type.size * 0.7, screen.y - type.size / 2 + sinA * type.size * 0.7 + i * 2);
+            ctx.lineTo(screen.x - cosA * type.size * 1.2, screen.y + sinA * type.size * 1.2 + i * 2);
+            ctx.stroke();
+        }
+    } else if (unit.type === 'rocket') {
+        // Rocket: pointed triangle shape
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.moveTo(screen.x + cosA * type.size, screen.y - type.size / 2 + sinA * type.size);
+        ctx.lineTo(screen.x - cosA * type.size * 0.7 + sinA * type.size * 0.6, screen.y + sinA * type.size * 0.7 + cosA * type.size * 0.6);
+        ctx.lineTo(screen.x - cosA * type.size * 0.7 - sinA * type.size * 0.6, screen.y + sinA * type.size * 0.7 - cosA * type.size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        // Infantry: default circle design
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y - type.size / 2, type.size, 0, Math.PI * 2);
+        ctx.fill();
     }
+
+    // Highlight for depth
+    ctx.fillStyle = shadeColor(player.color, 40);
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(screen.x - 2, screen.y - type.size / 2 - 2, type.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
 
     // Health bar
     const hpPercent = unit.hp / type.hp;
@@ -597,10 +892,10 @@ function drawUnit(unit) {
 
     // Harvester cargo indicator
     if (unit.type === 'harvester' && unit.cargo > 0) {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(screen.x - 10, screen.y + 5, 20, 4);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(screen.x - 10, screen.y + 8, 20, 3);
         ctx.fillStyle = '#fa0';
-        ctx.fillRect(screen.x - 10, screen.y + 5, 20 * (unit.cargo / type.capacity), 4);
+        ctx.fillRect(screen.x - 10, screen.y + 8, 20 * (unit.cargo / type.capacity), 3);
     }
 }
 
@@ -783,6 +1078,22 @@ function updateUnits(dt) {
                 unit.x += moveX + avoidanceForce.x;
                 unit.y += moveY + avoidanceForce.y;
 
+                // Create dust trail effect
+                if (Math.random() < 0.3) { // 30% chance each frame
+                    const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.15,
+                        vy: (Math.random() - 0.5) * 0.15,
+                        vz: Math.random() * 0.1 + 0.05,
+                        color: dustColor,
+                        size: Math.random() * 2 + 1,
+                        life: 0.5
+                    });
+                }
+
             } else {
                 unit.targetX = undefined;
                 unit.targetY = undefined;
@@ -803,9 +1114,17 @@ function updateUnits(dt) {
             }
         }
 
-        // Keep in bounds
+        // Keep in bounds and avoid hills/water/rocks
         unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x));
         unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y));
+
+        const tileType = game.map[Math.floor(unit.y)]?.[Math.floor(unit.x)]?.type;
+        if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') {
+            // Push unit back slightly if stuck on impassable terrain
+            const backDist = Math.sqrt((unit.x) ** 2 + (unit.y) ** 2) || 1;
+            unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x - 0.5 * (unit.x / backDist)));
+            unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y - 0.5 * (unit.y / backDist)));
+        }
     }
 }
 
@@ -827,6 +1146,21 @@ function updateHarvester(unit, type) {
                 unit.x += (dx / dist) * type.speed * 0.016 * 60;
                 unit.y += (dy / dist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
+
+                // Create dust trail effect
+                if (Math.random() < 0.2) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.1,
+                        vy: (Math.random() - 0.5) * 0.1,
+                        vz: Math.random() * 0.08,
+                        color: '#777777',
+                        size: Math.random() * 2 + 1.5,
+                        life: 0.4
+                    });
+                }
             } else {
                 // Deposit cargo
                 player.oil += unit.cargo;
@@ -866,6 +1200,21 @@ function updateHarvester(unit, type) {
                 unit.x += (dx / nearestDist) * type.speed * 0.016 * 60;
                 unit.y += (dy / nearestDist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
+
+                // Create dust trail effect
+                if (Math.random() < 0.2) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.1,
+                        vy: (Math.random() - 0.5) * 0.1,
+                        vz: Math.random() * 0.08,
+                        color: '#777777',
+                        size: Math.random() * 2 + 1.5,
+                        life: 0.4
+                    });
+                }
             } else {
                 // Harvest
                 unit.cargo = Math.min(type.capacity, unit.cargo + 2);
@@ -931,6 +1280,17 @@ function updateProjectiles(dt) {
         proj.x += proj.vx;
         proj.y += proj.vy;
         proj.life--;
+
+        // Check if blocked by hill
+        if (proj.blockadeIndex >= 0) {
+            const distTraveled = 1 - (proj.life / 100); // How far we've traveled
+            if (distTraveled >= proj.blockadeIndex) {
+                // Hit the hill, remove projectile
+                createImpact(proj.x, proj.y);
+                game.projectiles.splice(i, 1);
+                continue;
+            }
+        }
 
         // Check hit
         const dx = proj.targetX - proj.x;
@@ -1402,6 +1762,9 @@ function fireProjectile(source, target, customDamage) {
     const dist = Math.sqrt(dx * dx + dy * dy);
     const speed = 0.3;
 
+    // Check if path is blocked by hills
+    const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
+
     game.projectiles.push({
         x: source.x,
         y: source.y,
@@ -1411,8 +1774,26 @@ function fireProjectile(source, target, customDamage) {
         targetY: target.y,
         target,
         damage,
-        life: 100
+        life: 100,
+        blockadeIndex: blockadeIndex
     });
+}
+
+function checkLineOfSight(x1, y1, x2, y2) {
+    // Check if path is blocked by hills - return distance to blockade or -1 if clear
+    const steps = Math.ceil(Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 2);
+    for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const x = Math.round(x1 + (x2 - x1) * t);
+        const y = Math.round(y1 + (y2 - y1) * t);
+        if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+
+        const tile = game.map[y]?.[x];
+        if (tile && tile.type === 'hill') {
+            return i / steps; // Return how far along the path blockade is
+        }
+    }
+    return -1; // No blockade
 }
 
 function createExplosion(x, y, big = false) {
@@ -1478,7 +1859,7 @@ function findBuildPosition(nearX, nearY, playerId) {
             const y = Math.floor(nearY + Math.sin(angle) * r);
 
             if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
-            if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock') continue;
+            if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock' || game.map[y][x].type === 'hill') continue;
 
             const blocked = game.buildings.some(b => {
                 const size = BUILDING_TYPES[b.type].size;
@@ -1692,6 +2073,12 @@ function updateCamera() {
 // GAME INITIALIZATION
 // ============================================
 
+function startNewGame() {
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    welcomeScreen.classList.add('hidden');
+    initGame();
+}
+
 function initGame() {
     generateMap();
 
@@ -1734,8 +2121,7 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-// Start game
-initGame();
+// Start game loop (game data initialized when player clicks "New Game")
 requestAnimationFrame(gameLoop);
 
 console.log('XFire RTS Engine loaded!');
