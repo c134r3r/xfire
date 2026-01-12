@@ -267,10 +267,17 @@
     </div>
 
     <div id="footer">
-        Controls: Left-click select | Right-click move/attack | Drag to box-select | WASD/Arrows scroll | 1-5 unit groups
+        <span id="controlsHelp">Controls: Left-click select | Right-click move/attack | Drag to box-select | WASD/Arrows scroll | 1-5 unit groups</span>
     </div>
 
     <script>
+// Detect Mac and update control help text
+const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+if (isMac) {
+    const helpEl = document.getElementById('controlsHelp');
+    helpEl.innerHTML = 'Controls: Left-click select | ⌘+Click or right-click move/attack | Drag to box-select | WASD/Arrows scroll | ⌘+1–5 unit groups';
+}
+
 // ============================================
 // XFIRE - Skirmish RTS Game Engine
 // ============================================
@@ -1892,7 +1899,10 @@ canvas.addEventListener('mousedown', (e) => {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (e.button === 0) { // Left click
+    // Right click (button 2) or Command+Click (macOS) or Ctrl+Click (Windows/Linux)
+    const isRightClick = e.button === 2 || (e.button === 0 && (e.metaKey || e.ctrlKey));
+
+    if (e.button === 0 && !isRightClick) { // Left click (not Command/Ctrl)
         if (game.placingBuilding) {
             // Place building
             const world = screenToWorld(x, y);
@@ -1917,7 +1927,7 @@ canvas.addEventListener('mousedown', (e) => {
             // Start selection box
             game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
         }
-    } else if (e.button === 2) { // Right click
+    } else if (isRightClick) {
         const world = screenToWorld(x, y);
 
         // Check if clicking on enemy
@@ -1966,6 +1976,29 @@ canvas.addEventListener('mousemove', (e) => {
     }
 });
 
+// Double-click to select all units of same type
+let lastClickTarget = null;
+let lastClickTime = 0;
+
+canvas.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const clicked = game.units.find(entity => {
+        const screen = worldToScreen(entity.x, entity.y);
+        const dx = screen.x - x;
+        const dy = screen.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < 20;
+    });
+
+    if (clicked && clicked.playerId === 0) {
+        // Select all units of same type
+        game.selection = game.units.filter(u => u.playerId === 0 && u.type === clicked.type);
+    }
+});
+
 canvas.addEventListener('mouseup', (e) => {
     if (e.button === 0 && game.selectionBox) {
         const box = game.selectionBox;
@@ -1974,14 +2007,15 @@ canvas.addEventListener('mouseup', (e) => {
         const minY = Math.min(box.y1, box.y2);
         const maxY = Math.max(box.y1, box.y2);
 
-        // Clear selection if not holding shift
-        if (!keys['Shift']) {
+        // Clear selection if not holding shift (Mac: Shift key)
+        const isMultiSelect = keys['Shift'];
+        if (!isMultiSelect) {
             game.selection = [];
         }
 
         // Box select or click select
         if (maxX - minX < 5 && maxY - minY < 5) {
-            // Click select
+            // Click select (single unit/building)
             const clicked = [...game.units, ...game.buildings].find(entity => {
                 const screen = worldToScreen(entity.x, entity.y);
                 const dx = screen.x - game.mouse.x;
@@ -1990,16 +2024,28 @@ canvas.addEventListener('mouseup', (e) => {
             });
 
             if (clicked && clicked.playerId === 0) {
-                game.selection = [clicked];
+                if (isMultiSelect && game.selection.includes(clicked)) {
+                    // Deselect if already selected (Shift+Click toggle)
+                    game.selection = game.selection.filter(u => u !== clicked);
+                } else if (!isMultiSelect || !game.selection.includes(clicked)) {
+                    // Add to selection or replace
+                    if (!isMultiSelect) {
+                        game.selection = [clicked];
+                    } else {
+                        game.selection.push(clicked);
+                    }
+                }
             }
         } else {
-            // Box select
+            // Box select (multiple units)
             for (const unit of game.units) {
                 if (unit.playerId !== 0) continue;
                 const screen = worldToScreen(unit.x, unit.y);
                 if (screen.x >= minX && screen.x <= maxX &&
                     screen.y >= minY && screen.y <= maxY) {
-                    game.selection.push(unit);
+                    if (!game.selection.includes(unit)) {
+                        game.selection.push(unit);
+                    }
                 }
             }
         }
@@ -2009,6 +2055,21 @@ canvas.addEventListener('mouseup', (e) => {
 });
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Trackpad scroll and zoom support
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+
+    // Trackpad pinch zoom (Cmd+Scroll on Mac)
+    if (e.ctrlKey || e.metaKey) {
+        // TODO: Implement zoom (would need to modify camera/zoom system)
+    } else {
+        // Regular scroll for camera movement
+        const scrollSpeed = 20;
+        game.camera.x += (e.deltaX / Math.abs(e.deltaX || 1)) * scrollSpeed;
+        game.camera.y += (e.deltaY / Math.abs(e.deltaY || 1)) * scrollSpeed;
+    }
+}, { passive: false });
 
 // Minimap click
 minimapCanvas.addEventListener('click', (e) => {
@@ -2024,9 +2085,9 @@ minimapCanvas.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    // Number keys for control groups
+    // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
     if (e.key >= '1' && e.key <= '5') {
-        if (e.ctrlKey) {
+        if (e.metaKey || e.ctrlKey) {
             // Assign group
             game[`group${e.key}`] = [...game.selection];
         } else {
