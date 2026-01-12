@@ -2129,23 +2129,7 @@ function updateCamera() {
 // GAME INITIALIZATION
 // ============================================
 
-function startNewGame() {
-    try {
-        // Make sure canvas is initialized
-        if (!canvas || !ctx) {
-            if (!initializeCanvases()) {
-                console.error('Failed to initialize canvases');
-                return;
-            }
-        }
-
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        welcomeScreen.classList.add('hidden');
-        initGame();
-    } catch (e) {
-        console.error('Error starting new game:', e);
-    }
-}
+// Welcome screen removed - game starts immediately on load
 
 function initGame() {
     generateMap();
@@ -2197,12 +2181,26 @@ function gameLoop(timestamp) {
 
 // Initialize canvases and start game loop
 // defer attribute ensures this runs after DOM is ready
-if (!initializeCanvases()) {
-    console.error('Failed to initialize canvases');
-} else {
-    // Start game immediately (welcome screen disabled for now)
-    initGame();
-    requestAnimationFrame(gameLoop);
+try {
+    if (!initializeCanvases()) {
+        console.error('Failed to initialize canvases');
+        alert('Error: Could not initialize game canvases');
+    } else {
+        console.log('Canvases initialized successfully');
+        try {
+            // Start game immediately (welcome screen disabled for now)
+            console.log('Initializing game...');
+            initGame();
+            console.log('Game initialized, starting render loop');
+            requestAnimationFrame(gameLoop);
+        } catch (gameError) {
+            console.error('Error during game init:', gameError);
+            alert('Error starting game: ' + gameError.message);
+        }
+    }
+} catch (e) {
+    console.error('Fatal error:', e);
+    alert('Fatal error: ' + e.message);
 }
 
 console.log('XFire RTS Engine loaded!');
