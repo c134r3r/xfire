@@ -2129,23 +2129,7 @@ function updateCamera() {
 // GAME INITIALIZATION
 // ============================================
 
-function startNewGame() {
-    try {
-        // Make sure canvas is initialized
-        if (!canvas || !ctx) {
-            if (!initializeCanvases()) {
-                console.error('Failed to initialize canvases');
-                return;
-            }
-        }
-
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        welcomeScreen.classList.add('hidden');
-        initGame();
-    } catch (e) {
-        console.error('Error starting new game:', e);
-    }
-}
+// Welcome screen removed - game starts immediately on load
 
 function initGame() {
     generateMap();
