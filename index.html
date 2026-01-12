@@ -1078,6 +1078,22 @@ function updateUnits(dt) {
                 unit.x += moveX + avoidanceForce.x;
                 unit.y += moveY + avoidanceForce.y;
 
+                // Create dust trail effect
+                if (Math.random() < 0.3) { // 30% chance each frame
+                    const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.15,
+                        vy: (Math.random() - 0.5) * 0.15,
+                        vz: Math.random() * 0.1 + 0.05,
+                        color: dustColor,
+                        size: Math.random() * 2 + 1,
+                        life: 0.5
+                    });
+                }
+
             } else {
                 unit.targetX = undefined;
                 unit.targetY = undefined;
@@ -1130,6 +1146,21 @@ function updateHarvester(unit, type) {
                 unit.x += (dx / dist) * type.speed * 0.016 * 60;
                 unit.y += (dy / dist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
+
+                // Create dust trail effect
+                if (Math.random() < 0.2) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.1,
+                        vy: (Math.random() - 0.5) * 0.1,
+                        vz: Math.random() * 0.08,
+                        color: '#777777',
+                        size: Math.random() * 2 + 1.5,
+                        life: 0.4
+                    });
+                }
             } else {
                 // Deposit cargo
                 player.oil += unit.cargo;
@@ -1169,6 +1200,21 @@ function updateHarvester(unit, type) {
                 unit.x += (dx / nearestDist) * type.speed * 0.016 * 60;
                 unit.y += (dy / nearestDist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
+
+                // Create dust trail effect
+                if (Math.random() < 0.2) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.1,
+                        vy: (Math.random() - 0.5) * 0.1,
+                        vz: Math.random() * 0.08,
+                        color: '#777777',
+                        size: Math.random() * 2 + 1.5,
+                        life: 0.4
+                    });
+                }
             } else {
                 // Harvest
                 unit.cargo = Math.min(type.capacity, unit.cargo + 2);
