@@ -15,6 +15,140 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             color: #eee;
         }
+
+        /* Main Menu */
+        #mainMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        #mainMenu.hidden { display: none; }
+        #mainMenu h1 {
+            font-size: 72px;
+            color: #ff6b35;
+            text-shadow: 4px 4px 8px rgba(0,0,0,0.5), 0 0 40px rgba(255,107,53,0.3);
+            margin-bottom: 10px;
+            letter-spacing: 8px;
+        }
+        #mainMenu .subtitle {
+            color: #888;
+            font-size: 18px;
+            margin-bottom: 40px;
+        }
+        .menu-panel {
+            background: rgba(30, 30, 48, 0.95);
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 30px;
+            min-width: 400px;
+        }
+        .menu-panel h2 {
+            color: #ff6b35;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .setting-row label {
+            color: #ccc;
+        }
+        .setting-row select, .setting-row input {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+        .setting-row select:focus, .setting-row input:focus {
+            outline: none;
+            border-color: #ff6b35;
+        }
+        #startBtn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            background: linear-gradient(180deg, #ff6b35 0%, #e55a25 100%);
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+        }
+        #startBtn:hover {
+            background: linear-gradient(180deg, #ff8855 0%, #ff6b35 100%);
+            transform: scale(1.02);
+        }
+
+        /* Game Over Overlay */
+        #gameOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        #gameOverlay.hidden { display: none; }
+        #gameOverlay h1 {
+            font-size: 64px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 30px currentColor;
+        }
+        #gameOverlay.victory h1 { color: #4f4; }
+        #gameOverlay.defeat h1 { color: #f44; }
+        #gameOverlay p {
+            font-size: 24px;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+        #gameOverlay button {
+            padding: 15px 40px;
+            margin: 10px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #gameOverlay button:hover {
+            border-color: #ff6b35;
+            background: #444;
+        }
+
+        /* Game UI */
+        #gameUI { display: none; }
+        #gameUI.active { display: flex; flex-direction: column; align-items: center; }
+
         #header {
             padding: 10px 20px;
             background: linear-gradient(180deg, #2d2d44 0%, #1a1a2e 100%);
@@ -43,6 +177,17 @@
             border-radius: 4px;
         }
         .resource-icon { font-size: 18px; }
+        #timer {
+            background: rgba(255,107,53,0.2);
+            border: 1px solid #ff6b35;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #timer.warning { color: #f00; animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { opacity: 0.5; } }
+
         #gameContainer {
             display: flex;
             gap: 10px;
@@ -123,43 +268,114 @@
             color: #ff6b35;
             font-size: 10px;
         }
+        #pauseBtn {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        #pauseBtn:hover { border-color: #ff6b35; }
     </style>
 </head>
 <body>
-    <div id="header">
+    <!-- Main Menu -->
+    <div id="mainMenu">
         <h1>XFIRE</h1>
-        <div id="resources">
-            <div class="resource">
-                <span class="resource-icon">&#9981;</span>
-                <span>Oil: <strong id="oil">1000</strong></span>
+        <div class="subtitle">Skirmish RTS</div>
+        <div class="menu-panel">
+            <h2>Game Settings</h2>
+            <div class="setting-row">
+                <label>Time Limit</label>
+                <select id="timeLimit">
+                    <option value="0">No Limit</option>
+                    <option value="5">5 Minutes</option>
+                    <option value="10" selected>10 Minutes</option>
+                    <option value="15">15 Minutes</option>
+                    <option value="20">20 Minutes</option>
+                    <option value="30">30 Minutes</option>
+                </select>
             </div>
-            <div class="resource">
-                <span class="resource-icon">&#9889;</span>
-                <span>Power: <strong id="power">100</strong></span>
+            <div class="setting-row">
+                <label>AI Difficulty</label>
+                <select id="aiDifficulty">
+                    <option value="easy">Easy</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="hard">Hard</option>
+                </select>
             </div>
+            <div class="setting-row">
+                <label>Map Size</label>
+                <select id="mapSize">
+                    <option value="48">Small (48x48)</option>
+                    <option value="64" selected>Medium (64x64)</option>
+                    <option value="80">Large (80x80)</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>Starting Oil</label>
+                <select id="startingOil">
+                    <option value="500">500</option>
+                    <option value="1000" selected>1000</option>
+                    <option value="2000">2000</option>
+                    <option value="5000">5000</option>
+                </select>
+            </div>
+            <button id="startBtn">Start Game</button>
         </div>
     </div>
 
-    <div id="gameContainer">
-        <canvas id="canvas" width="1000" height="600"></canvas>
-        <div id="sidebar">
-            <div class="panel">
-                <h3>Minimap</h3>
-                <canvas id="minimap" width="180" height="180"></canvas>
-            </div>
-            <div class="panel">
-                <h3>Selection</h3>
-                <div id="selectionInfo">No selection</div>
-            </div>
-            <div class="panel">
-                <h3>Build <span class="hotkey">[B]</span></h3>
-                <div id="buildMenu"></div>
-            </div>
+    <!-- Game Over Overlay -->
+    <div id="gameOverlay" class="hidden">
+        <h1 id="gameOverTitle">VICTORY</h1>
+        <p id="gameOverText">You destroyed the enemy!</p>
+        <div>
+            <button id="playAgainBtn">Play Again</button>
+            <button id="mainMenuBtn">Main Menu</button>
         </div>
     </div>
 
-    <div id="footer">
-        Controls: Left-click select | Right-click move/attack | Drag to box-select | WASD/Arrows scroll | 1-5 unit groups
+    <!-- Game UI -->
+    <div id="gameUI">
+        <div id="header">
+            <h1>XFIRE</h1>
+            <div id="resources">
+                <div class="resource">
+                    <span class="resource-icon">&#9981;</span>
+                    <span>Oil: <strong id="oil">1000</strong></span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon">&#9889;</span>
+                    <span>Power: <strong id="power">100</strong></span>
+                </div>
+                <div id="timer">10:00</div>
+                <button id="pauseBtn">Pause [P]</button>
+            </div>
+        </div>
+
+        <div id="gameContainer">
+            <canvas id="canvas" width="1000" height="600"></canvas>
+            <div id="sidebar">
+                <div class="panel">
+                    <h3>Minimap</h3>
+                    <canvas id="minimap" width="180" height="180"></canvas>
+                </div>
+                <div class="panel">
+                    <h3>Selection</h3>
+                    <div id="selectionInfo">No selection</div>
+                </div>
+                <div class="panel">
+                    <h3>Build <span class="hotkey">[B]</span></h3>
+                    <div id="buildMenu"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="footer">
+            Controls: Left-click select | Right-click move/attack | Drag to box-select | WASD/Arrows scroll | 1-5 unit groups | P pause | ESC menu
+        </div>
     </div>
 
     <script>
@@ -175,13 +391,22 @@ const minimapCtx = minimapCanvas.getContext('2d');
 // Game Constants
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
-const MAP_SIZE = 64;
+let MAP_SIZE = 64;
+
+// Game Settings
+const settings = {
+    timeLimit: 10,
+    aiDifficulty: 'normal',
+    mapSize: 64,
+    startingOil: 1000
+};
 
 // Game State
 const game = {
-    running: true,
+    state: 'menu', // menu, playing, paused, victory, defeat
     tick: 0,
-    camera: { x: MAP_SIZE * TILE_WIDTH / 4, y: 0 },
+    timeRemaining: 0,
+    camera: { x: 0, y: 0 },
     mouse: { x: 0, y: 0, worldX: 0, worldY: 0 },
     selection: [],
     selectionBox: null,
@@ -249,6 +474,81 @@ const BUILDING_TYPES = {
     }
 };
 
+// AI difficulty multipliers
+const AI_DIFFICULTY = {
+    easy: { oilMult: 0.5, attackThreshold: 8, buildDelay: 180 },
+    normal: { oilMult: 1.0, attackThreshold: 5, buildDelay: 120 },
+    hard: { oilMult: 1.5, attackThreshold: 3, buildDelay: 60 }
+};
+
+// ============================================
+// MENU HANDLING
+// ============================================
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('playAgainBtn').addEventListener('click', startGame);
+document.getElementById('mainMenuBtn').addEventListener('click', showMainMenu);
+document.getElementById('pauseBtn').addEventListener('click', togglePause);
+
+function showMainMenu() {
+    game.state = 'menu';
+    document.getElementById('mainMenu').classList.remove('hidden');
+    document.getElementById('gameOverlay').classList.add('hidden');
+    document.getElementById('gameUI').classList.remove('active');
+}
+
+function startGame() {
+    // Read settings
+    settings.timeLimit = parseInt(document.getElementById('timeLimit').value);
+    settings.aiDifficulty = document.getElementById('aiDifficulty').value;
+    settings.mapSize = parseInt(document.getElementById('mapSize').value);
+    settings.startingOil = parseInt(document.getElementById('startingOil').value);
+
+    MAP_SIZE = settings.mapSize;
+
+    // Reset game state
+    game.state = 'playing';
+    game.tick = 0;
+    game.timeRemaining = settings.timeLimit * 60 * 60; // Convert to ticks (60fps)
+    game.units = [];
+    game.buildings = [];
+    game.projectiles = [];
+    game.particles = [];
+    game.selection = [];
+    game.players[0].oil = settings.startingOil;
+    game.players[1].oil = settings.startingOil;
+
+    // Hide menu, show game
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('gameOverlay').classList.add('hidden');
+    document.getElementById('gameUI').classList.add('active');
+
+    // Initialize
+    initGame();
+}
+
+function togglePause() {
+    if (game.state === 'playing') {
+        game.state = 'paused';
+        document.getElementById('pauseBtn').textContent = 'Resume [P]';
+    } else if (game.state === 'paused') {
+        game.state = 'playing';
+        document.getElementById('pauseBtn').textContent = 'Pause [P]';
+    }
+}
+
+function showGameOver(victory) {
+    game.state = victory ? 'victory' : 'defeat';
+    const overlay = document.getElementById('gameOverlay');
+    overlay.classList.remove('hidden', 'victory', 'defeat');
+    overlay.classList.add(victory ? 'victory' : 'defeat');
+
+    document.getElementById('gameOverTitle').textContent = victory ? 'VICTORY!' : 'DEFEAT';
+    document.getElementById('gameOverText').textContent = victory
+        ? 'You destroyed all enemy forces!'
+        : 'Your forces have been eliminated!';
+}
+
 // ============================================
 // MAP GENERATION
 // ============================================
@@ -257,7 +557,6 @@ function generateMap() {
     game.map = [];
     game.fogOfWar = [];
 
-    // Initialize with grass
     for (let y = 0; y < MAP_SIZE; y++) {
         game.map[y] = [];
         game.fogOfWar[y] = [];
@@ -267,11 +566,11 @@ function generateMap() {
                 height: 0,
                 oil: false
             };
-            game.fogOfWar[y][x] = game.players[0].team === 'player' ? 0 : 2;
+            game.fogOfWar[y][x] = 0;
         }
     }
 
-    // Add terrain features using simplex-like noise
+    // Add terrain features
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
             const noise = Math.sin(x * 0.1) * Math.cos(y * 0.1) +
@@ -289,11 +588,27 @@ function generateMap() {
         }
     }
 
-    // Add oil deposits
-    const oilCount = 8 + Math.floor(Math.random() * 5);
+    // Add oil deposits - ensure some near each base
+    const oilCount = Math.floor(MAP_SIZE / 8) + Math.floor(Math.random() * 5);
+
+    // Oil near player base
+    addOilDeposit(15, 15);
+    addOilDeposit(18, 12);
+
+    // Oil near enemy base
+    addOilDeposit(MAP_SIZE - 16, MAP_SIZE - 16);
+    addOilDeposit(MAP_SIZE - 19, MAP_SIZE - 13);
+
+    // Random oil in middle
     for (let i = 0; i < oilCount; i++) {
-        const x = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
-        const y = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
+        const x = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const y = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        addOilDeposit(x, y);
+    }
+}
+
+function addOilDeposit(x, y) {
+    if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
         if (game.map[y][x].type === 'grass' || game.map[y][x].type === 'sand') {
             game.map[y][x].oil = true;
         }
@@ -321,20 +636,14 @@ function screenToWorld(sx, sy) {
     return { x: worldX, y: worldY };
 }
 
-function tileToWorld(tx, ty) {
-    return { x: tx, y: ty };
-}
-
 // ============================================
 // RENDERING
 // ============================================
 
 function render() {
-    // Clear
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Determine visible tiles
     const startTile = screenToWorld(0, 0);
     const endTile = screenToWorld(canvas.width, canvas.height);
 
@@ -350,13 +659,13 @@ function render() {
         }
     }
 
-    // Draw buildings (sorted by y for depth)
+    // Draw buildings
     const sortedBuildings = [...game.buildings].sort((a, b) => a.y - b.y);
     for (const building of sortedBuildings) {
         drawBuilding(building);
     }
 
-    // Draw units (sorted by y for depth)
+    // Draw units
     const sortedUnits = [...game.units].sort((a, b) => a.y - b.y);
     for (const unit of sortedUnits) {
         drawUnit(unit);
@@ -386,7 +695,18 @@ function render() {
         ctx.setLineDash([]);
     }
 
-    // Draw minimap
+    // Draw pause overlay
+    if (game.state === 'paused') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '48px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+        ctx.font = '18px Segoe UI';
+        ctx.fillText('Press P to resume', canvas.width / 2, canvas.height / 2 + 40);
+    }
+
     renderMinimap();
 }
 
@@ -397,7 +717,6 @@ function drawTile(tx, ty) {
     const fog = game.fogOfWar[ty]?.[tx] ?? 0;
     const screen = worldToScreen(tx, ty);
 
-    // Tile colors
     const colors = {
         grass: '#3d5c3d',
         sand: '#a08050',
@@ -407,14 +726,12 @@ function drawTile(tx, ty) {
 
     let color = colors[tile.type] || colors.grass;
 
-    // Height shading
     if (tile.height > 0) {
         color = shadeColor(color, 20);
     } else if (tile.height < 0) {
         color = shadeColor(color, -20);
     }
 
-    // Draw isometric tile
     ctx.beginPath();
     ctx.moveTo(screen.x, screen.y - TILE_HEIGHT / 2);
     ctx.lineTo(screen.x + TILE_WIDTH / 2, screen.y);
@@ -425,12 +742,10 @@ function drawTile(tx, ty) {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Tile border
     ctx.strokeStyle = shadeColor(color, -15);
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Draw oil deposit
     if (tile.oil && fog >= 1) {
         ctx.fillStyle = '#222';
         ctx.beginPath();
@@ -442,7 +757,6 @@ function drawTile(tx, ty) {
         ctx.fill();
     }
 
-    // Fog of war overlay
     if (fog === 0) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fill();
@@ -457,40 +771,33 @@ function drawBuilding(building) {
     const screen = worldToScreen(building.x, building.y);
     const player = game.players[building.playerId];
 
-    // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.beginPath();
     ctx.ellipse(screen.x + 5, screen.y + 10, type.size * 15, type.size * 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Building base
     const size = type.size * 20;
     ctx.fillStyle = shadeColor(player.color, -30);
     ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
 
-    // Building top (pseudo-3D)
     ctx.fillStyle = player.color;
     ctx.fillRect(screen.x - size/2, screen.y - size - 10, size, size);
 
-    // Roof highlight
     ctx.fillStyle = shadeColor(player.color, 30);
     ctx.fillRect(screen.x - size/2 + 4, screen.y - size - 6, size - 8, 4);
 
-    // Health bar
     const hpPercent = building.hp / type.hp;
     ctx.fillStyle = '#333';
     ctx.fillRect(screen.x - 20, screen.y - size - 20, 40, 4);
     ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
     ctx.fillRect(screen.x - 20, screen.y - size - 20, 40 * hpPercent, 4);
 
-    // Selection indicator
     if (game.selection.includes(building)) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
         ctx.strokeRect(screen.x - size/2 - 3, screen.y - size - 13, size + 6, size + 16);
     }
 
-    // Production progress
     if (building.producing) {
         const progress = building.produceProgress / building.produceTime;
         ctx.fillStyle = '#555';
@@ -505,25 +812,21 @@ function drawUnit(unit) {
     const screen = worldToScreen(unit.x, unit.y);
     const player = game.players[unit.playerId];
 
-    // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.beginPath();
     ctx.ellipse(screen.x + 3, screen.y + 3, type.size * 0.8, type.size * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Unit body
     ctx.fillStyle = player.color;
     ctx.beginPath();
     ctx.arc(screen.x, screen.y - type.size / 2, type.size, 0, Math.PI * 2);
     ctx.fill();
 
-    // Unit highlight (pseudo-3D)
     ctx.fillStyle = shadeColor(player.color, 40);
     ctx.beginPath();
     ctx.arc(screen.x - 2, screen.y - type.size / 2 - 2, type.size * 0.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Direction indicator
     if (unit.targetX !== undefined || unit.attackTarget) {
         const angle = unit.angle || 0;
         ctx.strokeStyle = shadeColor(player.color, -30);
@@ -537,7 +840,6 @@ function drawUnit(unit) {
         ctx.stroke();
     }
 
-    // Health bar
     const hpPercent = unit.hp / type.hp;
     if (hpPercent < 1) {
         ctx.fillStyle = '#333';
@@ -546,7 +848,6 @@ function drawUnit(unit) {
         ctx.fillRect(screen.x - 12, screen.y - type.size - 10, 24 * hpPercent, 3);
     }
 
-    // Selection indicator
     if (game.selection.includes(unit)) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
@@ -555,7 +856,6 @@ function drawUnit(unit) {
         ctx.stroke();
     }
 
-    // Harvester cargo indicator
     if (unit.type === 'harvester' && unit.cargo > 0) {
         ctx.fillStyle = '#000';
         ctx.fillRect(screen.x - 10, screen.y + 5, 20, 4);
@@ -567,7 +867,6 @@ function drawUnit(unit) {
 function drawProjectile(proj) {
     const screen = worldToScreen(proj.x, proj.y);
 
-    // Trail
     ctx.strokeStyle = '#ff8800';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -575,7 +874,6 @@ function drawProjectile(proj) {
     ctx.lineTo(screen.x - proj.vx * 3, screen.y - proj.vy * 3);
     ctx.stroke();
 
-    // Projectile
     ctx.fillStyle = '#ffff00';
     ctx.beginPath();
     ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
@@ -598,7 +896,6 @@ function renderMinimap() {
 
     const scale = 180 / MAP_SIZE;
 
-    // Draw terrain
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
             const tile = game.map[y][x];
@@ -623,19 +920,16 @@ function renderMinimap() {
         }
     }
 
-    // Draw buildings
     for (const b of game.buildings) {
         minimapCtx.fillStyle = game.players[b.playerId].color;
         minimapCtx.fillRect(b.x * scale - 2, b.y * scale - 2, 4, 4);
     }
 
-    // Draw units
     for (const u of game.units) {
         minimapCtx.fillStyle = game.players[u.playerId].color;
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
 
-    // Draw camera viewport
     const viewStart = screenToWorld(0, 0);
     const viewEnd = screenToWorld(canvas.width, canvas.height);
     minimapCtx.strokeStyle = '#fff';
@@ -653,7 +947,26 @@ function renderMinimap() {
 // ============================================
 
 function update(dt) {
+    if (game.state !== 'playing') return;
+
     game.tick++;
+
+    // Timer
+    if (settings.timeLimit > 0) {
+        game.timeRemaining--;
+        if (game.timeRemaining <= 0) {
+            // Time's up - determine winner by remaining units/buildings
+            const playerScore = game.units.filter(u => u.playerId === 0).length +
+                               game.buildings.filter(b => b.playerId === 0).length * 2;
+            const enemyScore = game.units.filter(u => u.playerId === 1).length +
+                              game.buildings.filter(b => b.playerId === 1).length * 2;
+            showGameOver(playerScore >= enemyScore);
+            return;
+        }
+    }
+
+    // Check win/lose conditions
+    checkVictoryConditions();
 
     updateUnits(dt);
     updateBuildings(dt);
@@ -665,12 +978,30 @@ function update(dt) {
     updateUI();
 }
 
+function checkVictoryConditions() {
+    const playerUnits = game.units.filter(u => u.playerId === 0);
+    const playerBuildings = game.buildings.filter(b => b.playerId === 0);
+    const enemyUnits = game.units.filter(u => u.playerId === 1);
+    const enemyBuildings = game.buildings.filter(b => b.playerId === 1);
+
+    // Defeat: player has nothing left
+    if (playerUnits.length === 0 && playerBuildings.length === 0) {
+        showGameOver(false);
+        return;
+    }
+
+    // Victory: enemy has nothing left
+    if (enemyUnits.length === 0 && enemyBuildings.length === 0) {
+        showGameOver(true);
+        return;
+    }
+}
+
 function updateUnits(dt) {
     for (let i = game.units.length - 1; i >= 0; i--) {
         const unit = game.units[i];
         const type = UNIT_TYPES[unit.type];
 
-        // Death check
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             game.units.splice(i, 1);
@@ -678,13 +1009,11 @@ function updateUnits(dt) {
             continue;
         }
 
-        // Harvester logic
         if (unit.type === 'harvester') {
             updateHarvester(unit, type);
             continue;
         }
 
-        // Attack logic
         if (unit.attackTarget) {
             const target = unit.attackTarget;
             if (target.hp <= 0) {
@@ -697,20 +1026,16 @@ function updateUnits(dt) {
                 unit.angle = Math.atan2(dy, dx);
 
                 if (dist > type.range) {
-                    // Move towards target
                     unit.x += (dx / dist) * type.speed * dt * 60;
                     unit.y += (dy / dist) * type.speed * dt * 60;
                 } else {
-                    // Attack
                     if (game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
                     }
                 }
             }
-        }
-        // Movement
-        else if (unit.targetX !== undefined) {
+        } else if (unit.targetX !== undefined) {
             const dx = unit.targetX - unit.x;
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -721,7 +1046,6 @@ function updateUnits(dt) {
                 unit.x += (dx / dist) * speed;
                 unit.y += (dy / dist) * speed;
 
-                // Collision avoidance
                 for (const other of game.units) {
                     if (other === unit) continue;
                     const odx = unit.x - other.x;
@@ -738,21 +1062,21 @@ function updateUnits(dt) {
             }
         }
 
-        // Auto-attack nearby enemies
+        // Auto-attack
         if (!unit.attackTarget && type.damage > 0) {
-            for (const other of game.units) {
-                if (other.playerId === unit.playerId) continue;
-                const dx = other.x - unit.x;
-                const dy = other.y - unit.y;
+            const enemies = [...game.units.filter(u => u.playerId !== unit.playerId),
+                            ...game.buildings.filter(b => b.playerId !== unit.playerId)];
+            for (const enemy of enemies) {
+                const dx = enemy.x - unit.x;
+                const dy = enemy.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist < type.sight) {
-                    unit.attackTarget = other;
+                    unit.attackTarget = enemy;
                     break;
                 }
             }
         }
 
-        // Keep in bounds
         unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x));
         unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y));
     }
@@ -760,12 +1084,9 @@ function updateUnits(dt) {
 
 function updateHarvester(unit, type) {
     const player = game.players[unit.playerId];
-
-    // Find nearest HQ for dropoff
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
 
     if (unit.cargo >= type.capacity || (unit.returning && unit.cargo > 0)) {
-        // Return to HQ
         unit.returning = true;
         if (hq) {
             const dx = hq.x - unit.x;
@@ -777,21 +1098,18 @@ function updateHarvester(unit, type) {
                 unit.y += (dy / dist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
             } else {
-                // Deposit cargo
                 player.oil += unit.cargo;
                 unit.cargo = 0;
                 unit.returning = false;
             }
         }
     } else {
-        // Find oil
         let nearestOil = null;
         let nearestDist = Infinity;
 
         for (let y = 0; y < MAP_SIZE; y++) {
             for (let x = 0; x < MAP_SIZE; x++) {
                 if (game.map[y][x].oil) {
-                    // Check if not already occupied by derrick
                     const hasDerrick = game.buildings.some(b =>
                         b.type === 'derrick' && Math.abs(b.x - x) < 1 && Math.abs(b.y - y) < 1
                     );
@@ -816,7 +1134,6 @@ function updateHarvester(unit, type) {
                 unit.y += (dy / nearestDist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
             } else {
-                // Harvest
                 unit.cargo = Math.min(type.capacity, unit.cargo + 2);
             }
         } else if (unit.cargo > 0) {
@@ -830,7 +1147,6 @@ function updateBuildings(dt) {
         const building = game.buildings[i];
         const type = BUILDING_TYPES[building.type];
 
-        // Death check
         if (building.hp <= 0) {
             createExplosion(building.x, building.y, true);
             game.buildings.splice(i, 1);
@@ -843,14 +1159,16 @@ function updateBuildings(dt) {
             let nearestEnemy = null;
             let nearestDist = Infinity;
 
-            for (const unit of game.units) {
-                if (unit.playerId === building.playerId) continue;
-                const dx = unit.x - building.x;
-                const dy = unit.y - building.y;
+            const enemies = [...game.units.filter(u => u.playerId !== building.playerId),
+                            ...game.buildings.filter(b => b.playerId !== building.playerId)];
+
+            for (const enemy of enemies) {
+                const dx = enemy.x - building.x;
+                const dy = enemy.y - building.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist < type.range && dist < nearestDist) {
                     nearestDist = dist;
-                    nearestEnemy = unit;
+                    nearestEnemy = enemy;
                 }
             }
 
@@ -860,11 +1178,9 @@ function updateBuildings(dt) {
             }
         }
 
-        // Production
         if (building.producing) {
             building.produceProgress++;
             if (building.produceProgress >= building.produceTime) {
-                // Spawn unit
                 spawnUnit(building.producing, building.playerId, building.x + 2, building.y + 2);
                 building.producing = null;
                 building.produceProgress = 0;
@@ -881,13 +1197,11 @@ function updateProjectiles(dt) {
         proj.y += proj.vy;
         proj.life--;
 
-        // Check hit
         const dx = proj.targetX - proj.x;
         const dy = proj.targetY - proj.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 1 || proj.life <= 0) {
-            // Deal damage
             if (proj.target && proj.target.hp > 0) {
                 proj.target.hp -= proj.damage;
                 createImpact(proj.x, proj.y);
@@ -903,7 +1217,7 @@ function updateParticles(dt) {
         p.x += p.vx;
         p.y += p.vy;
         p.z += p.vz;
-        p.vz -= 0.1; // gravity
+        p.vz -= 0.1;
         p.life -= 0.02;
 
         if (p.life <= 0 || p.z < 0) {
@@ -913,7 +1227,6 @@ function updateParticles(dt) {
 }
 
 function updateFogOfWar() {
-    // Reset explored areas to "seen but not visible"
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
             if (game.fogOfWar[y][x] === 2) {
@@ -922,7 +1235,6 @@ function updateFogOfWar() {
         }
     }
 
-    // Update visibility from player units and buildings
     const revealers = [
         ...game.units.filter(u => u.playerId === 0),
         ...game.buildings.filter(b => b.playerId === 0)
@@ -947,7 +1259,8 @@ function updateFogOfWar() {
 }
 
 function updateAI() {
-    if (game.tick % 120 !== 0) return; // Run every 2 seconds
+    const difficulty = AI_DIFFICULTY[settings.aiDifficulty];
+    if (game.tick % difficulty.buildDelay !== 0) return;
 
     const ai = game.players[1];
     const aiUnits = game.units.filter(u => u.playerId === 1);
@@ -955,11 +1268,21 @@ function updateAI() {
     const playerUnits = game.units.filter(u => u.playerId === 0);
     const playerBuildings = game.buildings.filter(b => b.playerId === 0);
 
-    // Build production buildings
     const aiHQ = aiBuildings.find(b => b.type === 'hq');
     const aiBarracks = aiBuildings.filter(b => b.type === 'barracks');
     const aiFactory = aiBuildings.filter(b => b.type === 'factory');
+    const aiHarvesters = aiUnits.filter(u => u.type === 'harvester');
 
+    // Build harvester if none
+    if (aiHarvesters.length === 0 && aiFactory.length > 0) {
+        const factory = aiFactory[0];
+        if (!factory.producing && ai.oil >= 500) {
+            startProduction(factory, 'harvester');
+            ai.oil -= 500;
+        }
+    }
+
+    // Build barracks
     if (aiHQ && ai.oil >= 400 && aiBarracks.length < 2) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
@@ -968,6 +1291,7 @@ function updateAI() {
         }
     }
 
+    // Build factory
     if (aiHQ && ai.oil >= 600 && aiFactory.length < 1 && aiBarracks.length > 0) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
@@ -985,17 +1309,18 @@ function updateAI() {
     }
 
     for (const factory of aiFactory) {
-        if (!factory.producing && ai.oil >= 300) {
+        if (!factory.producing && ai.oil >= 300 && aiHarvesters.length > 0) {
             startProduction(factory, 'tank');
             ai.oil -= 300;
         }
     }
 
-    // Attack if we have enough units
-    if (aiUnits.length >= 5) {
+    // Attack when enough units
+    const combatUnits = aiUnits.filter(u => u.type !== 'harvester');
+    if (combatUnits.length >= difficulty.attackThreshold) {
         const target = playerBuildings[0] || playerUnits[0];
         if (target) {
-            for (const unit of aiUnits) {
+            for (const unit of combatUnits) {
                 if (!unit.attackTarget) {
                     unit.attackTarget = target;
                 }
@@ -1003,20 +1328,15 @@ function updateAI() {
         }
     }
 
-    // Give AI some oil periodically
-    ai.oil += 20;
+    // AI gets oil bonus based on difficulty
+    ai.oil += 10 * difficulty.oilMult;
 }
 
 function updateResources() {
-    // Derricks generate oil
     for (const building of game.buildings) {
         if (building.type === 'derrick') {
             const type = BUILDING_TYPES.derrick;
             game.players[building.playerId].oil += type.generates / 60;
-        }
-        if (building.type === 'powerplant') {
-            const type = BUILDING_TYPES.powerplant;
-            // Power is just tracked, not consumed for now
         }
     }
 }
@@ -1024,6 +1344,18 @@ function updateResources() {
 function updateUI() {
     document.getElementById('oil').textContent = Math.floor(game.players[0].oil);
     document.getElementById('power').textContent = Math.floor(game.players[0].power);
+
+    // Timer
+    if (settings.timeLimit > 0) {
+        const seconds = Math.max(0, Math.floor(game.timeRemaining / 60));
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        const timerEl = document.getElementById('timer');
+        timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        timerEl.classList.toggle('warning', seconds < 60);
+    } else {
+        document.getElementById('timer').textContent = '--:--';
+    }
 
     // Selection info
     const infoEl = document.getElementById('selectionInfo');
@@ -1035,14 +1367,13 @@ function updateUI() {
         infoEl.innerHTML = `
             <strong>${type.name}</strong><br>
             HP: ${Math.floor(sel.hp)}/${type.hp}<br>
-            ${sel.cargo !== undefined ? `Cargo: ${sel.cargo}/${type.capacity}` : ''}
+            ${sel.cargo !== undefined ? `Cargo: ${Math.floor(sel.cargo)}/${type.capacity}` : ''}
             ${sel.producing ? `Building: ${sel.producing}` : ''}
         `;
     } else {
         infoEl.innerHTML = `${game.selection.length} units selected`;
     }
 
-    // Build menu
     updateBuildMenu();
 }
 
@@ -1050,7 +1381,6 @@ function updateBuildMenu() {
     const menu = document.getElementById('buildMenu');
     const player = game.players[0];
 
-    // Check what's selected
     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
 
     if (selectedBuilding && selectedBuilding.playerId === 0) {
@@ -1073,7 +1403,6 @@ function updateBuildMenu() {
             menu.appendChild(btn);
         }
     } else {
-        // Show building options
         menu.innerHTML = '';
         const buildable = ['barracks', 'factory', 'derrick', 'turret', 'powerplant'];
 
@@ -1127,7 +1456,7 @@ function createBuilding(type, playerId, x, y) {
 function startProduction(building, unitType) {
     building.producing = unitType;
     building.produceProgress = 0;
-    building.produceTime = 180; // 3 seconds at 60fps
+    building.produceTime = 180;
 }
 
 function fireProjectile(source, target, customDamage) {
@@ -1217,20 +1546,20 @@ function shadeColor(color, percent) {
 const keys = {};
 
 canvas.addEventListener('mousedown', (e) => {
+    if (game.state !== 'playing') return;
+
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (e.button === 0) { // Left click
+    if (e.button === 0) {
         if (game.placingBuilding) {
-            // Place building
             const world = screenToWorld(x, y);
             const tx = Math.floor(world.x);
             const ty = Math.floor(world.y);
             const type = BUILDING_TYPES[game.placingBuilding];
 
             if (game.players[0].oil >= type.cost) {
-                // Check if on oil for derrick
                 if (game.placingBuilding === 'derrick') {
                     if (!game.map[ty]?.[tx]?.oil) {
                         game.placingBuilding = null;
@@ -1243,13 +1572,11 @@ canvas.addEventListener('mousedown', (e) => {
             }
             game.placingBuilding = null;
         } else {
-            // Start selection box
             game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
         }
-    } else if (e.button === 2) { // Right click
+    } else if (e.button === 2) {
         const world = screenToWorld(x, y);
 
-        // Check if clicking on enemy
         const enemy = game.units.find(u => {
             if (u.playerId === 0) return false;
             const screen = worldToScreen(u.x, u.y);
@@ -1303,14 +1630,11 @@ canvas.addEventListener('mouseup', (e) => {
         const minY = Math.min(box.y1, box.y2);
         const maxY = Math.max(box.y1, box.y2);
 
-        // Clear selection if not holding shift
         if (!keys['Shift']) {
             game.selection = [];
         }
 
-        // Box select or click select
         if (maxX - minX < 5 && maxY - minY < 5) {
-            // Click select
             const clicked = [...game.units, ...game.buildings].find(entity => {
                 const screen = worldToScreen(entity.x, entity.y);
                 const dx = screen.x - game.mouse.x;
@@ -1322,7 +1646,6 @@ canvas.addEventListener('mouseup', (e) => {
                 game.selection = [clicked];
             }
         } else {
-            // Box select
             for (const unit of game.units) {
                 if (unit.playerId !== 0) continue;
                 const screen = worldToScreen(unit.x, unit.y);
@@ -1339,8 +1662,9 @@ canvas.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// Minimap click
 minimapCanvas.addEventListener('click', (e) => {
+    if (game.state !== 'playing' && game.state !== 'paused') return;
+
     const rect = minimapCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -1353,23 +1677,27 @@ minimapCanvas.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    // Number keys for control groups
+    if (e.key === 'p' || e.key === 'P') {
+        togglePause();
+    }
+
+    if (e.key === 'Escape') {
+        if (game.state === 'playing' || game.state === 'paused') {
+            game.placingBuilding = null;
+            game.selection = [];
+        }
+    }
+
+    if (game.state !== 'playing') return;
+
     if (e.key >= '1' && e.key <= '5') {
         if (e.ctrlKey) {
-            // Assign group
             game[`group${e.key}`] = [...game.selection];
         } else {
-            // Select group
             game.selection = game[`group${e.key}`] || [];
         }
     }
 
-    // A for attack move
-    if (e.key === 'a' || e.key === 'A') {
-        // TODO: Attack move cursor
-    }
-
-    // S for stop
     if (e.key === 's' || e.key === 'S') {
         for (const sel of game.selection) {
             sel.targetX = undefined;
@@ -1377,23 +1705,18 @@ document.addEventListener('keydown', (e) => {
             sel.attackTarget = null;
         }
     }
-
-    // Escape to cancel
-    if (e.key === 'Escape') {
-        game.placingBuilding = null;
-        game.selection = [];
-    }
 });
 
 document.addEventListener('keyup', (e) => {
     keys[e.key] = false;
 });
 
-// Camera scrolling
 function updateCamera() {
+    if (game.state !== 'playing' && game.state !== 'paused') return;
+
     const speed = 10;
     if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= speed;
-    if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += speed;
+    if (keys['ArrowDown']) game.camera.y += speed;
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= speed;
     if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += speed;
 }
@@ -1405,23 +1728,17 @@ function updateCamera() {
 function initGame() {
     generateMap();
 
-    // Player base (bottom-left area)
+    // Player base: HQ + Harvester
     createBuilding('hq', 0, 10, 10);
-    spawnUnit('infantry', 0, 12, 10);
-    spawnUnit('infantry', 0, 12, 11);
-    spawnUnit('infantry', 0, 13, 10);
-    spawnUnit('harvester', 0, 11, 12);
+    spawnUnit('harvester', 0, 12, 12);
 
-    // Enemy base (top-right area)
+    // Enemy base: HQ + Harvester
     createBuilding('hq', 1, MAP_SIZE - 12, MAP_SIZE - 12);
-    spawnUnit('infantry', 1, MAP_SIZE - 14, MAP_SIZE - 12);
-    spawnUnit('infantry', 1, MAP_SIZE - 14, MAP_SIZE - 13);
-    spawnUnit('infantry', 1, MAP_SIZE - 15, MAP_SIZE - 12);
+    spawnUnit('harvester', 1, MAP_SIZE - 14, MAP_SIZE - 14);
 
     // Center camera on player base
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
     if (playerHQ) {
-        const screen = worldToScreen(playerHQ.x, playerHQ.y);
         game.camera.x = playerHQ.x * TILE_WIDTH / 2;
         game.camera.y = playerHQ.y * TILE_HEIGHT;
     }
@@ -1438,18 +1755,22 @@ function gameLoop(timestamp) {
     lastTime = timestamp;
 
     updateCamera();
-    update(dt);
-    render();
+
+    if (game.state === 'playing') {
+        update(dt);
+    }
+
+    if (game.state !== 'menu') {
+        render();
+    }
 
     requestAnimationFrame(gameLoop);
 }
 
-// Start game
-initGame();
+// Start loop
 requestAnimationFrame(gameLoop);
 
 console.log('XFire RTS Engine loaded!');
-console.log('Controls: WASD/Arrows to scroll, Left-click select, Right-click move/attack');
     </script>
 </body>
 </html>
