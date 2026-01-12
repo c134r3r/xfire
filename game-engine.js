@@ -2200,6 +2200,8 @@ function gameLoop(timestamp) {
 if (!initializeCanvases()) {
     console.error('Failed to initialize canvases');
 } else {
+    // Start game immediately (welcome screen disabled for now)
+    initGame();
     requestAnimationFrame(gameLoop);
 }
 
