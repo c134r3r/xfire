@@ -164,17 +164,57 @@ function toggleGraphicsMode(useSprites = null) {
     console.log('[XFire Assets] Changes will apply to newly rendered units/buildings');
 }
 
+/**
+ * Load procedurally generated sprites using SpriteGenerator
+ */
+async function loadGeneratedSprites() {
+    console.log('[XFire Assets] Loading procedurally generated sprites...');
+
+    if (typeof SpriteGenerator === 'undefined') {
+        console.warn('[XFire Assets] SpriteGenerator not available');
+        return false;
+    }
+
+    if (typeof assetLoader === 'undefined') {
+        console.warn('[XFire Assets] AssetLoader not available');
+        return false;
+    }
+
+    try {
+        const generator = new SpriteGenerator();
+
+        // Generate player team (blue) sprites
+        generator.generateAllSprites(assetLoader, '#4488ff');
+
+        console.log('[XFire Assets] ✓ Generated sprites loaded successfully');
+        return true;
+    } catch (error) {
+        console.error('[XFire Assets] Error generating sprites:', error);
+        return false;
+    }
+}
+
 // ===== Auto-load assets when this script loads =====
-// Uncomment the line below to automatically load assets on page load
 
 document.addEventListener('DOMContentLoaded', () => {
     // Wait a bit for game to initialize
     setTimeout(() => {
-        if (typeof assetLoader !== 'undefined') {
-            console.log('[XFire Assets] Game initialized, loading custom assets...');
-            loadCustomAssets().then(success => {
+        if (typeof assetLoader !== 'undefined' && typeof SpriteGenerator !== 'undefined') {
+            console.log('[XFire Assets] Game initialized, generating sprites...');
+
+            // First try to generate sprites (procedural generation)
+            loadGeneratedSprites().then(success => {
                 if (success) {
                     checkLoadedAssets();
+
+                    // Then try to load custom assets (they will override generated ones if present)
+                    console.log('[XFire Assets] Checking for custom assets...');
+                    loadCustomAssets().then(customSuccess => {
+                        if (customSuccess) {
+                            console.log('[XFire Assets] Custom assets loaded, updated asset list:');
+                            checkLoadedAssets();
+                        }
+                    });
                 }
             });
         }
@@ -185,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         loadCustomAssets,
+        loadGeneratedSprites,
         loadTeamAssets,
         checkLoadedAssets,
         debugAssets,
@@ -195,6 +236,7 @@ if (typeof module !== 'undefined' && module.exports) {
 // Make functions available globally for console access
 window.xfireAssets = {
     loadCustomAssets,
+    loadGeneratedSprites,
     loadTeamAssets,
     checkLoadedAssets,
     debugAssets,
@@ -206,8 +248,13 @@ XFire Asset Loader - Console API
 
 Functions available as window.xfireAssets.*
 
+loadGeneratedSprites()
+  - Generate all sprites procedurally (Canvas-based)
+  - No external files needed!
+
 loadCustomAssets()
-  - Load all custom sprites from assets/ directory
+  - Load custom sprites from assets/ directory
+  - Overrides generated sprites if files exist
 
 loadTeamAssets(teamColor)
   - Load team-specific sprites (pass 'blue' or 'red')
@@ -223,10 +270,11 @@ toggleGraphicsMode(useSprites)
   - Pass true/false or null to toggle
 
 Example usage in console:
-  window.xfireAssets.loadCustomAssets()
-  window.xfireAssets.debugAssets()
-  window.xfireAssets.toggleGraphicsMode(false)  // Use procedural graphics
-  window.xfireAssets.toggleGraphicsMode(true)   // Use sprites
+  window.xfireAssets.loadGeneratedSprites()  // Generate new sprites
+  window.xfireAssets.loadCustomAssets()      // Load from files
+  window.xfireAssets.debugAssets()           // Show asset info
+  window.xfireAssets.toggleGraphicsMode(false) // Use procedural graphics
+  window.xfireAssets.toggleGraphicsMode(true)  // Use sprites
         `);
     }
 };
