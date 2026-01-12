@@ -9,22 +9,39 @@ if (isMac) {
 // XFIRE - Skirmish RTS Game Engine
 // ============================================
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d', { alpha: false, antialias: true });
-
-// High-DPI canvas setup for crisp graphics
+let canvas, ctx, minimapCanvas, minimapCtx;
 const dpr = window.devicePixelRatio || 1;
-canvas.width = canvas.offsetWidth * dpr;
-canvas.height = canvas.offsetHeight * dpr;
-ctx.scale(dpr, dpr);
-canvas.style.width = (canvas.width / dpr) + 'px';
-canvas.style.height = (canvas.height / dpr) + 'px';
 
-// Enable image smoothing for better rendering
-ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = 'high';
-const minimapCanvas = document.getElementById('minimap');
-const minimapCtx = minimapCanvas.getContext('2d');
+// Initialize canvas when DOM is ready
+function initializeCanvases() {
+    canvas = document.getElementById('canvas');
+    if (!canvas) {
+        console.error('Canvas element not found!');
+        return false;
+    }
+
+    ctx = canvas.getContext('2d', { alpha: false, antialias: true });
+    if (!ctx) {
+        console.error('Could not get 2D context!');
+        return false;
+    }
+
+    // High-DPI canvas setup for crisp graphics
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    canvas.style.width = (canvas.width / dpr) + 'px';
+    canvas.style.height = (canvas.height / dpr) + 'px';
+
+    // Enable image smoothing for better rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    minimapCanvas = document.getElementById('minimap');
+    minimapCtx = minimapCanvas.getContext('2d');
+
+    return true;
+}
 
 // Game Constants
 const TILE_WIDTH = 64;
@@ -2113,9 +2130,21 @@ function updateCamera() {
 // ============================================
 
 function startNewGame() {
-    const welcomeScreen = document.getElementById('welcomeScreen');
-    welcomeScreen.classList.add('hidden');
-    initGame();
+    try {
+        // Make sure canvas is initialized
+        if (!canvas || !ctx) {
+            if (!initializeCanvases()) {
+                console.error('Failed to initialize canvases');
+                return;
+            }
+        }
+
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        welcomeScreen.classList.add('hidden');
+        initGame();
+    } catch (e) {
+        console.error('Error starting new game:', e);
+    }
 }
 
 function initGame() {
@@ -2150,6 +2179,12 @@ function initGame() {
 let lastTime = 0;
 
 function gameLoop(timestamp) {
+    if (!canvas || !ctx) {
+        // Canvas not yet initialized, try again next frame
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
 
@@ -2160,8 +2195,13 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-// Start game loop (game data initialized when player clicks "New Game")
-requestAnimationFrame(gameLoop);
+// Initialize canvases and start game loop
+// defer attribute ensures this runs after DOM is ready
+if (!initializeCanvases()) {
+    console.error('Failed to initialize canvases');
+} else {
+    requestAnimationFrame(gameLoop);
+}
 
 console.log('XFire RTS Engine loaded!');
 console.log('Controls:
