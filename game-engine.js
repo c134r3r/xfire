@@ -100,15 +100,9 @@ const game = {
     group1: [], group2: [], group3: [], group4: [], group5: []
 };
 
-// Tech Tree Dependencies
-const TECH_TREE = {
-    barracks: { requires: [], unlocks: ['academy'] },
-    factory: { requires: [], unlocks: ['techLab'] },
-    academy: { requires: ['barracks'], unlocks: [] },
-    techLab: { requires: ['factory'], unlocks: [] }
-};
-
-// Unit Types and Building Types are imported from constants.js
+// Game constants imported from constants.js:
+// - TILE_WIDTH, TILE_HEIGHT, MAP_SIZE
+// - UNIT_TYPES, BUILDING_TYPES, TECH_TREE
 
 // ============================================
 // MAP GENERATION
