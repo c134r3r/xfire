@@ -1143,17 +1143,26 @@ function updateUnits(dt) {
                 const dy = target.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                unit.angle = Math.atan2(dy, dx);
-
-                if (dist > type.range) {
-                    // Move towards target
-                    unit.x += (dx / dist) * type.speed * dt * 60;
-                    unit.y += (dy / dist) * type.speed * dt * 60;
-                } else {
-                    // Attack
+                // Avoid division by zero
+                if (dist < 0.01) {
+                    // Already at target position, just attack
                     if (game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
+                    }
+                } else {
+                    unit.angle = Math.atan2(dy, dx);
+
+                    if (dist > type.range) {
+                        // Move towards target
+                        unit.x += (dx / dist) * type.speed * dt * 60;
+                        unit.y += (dy / dist) * type.speed * dt * 60;
+                    } else {
+                        // Attack
+                        if (game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                            fireProjectile(unit, target);
+                            unit.lastAttack = game.tick;
+                        }
                     }
                 }
             }
@@ -1164,7 +1173,7 @@ function updateUnits(dt) {
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Only stop when very close to target
+            // Only stop when very close to target (also prevents division by zero)
             if (dist < 0.2) {
                 unit.targetX = undefined;
                 unit.targetY = undefined;
@@ -1172,7 +1181,7 @@ function updateUnits(dt) {
                 unit.angle = Math.atan2(dy, dx);
                 const speed = type.speed * dt * 60;
 
-                // Simple movement towards target
+                // Simple movement towards target (dist is guaranteed > 0.2 here)
                 let moveX = (dx / dist) * speed;
                 let moveY = (dy / dist) * speed;
 
@@ -1263,6 +1272,7 @@ function updateHarvester(unit, type) {
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist > 2) {
+                // Avoid division by zero (dist is guaranteed > 2 here)
                 unit.x += (dx / dist) * type.speed * 0.016 * 60;
                 unit.y += (dy / dist) * type.speed * 0.016 * 60;
                 unit.angle = Math.atan2(dy, dx);
@@ -1447,8 +1457,13 @@ function updateProjectiles(dt) {
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 1 || proj.life <= 0) {
-            // Deal damage
-            if (proj.target && proj.target.hp > 0) {
+            // Deal damage - check if target still exists in game
+            const targetStillExists = proj.target && (
+                game.units.includes(proj.target) ||
+                game.buildings.includes(proj.target)
+            );
+
+            if (targetStillExists && proj.target.hp > 0) {
                 let finalDamage = proj.damage;
 
                 // Apply versus bonus (50% extra damage against matching category)
@@ -1460,8 +1475,8 @@ function updateProjectiles(dt) {
                 }
 
                 proj.target.hp -= finalDamage;
-                createImpact(proj.x, proj.y);
             }
+            createImpact(proj.x, proj.y);
             game.projectiles.splice(i, 1);
         }
     }
@@ -2968,13 +2983,31 @@ function checkTimeLimit() {
     const enemyUnits = game.units.filter(u => u.playerId === 1).length;
     const enemyBuildings = game.buildings.filter(b => b.playerId === 1).length;
 
-    game.status = 'LOST';
-    showScreen('defeatScreen');
-    const statsEl = document.getElementById('defeatStats');
-    if (statsEl) {
-        statsEl.innerHTML = `Time Limit Reached<br>
+    // Compare total forces to determine winner
+    const playerScore = playerUnits + playerBuildings * 2;
+    const enemyScore = enemyUnits + enemyBuildings * 2;
+
+    if (playerScore > enemyScore) {
+        game.status = 'WON';
+        showScreen('victoryScreen');
+        const statsEl = document.getElementById('victoryStats');
+        if (statsEl) {
+            const timeMin = Math.floor(game.timeElapsed / 60);
+            const timeSec = Math.floor(game.timeElapsed % 60);
+            statsEl.innerHTML = `Time Limit Victory!<br>
+Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
 Your Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
 Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
+        }
+    } else {
+        game.status = 'LOST';
+        showScreen('defeatScreen');
+        const statsEl = document.getElementById('defeatStats');
+        if (statsEl) {
+            statsEl.innerHTML = `Time Limit Reached<br>
+Your Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
+Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
+        }
     }
 }
 
@@ -3044,8 +3077,34 @@ function setupMenuHandlers() {
     if (backBtn) backBtn.addEventListener('click', goToMainMenu);
     if (resumeBtn) resumeBtn.addEventListener('click', togglePause);
     if (quitBtn) quitBtn.addEventListener('click', goToMainMenu);
-    if (playAgainBtn) playAgainBtn.addEventListener('click', () => { resetGame(); initGame(); game.status = 'PLAYING'; showScreen('mainMenu'); document.getElementById('mainMenu').classList.add('hidden'); });
-    if (retryBtn) retryBtn.addEventListener('click', () => { resetGame(); initGame(); game.status = 'PLAYING'; showScreen('mainMenu'); document.getElementById('mainMenu').classList.add('hidden'); });
+    if (playAgainBtn) playAgainBtn.addEventListener('click', () => {
+        resetGame();
+        initGame();
+        game.status = 'PLAYING';
+        showScreen('mainMenu');
+        document.getElementById('mainMenu').classList.add('hidden');
+        document.getElementById('timerDisplay').style.display = 'block';
+        // Restart background music
+        const bgMusic = document.getElementById('backgroundMusic');
+        if (bgMusic) {
+            bgMusic.currentTime = 0;
+            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        }
+    });
+    if (retryBtn) retryBtn.addEventListener('click', () => {
+        resetGame();
+        initGame();
+        game.status = 'PLAYING';
+        showScreen('mainMenu');
+        document.getElementById('mainMenu').classList.add('hidden');
+        document.getElementById('timerDisplay').style.display = 'block';
+        // Restart background music
+        const bgMusic = document.getElementById('backgroundMusic');
+        if (bgMusic) {
+            bgMusic.currentTime = 0;
+            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        }
+    });
 
     menuReturnBtns.forEach(btn => {
         btn.addEventListener('click', goToMainMenu);
