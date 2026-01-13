@@ -2044,10 +2044,53 @@ function updateBuildMenu() {
                 menu.appendChild(btn);
             }
         }
+        // Show turret/defensive building info
+        else if (type.range && type.damage) {
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
+            let infoHTML = `<strong style="color: #fff;">${type.name}</strong><br><br>`;
+            infoHTML += `<span style="color: #f80;">Range:</span> ${type.range}<br>`;
+            infoHTML += `<span style="color: #f00;">Damage:</span> ${type.damage}<br>`;
+            infoHTML += `<span style="color: #0af;">Attack Speed:</span> ${type.attackSpeed}ms<br>`;
+            if (type.versus) {
+                const versusColor = type.versus === 'infantry' ? '#0f0' : '#ff0';
+                infoHTML += `<br><span style="color: ${versusColor};">+50% vs ${type.versus}</span>`;
+            }
+            if (type.powerUse) {
+                infoHTML += `<br><span style="color: #88f;">Power:</span> -${type.powerUse}`;
+            }
+            infoDiv.innerHTML = infoHTML;
+            menu.appendChild(infoDiv);
+        }
+        // Show other building info (powerplant, derrick, etc.)
+        else {
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
+            let infoHTML = `<strong style="color: #fff;">${type.name}</strong><br><br>`;
+            if (type.powerGen) {
+                infoHTML += `<span style="color: #0f0;">Power:</span> +${type.powerGen}<br>`;
+            }
+            if (type.generates) {
+                infoHTML += `<span style="color: #fa0;">Oil/sec:</span> +${(type.generates / 60).toFixed(2)}<br>`;
+            }
+            if (type.powerUse) {
+                infoHTML += `<span style="color: #88f;">Power Use:</span> -${type.powerUse}<br>`;
+            }
+            if (type.bonuses) {
+                if (type.bonuses.infantryDamage) {
+                    infoHTML += `<span style="color: #0f0;">Infantry Damage:</span> +${Math.round((type.bonuses.infantryDamage - 1) * 100)}%<br>`;
+                }
+                if (type.bonuses.vehicleDamage) {
+                    infoHTML += `<span style="color: #ff0;">Vehicle Damage:</span> +${Math.round((type.bonuses.vehicleDamage - 1) * 100)}%<br>`;
+                }
+            }
+            infoDiv.innerHTML = infoHTML;
+            menu.appendChild(infoDiv);
+        }
     } else {
         // Show building options (only available techs)
         menu.innerHTML = '';
-        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
+        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
 
         for (let i = 0; i < buildable.length; i++) {
             const bType = buildable[i];
@@ -2635,7 +2678,7 @@ canvas.addEventListener('wheel', (e) => {
             }
         } else {
             // No building selected or building has no production - use numbers for buildings
-            const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
+            const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
             const buildingIndex = keyNum - 1;
 
             if (buildableList[buildingIndex]) {
