@@ -82,7 +82,7 @@ const game = {
     status: 'MENU', // MENU, PLAYING, PAUSED, WON, LOST
     tick: 0,
     timeElapsed: 0,
-    camera: { x: MAP_SIZE * TILE_WIDTH / 4, y: 0 },
+    camera: { x: 0, y: (MAP_SIZE / 2) * TILE_HEIGHT },
     mouse: { x: 0, y: 0, worldX: 0, worldY: 0 },
     selection: [],
     selectionBox: null,
@@ -894,23 +894,26 @@ function renderMinimap() {
 
     // Draw terrain
     for (let y = 0; y < MAP_SIZE; y++) {
+        if (!game.map[y]) continue;
         for (let x = 0; x < MAP_SIZE; x++) {
             const tile = game.map[y][x];
-            const fog = game.fogOfWar[y][x];
-
-            if (fog === 0) continue;
+            if (!tile) continue;
+            const fog = game.fogOfWar[y]?.[x] ?? 0;
 
             let color = '#3d5c3d';
             if (tile.type === 'water') color = '#304060';
             else if (tile.type === 'rock') color = '#606060';
             else if (tile.type === 'sand') color = '#a08050';
+            else if (tile.type === 'hill') color = '#5d7c4d';
 
-            if (fog === 1) color = shadeColor(color, -40);
+            // Apply fog darkness based on visibility level
+            if (fog === 0) color = shadeColor(color, -60); // Unexplored: very dark
+            else if (fog === 1) color = shadeColor(color, -30); // Explored but not visible
 
             minimapCtx.fillStyle = color;
             minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
 
-            if (tile.oil) {
+            if (tile.oil && fog >= 1) {
                 minimapCtx.fillStyle = '#000';
                 minimapCtx.fillRect(x * scale, y * scale, scale, scale);
             }
@@ -2196,6 +2199,9 @@ function resetGame() {
     game.group3 = [];
     game.group4 = [];
     game.group5 = [];
+    // Reset camera to center of map
+    game.camera.x = 0;
+    game.camera.y = (MAP_SIZE / 2) * TILE_HEIGHT;
     game.players[0].oil = gameSettings.startingOil;
     game.players[0].power = 100;
     game.players[0].tech = { barracks: true, factory: false, academy: false };
@@ -2341,12 +2347,14 @@ function initGame() {
     createBuilding('hq', 1, MAP_SIZE - 12, MAP_SIZE - 12);
     spawnUnit('harvester', 1, MAP_SIZE - 13, MAP_SIZE - 14);
 
-    // Center camera on player base
+    // Center camera on player base using isometric coordinates
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
     if (playerHQ) {
-        const screen = worldToScreen(playerHQ.x, playerHQ.y);
-        game.camera.x = playerHQ.x * TILE_WIDTH / 2;
-        game.camera.y = playerHQ.y * TILE_HEIGHT;
+        // Convert world coords to isometric screen coords for camera
+        const isoX = (playerHQ.x - playerHQ.y) * (TILE_WIDTH / 2);
+        const isoY = (playerHQ.x + playerHQ.y) * (TILE_HEIGHT / 2);
+        game.camera.x = isoX;
+        game.camera.y = isoY;
     }
 }
 
