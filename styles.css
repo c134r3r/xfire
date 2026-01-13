@@ -246,6 +246,7 @@ body {
     background-image: url('assets/mainmenu-bg.png');
     background-size: cover;
     background-position: center;
+    background-repeat: no-repeat;
     background-attachment: fixed;
     display: flex;
     justify-content: center;
