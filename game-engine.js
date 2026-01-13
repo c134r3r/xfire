@@ -87,9 +87,46 @@ const game = {
     selection: [],
     selectionBox: null,
     placingBuilding: null,
+    placingBuildingFrom: null,
     players: [
-        { id: 0, color: '#4488ff', oil: 1200, power: 100, team: 'player', tech: { barracks: true, factory: false, academy: false } },
-        { id: 1, color: '#ff4444', oil: 1200, power: 100, team: 'enemy', tech: { barracks: true, factory: false, academy: false } }
+        {
+            id: 0,
+            color: '#4488ff',
+            oil: 1200,
+            power: 100,
+            team: 'player',
+            tech: {
+                barracks: true,
+                factory: true,
+                derrick: true,
+                turret: true,
+                powerplant: true,
+                academy: true,
+                techLab: true,
+                researchLab: true,
+                rifleTurret: false,
+                missileTurret: false
+            }
+        },
+        {
+            id: 1,
+            color: '#ff4444',
+            oil: 1200,
+            power: 100,
+            team: 'enemy',
+            tech: {
+                barracks: true,
+                factory: true,
+                derrick: true,
+                turret: true,
+                powerplant: true,
+                academy: true,
+                techLab: true,
+                researchLab: true,
+                rifleTurret: false,
+                missileTurret: false
+            }
+        }
     ],
     units: [],
     buildings: [],
