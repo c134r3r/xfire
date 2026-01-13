@@ -163,30 +163,12 @@ function generateMap() {
         }
     }
 
-    // Add terrain features using simplex-like noise
-    for (let y = 0; y < MAP_SIZE; y++) {
-        for (let x = 0; x < MAP_SIZE; x++) {
-            const noise = Math.sin(x * 0.1) * Math.cos(y * 0.1) +
-                         Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 0.5;
-
-            if (noise > 0.7) {
-                game.map[y][x].type = 'rock';
-                game.map[y][x].height = 1;
-            } else if (noise < -0.6) {
-                game.map[y][x].type = 'water';
-                game.map[y][x].height = -1;
-            } else if (noise > 0.3 && noise < 0.5) {
-                game.map[y][x].type = 'sand';
-            }
-        }
-    }
-
-    // Add hill areas (small mountain clusters for cover)
-    const hillCount = 3 + Math.floor(Math.random() * 3);
+    // Add hill areas (15% of map = mostly grass)
+    const hillCount = 4 + Math.floor(Math.random() * 3);
     for (let h = 0; h < hillCount; h++) {
         const centerX = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
         const centerY = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
-        const hillSize = 3 + Math.floor(Math.random() * 4);
+        const hillSize = 2 + Math.floor(Math.random() * 3);
 
         for (let y = centerY - hillSize; y <= centerY + hillSize; y++) {
             for (let x = centerX - hillSize; x <= centerX + hillSize; x++) {
@@ -194,10 +176,33 @@ function generateMap() {
                 const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
                 if (dist <= hillSize) {
                     const tile = game.map[y][x];
-                    // Only add hills to grass/sand
-                    if (tile.type === 'grass' || tile.type === 'sand') {
+                    // Only add hills to grass
+                    if (tile.type === 'grass') {
                         tile.type = 'hill';
-                        tile.height = 2; // Higher elevation
+                        tile.height = 2;
+                    }
+                }
+            }
+        }
+    }
+
+    // Add small rivers/lakes (a few small water features, not large seas)
+    const waterCount = 2 + Math.floor(Math.random() * 2);
+    for (let w = 0; w < waterCount; w++) {
+        const centerX = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const centerY = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const waterSize = 1 + Math.floor(Math.random() * 2); // Small lakes/rivers
+
+        for (let y = centerY - waterSize; y <= centerY + waterSize; y++) {
+            for (let x = centerX - waterSize; x <= centerX + waterSize; x++) {
+                if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+                const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                if (dist <= waterSize) {
+                    const tile = game.map[y][x];
+                    // Only add water to grass
+                    if (tile.type === 'grass') {
+                        tile.type = 'water';
+                        tile.height = -1;
                     }
                 }
             }
@@ -209,7 +214,7 @@ function generateMap() {
     for (let i = 0; i < oilCount; i++) {
         const x = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
         const y = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
-        if (game.map[y][x].type === 'grass' || game.map[y][x].type === 'sand') {
+        if (game.map[y][x].type === 'grass') {
             game.map[y][x].oil = true;
         }
     }
@@ -2042,50 +2047,59 @@ function canBuildAt(buildingType, x, y) {
     const type = BUILDING_TYPES[buildingType];
     if (!type) return false;
 
-    // Check terrain first (basic validity)
+    // Check map bounds
     if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
-    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
-    if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') return false;
 
-    // Check if on oil for derrick ONLY
+    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
+
+    // Cannot build on water or hill
+    if (tileType === 'water' || tileType === 'hill') return false;
+
+    // Derrick requires oil tile
     if (buildingType === 'derrick') {
         if (!game.map[Math.floor(y)]?.[Math.floor(x)]?.oil) return false;
     }
 
-    // Check for building collision
+    // Check for building collision (don't build on top of other buildings)
     const bSize = type.size;
+    let canPlaceHere = true;
+
     for (const building of game.buildings) {
         const bType = BUILDING_TYPES[building.type];
         const bdx = Math.abs(x - building.x);
         const bdy = Math.abs(y - building.y);
-        // Using Chebyshev distance for tile-based collision
         const dist = Math.max(bdx, bdy);
+
+        // If too close to another building, can't place
         if (dist < bSize + bType.size) {
-            return false;
+            canPlaceHere = false;
+            break;
         }
     }
 
-    // Determine max distance based on source
-    let maxDist = 6;
-    let sourceBuilding = null;
+    if (!canPlaceHere) return false;
 
-    if (game.placingBuildingFrom) {
-        sourceBuilding = game.placingBuildingFrom;
-        maxDist = 3;
-    } else {
-        sourceBuilding = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
-        maxDist = 6;
+    // Check distance: must be within 5 tiles of any own building
+    const playerBuildings = game.buildings.filter(b => b.playerId === 0);
+
+    if (playerBuildings.length === 0) {
+        // No buildings yet - can build anywhere valid
+        return true;
     }
 
-    // Check distance from source building using Chebyshev distance (tile-based)
-    if (sourceBuilding) {
-        const dx = Math.abs(x - sourceBuilding.x);
-        const dy = Math.abs(y - sourceBuilding.y);
-        const dist = Math.max(dx, dy);  // Chebyshev distance for isometric grid
-        if (dist > maxDist) return false;
+    // Check if within 5 tiles of any own building
+    for (const building of playerBuildings) {
+        const dx = Math.abs(x - building.x);
+        const dy = Math.abs(y - building.y);
+        const dist = Math.max(dx, dy); // Chebyshev distance
+
+        if (dist <= 5) {
+            return true;
+        }
     }
 
-    return true;
+    // Not within 5 tiles of any own building
+    return false;
 }
 
 function unlockTech(buildingType, playerId) {
