@@ -1237,9 +1237,9 @@ function updateHarvester(unit, type) {
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
 
     if (unit.cargo >= type.capacity || (unit.returning && unit.cargo > 0)) {
-        // Return to HQ
-        unit.returning = true;
+        // Return to HQ - only if HQ exists
         if (hq) {
+            unit.returning = true;
             const dx = hq.x - unit.x;
             const dy = hq.y - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1270,6 +1270,9 @@ function updateHarvester(unit, type) {
                 unit.cargo = 0;
                 unit.returning = false;
             }
+        } else {
+            // HQ doesn't exist - reset returning state and continue harvesting
+            unit.returning = false;
         }
     } else {
         // Find oil
@@ -1376,7 +1379,7 @@ function updateBuildings(dt) {
                 }
             }
 
-            if (nearestEnemy && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
+            if (nearestEnemy && nearestEnemy.hp > 0 && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
                 fireProjectile(building, nearestEnemy, type.damage);
                 building.lastAttack = game.tick;
             }
@@ -2261,6 +2264,9 @@ function fireProjectile(source, target, customDamage) {
     const dist = Math.sqrt(dx * dx + dy * dy);
     const speed = 0.3;
 
+    // Prevent division by zero if source and target are at the same position
+    if (dist === 0) return;
+
     // Check if path is blocked by hills
     const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
 
@@ -2737,6 +2743,21 @@ function showScreen(screenId) {
         screen.classList.remove('hidden');
     } else {
         console.error('  ❌ Screen not found:', screenId);
+    }
+
+    // Play intro music when showing main menu
+    if (screenId === 'mainMenu') {
+        const bgMusic = document.getElementById('backgroundMusic');
+        const introMusic = document.getElementById('introMusic');
+        if (bgMusic) {
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+        }
+        if (introMusic) {
+            introMusic.volume = 0.3;
+            introMusic.currentTime = 0;
+            introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
+        }
     }
 }
 
