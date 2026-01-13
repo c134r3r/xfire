@@ -18,7 +18,7 @@ const UNIT_TYPES = {
         range: 80,
         damage: 10,
         attackSpeed: 600,
-        sight: 140,
+        sight: 100,
         size: 8,
         category: 'infantry'
     },
@@ -31,7 +31,7 @@ const UNIT_TYPES = {
         range: 100,
         damage: 20,
         attackSpeed: 800,
-        sight: 200,
+        sight: 120,
         size: 14,
         category: 'armor'
     },
@@ -44,7 +44,7 @@ const UNIT_TYPES = {
         range: 120,
         damage: 35,
         attackSpeed: 1200,
-        sight: 180,
+        sight: 110,
         size: 16,
         category: 'armor'
     },
@@ -57,7 +57,7 @@ const UNIT_TYPES = {
         range: 130,
         damage: 55,
         attackSpeed: 1500,
-        sight: 160,
+        sight: 100,
         size: 18,
         category: 'armor'
     },
@@ -70,7 +70,7 @@ const UNIT_TYPES = {
         range: 0,
         damage: 0,
         attackSpeed: 0,
-        sight: 120,
+        sight: 80,
         size: 18,
         capacity: 500,
         category: 'armor'
@@ -97,7 +97,7 @@ const UNIT_TYPES = {
         range: 150,
         damage: 25,
         attackSpeed: 600,
-        sight: 220,
+        sight: 130,
         size: 12,
         category: 'armor'
     },
@@ -110,7 +110,7 @@ const UNIT_TYPES = {
         range: 100,
         damage: 8,
         attackSpeed: 400,
-        sight: 220,
+        sight: 180,
         size: 10,
         category: 'infantry'
     },
@@ -123,7 +123,7 @@ const UNIT_TYPES = {
         range: 120,
         damage: 35,
         attackSpeed: 1000,
-        sight: 160,
+        sight: 110,
         size: 12,
         category: 'infantry'
     }
@@ -138,7 +138,7 @@ const BUILDING_TYPES = {
         hp: 1000,
         size: 3,
         produces: ['infantry', 'rocket'],
-        sight: 200
+        sight: 130
     },
     barracks: {
         name: 'Barracks',
@@ -147,7 +147,7 @@ const BUILDING_TYPES = {
         hp: 400,
         size: 2,
         produces: ['infantry', 'scout', 'rocket'],
-        sight: 150,
+        sight: 100,
         powerUse: 10
     },
     factory: {
@@ -157,7 +157,7 @@ const BUILDING_TYPES = {
         hp: 600,
         size: 3,
         produces: ['lightTank', 'mediumTank', 'heavyTank', 'harvester', 'artillery', 'flak'],
-        sight: 150,
+        sight: 100,
         powerUse: 20
     },
     derrick: {
