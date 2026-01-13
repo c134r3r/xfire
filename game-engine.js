@@ -1936,19 +1936,21 @@ function updateBuildMenu() {
     } else {
         // Show building options (only available techs)
         menu.innerHTML = '';
-        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'researchLab', 'powerplant', 'academy', 'techLab'];
+        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
 
-        for (const bType of buildable) {
+        for (let i = 0; i < buildable.length; i++) {
+            const bType = buildable[i];
             const type = BUILDING_TYPES[bType];
             if (!type) continue;
 
             // Check if tech is available
             const isTechAvailable = game.players[0].tech[bType] !== false;
+            const keyNum = i + 1; // 1-8
 
             const btn = document.createElement('button');
             btn.className = 'build-btn';
-            btn.innerHTML = `${type.icon}<span>${type.cost}</span>`;
-            btn.title = isTechAvailable ? `${type.name} - ${type.cost} oil` : `${type.name} - Requires tech`;
+            btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
+            btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
             btn.disabled = player.oil < type.cost || !isTechAvailable;
             btn.onclick = () => {
                 if (player.oil >= type.cost && isTechAvailable) {
@@ -1957,10 +1959,12 @@ function updateBuildMenu() {
                     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
                     if (selectedBuilding && selectedBuilding.playerId === 0) {
                         game.placingBuildingFrom = selectedBuilding;
+                    } else {
+                        game.placingBuildingFrom = null;
                     }
                 }
             };
-            menu.appendChild(btn);
+            menu.appendChild(btn);;
         }
     }
 }
@@ -2477,15 +2481,41 @@ canvas.addEventListener('wheel', (e) => {
     document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
-    if (e.key >= '1' && e.key <= '5') {
-        if (e.metaKey || e.ctrlKey) {
-            // Assign group
-            game[`group${e.key}`] = [...game.selection];
-        } else {
-            // Select group
-            game.selection = game[`group${e.key}`] || [];
+    // Number keys 1-8 for building placement (if not building placement mode already)
+    if (e.key >= '1' && e.key <= '8' && !(e.metaKey || e.ctrlKey)) {
+        const buildingIndex = parseInt(e.key) - 1;
+        const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
+
+        if (buildableList[buildingIndex]) {
+            const bType = buildableList[buildingIndex];
+            const type = BUILDING_TYPES[bType];
+            const player = game.players[0];
+
+            // Check if building is affordable and tech available
+            const isTechAvailable = player.tech[bType] !== false;
+            if (player.oil >= type.cost && isTechAvailable && game.status === 'PLAYING') {
+                game.placingBuilding = bType;
+                // If a building is selected, set it as source
+                const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
+                if (selectedBuilding && selectedBuilding.playerId === 0) {
+                    game.placingBuildingFrom = selectedBuilding;
+                } else {
+                    game.placingBuildingFrom = null;
+                }
+                e.preventDefault();
+            }
         }
+    }
+    // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
+    else if (e.key >= '1' && e.key <= '5' && (e.metaKey || e.ctrlKey)) {
+        // Assign group
+        game[`group${e.key}`] = [...game.selection];
+        e.preventDefault();
+    }
+    // Number keys for selecting groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
+    else if (e.key >= '1' && e.key <= '5' && !(e.metaKey || e.ctrlKey) && game.status !== 'PLAYING') {
+        // Select group (only in menu)
+        game.selection = game[`group${e.key}`] || [];
     }
 
     // A for attack move
@@ -2510,6 +2540,7 @@ canvas.addEventListener('wheel', (e) => {
     // Escape to cancel
     if (e.key === 'Escape') {
         game.placingBuilding = null;
+        game.placingBuildingFrom = null;
         game.selection = [];
     }
     });
