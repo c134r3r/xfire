@@ -96,61 +96,7 @@ const TECH_TREE = {
     techLab: { requires: ['factory'], unlocks: [] }
 };
 
-// Unit Types
-const UNIT_TYPES = {
-    infantry: {
-        name: 'Infantry', icon: '&#9823;', cost: 80, hp: 40, speed: 1.5,
-        range: 120, damage: 10, attackSpeed: 600, sight: 140, size: 8
-    },
-    tank: {
-        name: 'Tank', icon: '&#9820;', cost: 350, hp: 250, speed: 1,
-        range: 130, damage: 30, attackSpeed: 1200, sight: 180, size: 16
-    },
-    harvester: {
-        name: 'Harvester', icon: '&#9819;', cost: 450, hp: 150, speed: 0.5,
-        range: 0, damage: 0, attackSpeed: 0, sight: 120, size: 18, capacity: 500
-    },
-    artillery: {
-        name: 'Artillery', icon: '&#9814;', cost: 500, hp: 120, speed: 0.6,
-        range: 280, damage: 60, attackSpeed: 2000, sight: 200, size: 14
-    },
-    scout: {
-        name: 'Scout', icon: '&#9816;', cost: 120, hp: 25, speed: 2.5,
-        range: 120, damage: 8, attackSpeed: 400, sight: 220, size: 10
-    },
-    rocket: {
-        name: 'Rocket Soldier', icon: '&#9917;', cost: 200, hp: 70, speed: 1.2,
-        range: 180, damage: 35, attackSpeed: 1000, sight: 160, size: 12
-    }
-};
-
-// Building Types
-const BUILDING_TYPES = {
-    hq: {
-        name: 'HQ', icon: '&#127984;', cost: 0, hp: 1000, size: 3,
-        produces: ['infantry', 'rocket'], sight: 200
-    },
-    barracks: {
-        name: 'Barracks', icon: '&#127976;', cost: 400, hp: 400, size: 2,
-        produces: ['infantry', 'scout', 'rocket'], sight: 150
-    },
-    factory: {
-        name: 'Factory', icon: '&#127981;', cost: 600, hp: 600, size: 3,
-        produces: ['tank', 'harvester', 'artillery'], sight: 150
-    },
-    derrick: {
-        name: 'Derrick', icon: '&#9981;', cost: 200, hp: 200, size: 1,
-        produces: [], generates: 10, sight: 100
-    },
-    turret: {
-        name: 'Turret', icon: '&#9876;', cost: 350, hp: 300, size: 1,
-        produces: [], range: 250, damage: 20, attackSpeed: 800, sight: 200
-    },
-    powerplant: {
-        name: 'Power Plant', icon: '&#9889;', cost: 300, hp: 250, size: 2,
-        produces: [], powerGen: 50, sight: 100
-    }
-};
+// Unit Types and Building Types are imported from constants.js
 
 // ============================================
 // MAP GENERATION
