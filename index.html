@@ -57,8 +57,106 @@
 
     <div id="footer">
         <span id="controlsHelp">Controls: Left-click select | Right-click move/attack | Drag to box-select | WASD/Arrows scroll | 1-5 unit groups</span>
+        <span id="timerDisplay" style="float: right; display: none;">Time: <strong id="gameTimer">0:00</strong></span>
     </div>
 
-    <script defer src="game-engine.js?v=1"></script>
+    <!-- Main Menu Screen -->
+    <div id="mainMenu" class="fullscreen-overlay">
+        <div class="menu-container">
+            <h1 class="menu-title">XFIRE</h1>
+            <p class="menu-subtitle">Skirmish RTS</p>
+            <div class="menu-buttons">
+                <button id="newGameBtn" class="menu-btn">New Game</button>
+                <button id="settingsBtn" class="menu-btn">Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Menu Screen -->
+    <div id="settingsMenu" class="fullscreen-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title">Game Settings</h1>
+            <div class="settings-panel">
+                <div class="setting-group">
+                    <label>Time Limit:</label>
+                    <select id="timeLimitSelect">
+                        <option value="unlimited">Unlimited</option>
+                        <option value="5">5 Minutes</option>
+                        <option value="10">10 Minutes</option>
+                        <option value="20" selected>20 Minutes</option>
+                        <option value="30">30 Minutes</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>AI Difficulty:</label>
+                    <select id="difficultySelect">
+                        <option value="easy">Easy</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Map Size:</label>
+                    <select id="mapSizeSelect">
+                        <option value="small">Small (32x32)</option>
+                        <option value="medium" selected>Medium (64x64)</option>
+                        <option value="large">Large (96x96)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Starting Oil:</label>
+                    <select id="startingOilSelect">
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="1200" selected>1200</option>
+                        <option value="2000">2000</option>
+                    </select>
+                </div>
+            </div>
+            <div class="menu-buttons">
+                <button id="startGameBtn" class="menu-btn">Start Game</button>
+                <button id="backBtn" class="menu-btn secondary">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Screen -->
+    <div id="pauseScreen" class="fullscreen-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title">PAUSED</h1>
+            <div class="menu-buttons">
+                <button id="resumeBtn" class="menu-btn">Resume (P)</button>
+                <button id="quitBtn" class="menu-btn secondary">Quit to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Screen -->
+    <div id="victoryScreen" class="fullscreen-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title victory-title">VICTORY!</h1>
+            <p class="victory-info">You have defeated all enemy forces!</p>
+            <div id="victoryStats" class="stats-box"></div>
+            <div class="menu-buttons">
+                <button id="playAgainBtn" class="menu-btn">Play Again</button>
+                <button class="menu-btn secondary menu-return">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Defeat Screen -->
+    <div id="defeatScreen" class="fullscreen-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title defeat-title">DEFEAT!</h1>
+            <p class="defeat-info">All your forces have been eliminated.</p>
+            <div id="defeatStats" class="stats-box"></div>
+            <div class="menu-buttons">
+                <button id="retryBtn" class="menu-btn">Retry</button>
+                <button class="menu-btn secondary menu-return">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="game-engine.js?v=2"></script>
 </body>
 </html>

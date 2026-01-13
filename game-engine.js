@@ -66,14 +66,27 @@ function initializeCanvases() {
     return true;
 }
 
+// Game Settings
+const gameSettings = {
+    timeLimit: 'unlimited',
+    difficulty: 'normal',
+    mapSize: 'medium',
+    startingOil: 1200,
+    MAP_SIZE: MAP_SIZE
+};
+
 // Game State (Constants imported from constants.js)
 const game = {
     running: true,
+    paused: false,
+    status: 'MENU', // MENU, PLAYING, PAUSED, WON, LOST
     tick: 0,
+    timeElapsed: 0,
     camera: { x: MAP_SIZE * TILE_WIDTH / 4, y: 0 },
     mouse: { x: 0, y: 0, worldX: 0, worldY: 0 },
     selection: [],
     selectionBox: null,
+    placingBuilding: null,
     players: [
         { id: 0, color: '#4488ff', oil: 1200, power: 100, team: 'player', tech: { barracks: true, factory: false, academy: false } },
         { id: 1, color: '#ff4444', oil: 1200, power: 100, team: 'enemy', tech: { barracks: true, factory: false, academy: false } }
@@ -83,7 +96,8 @@ const game = {
     projectiles: [],
     particles: [],
     map: [],
-    fogOfWar: []
+    fogOfWar: [],
+    group1: [], group2: [], group3: [], group4: [], group5: []
 };
 
 // Tech Tree Dependencies
@@ -2124,6 +2138,11 @@ canvas.addEventListener('wheel', (e) => {
         }
     }
 
+    // P for pause
+    if (e.key === 'p' || e.key === 'P') {
+        togglePause();
+    }
+
     // Escape to cancel
     if (e.key === 'Escape') {
         game.placingBuilding = null;
@@ -2146,26 +2165,216 @@ function updateCamera() {
 }
 
 // ============================================
-// GAME INITIALIZATION
+// MENU SYSTEM
 // ============================================
 
-// Welcome screen removed - game starts immediately on load
+function showScreen(screenId) {
+    document.querySelectorAll('.fullscreen-overlay').forEach(el => el.classList.add('hidden'));
+    const screen = document.getElementById(screenId);
+    if (screen) screen.classList.remove('hidden');
+}
+
+function goToMainMenu() {
+    game.status = 'MENU';
+    game.paused = false;
+    game.units = [];
+    game.buildings = [];
+    game.selection = [];
+    showScreen('mainMenu');
+}
+
+function goToSettings() {
+    showScreen('settingsMenu');
+}
+
+function startGame() {
+    const timeLimitEl = document.getElementById('timeLimitSelect');
+    const difficultyEl = document.getElementById('difficultySelect');
+    const mapSizeEl = document.getElementById('mapSizeSelect');
+    const oilEl = document.getElementById('startingOilSelect');
+
+    if (!timeLimitEl || !difficultyEl || !mapSizeEl || !oilEl) {
+        console.error('Settings elements not found');
+        return;
+    }
+
+    gameSettings.timeLimit = timeLimitEl.value;
+    gameSettings.difficulty = difficultyEl.value;
+    gameSettings.mapSize = mapSizeEl.value;
+    gameSettings.startingOil = parseInt(oilEl.value);
+
+    resetGame();
+    initGame();
+    game.status = 'PLAYING';
+    showScreen('mainMenu');
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('timerDisplay').style.display = 'block';
+}
+
+function togglePause() {
+    if (game.status !== 'PLAYING' && game.status !== 'PAUSED') return;
+
+    if (game.status === 'PLAYING') {
+        game.status = 'PAUSED';
+        game.paused = true;
+        showScreen('pauseScreen');
+    } else if (game.status === 'PAUSED') {
+        game.status = 'PLAYING';
+        game.paused = false;
+        showScreen('mainMenu');
+        document.getElementById('mainMenu').classList.add('hidden');
+    }
+}
+
+function resetGame() {
+    game.tick = 0;
+    game.timeElapsed = 0;
+    game.paused = false;
+    game.selection = [];
+    game.selectionBox = null;
+    game.placingBuilding = null;
+    game.units = [];
+    game.buildings = [];
+    game.projectiles = [];
+    game.particles = [];
+    game.map = [];
+    game.fogOfWar = [];
+    game.group1 = [];
+    game.group2 = [];
+    game.group3 = [];
+    game.group4 = [];
+    game.group5 = [];
+    game.players[0].oil = gameSettings.startingOil;
+    game.players[0].power = 100;
+    game.players[0].tech = { barracks: true, factory: false, academy: false };
+    game.players[1].oil = gameSettings.startingOil;
+    game.players[1].power = 100;
+    game.players[1].tech = { barracks: true, factory: false, academy: false };
+}
+
+function updateGameTimer() {
+    if (game.status !== 'PLAYING') return;
+
+    game.timeElapsed += (1 / 60);
+    const totalSeconds = Math.floor(game.timeElapsed);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const timerEl = document.getElementById('gameTimer');
+    if (timerEl) {
+        timerEl.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+
+        // Warning when less than 1 minute left
+        if (gameSettings.timeLimit !== 'unlimited') {
+            const timeLimitSeconds = parseInt(gameSettings.timeLimit) * 60;
+            const timeLeft = timeLimitSeconds - totalSeconds;
+            if (timeLeft > 0 && timeLeft <= 60) {
+                timerEl.classList.add('warning');
+            } else {
+                timerEl.classList.remove('warning');
+            }
+
+            // Time's up
+            if (timeLeft <= 0) {
+                checkTimeLimit();
+            }
+        }
+    }
+}
+
+function checkTimeLimit() {
+    const playerUnits = game.units.filter(u => u.playerId === 0).length;
+    const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
+    const enemyUnits = game.units.filter(u => u.playerId === 1).length;
+    const enemyBuildings = game.buildings.filter(b => b.playerId === 1).length;
+
+    game.status = 'LOST';
+    showScreen('defeatScreen');
+    const statsEl = document.getElementById('defeatStats');
+    if (statsEl) {
+        statsEl.innerHTML = `Time Limit Reached<br>
+Your Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
+Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
+    }
+}
+
+function checkWinCondition() {
+    const enemyUnits = game.units.filter(u => u.playerId === 1);
+    const enemyBuildings = game.buildings.filter(b => b.playerId === 1);
+
+    if (enemyUnits.length === 0 && enemyBuildings.length === 0) {
+        game.status = 'WON';
+        const playerUnits = game.units.filter(u => u.playerId === 0).length;
+        const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
+        showScreen('victoryScreen');
+        const statsEl = document.getElementById('victoryStats');
+        if (statsEl) {
+            const timeMin = Math.floor(game.timeElapsed / 60);
+            const timeSec = Math.floor(game.timeElapsed % 60);
+            statsEl.innerHTML = `Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
+Remaining Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
+Oil Remaining: ${Math.floor(game.players[0].oil)}`;
+        }
+    }
+}
+
+function checkLoseCondition() {
+    const playerUnits = game.units.filter(u => u.playerId === 0);
+    const playerBuildings = game.buildings.filter(b => b.playerId === 0);
+
+    if (playerUnits.length === 0 && playerBuildings.length === 0) {
+        game.status = 'LOST';
+        showScreen('defeatScreen');
+        const statsEl = document.getElementById('defeatStats');
+        if (statsEl) {
+            const timeMin = Math.floor(game.timeElapsed / 60);
+            const timeSec = Math.floor(game.timeElapsed % 60);
+            statsEl.innerHTML = `Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
+All your units and buildings have been destroyed.`;
+        }
+    }
+}
+
+function setupMenuHandlers() {
+    // Main menu buttons
+    const newGameBtn = document.getElementById('newGameBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const backBtn = document.getElementById('backBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const quitBtn = document.getElementById('quitBtn');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const menuReturnBtns = document.querySelectorAll('.menu-return');
+
+    if (newGameBtn) newGameBtn.addEventListener('click', goToSettings);
+    if (settingsBtn) settingsBtn.addEventListener('click', goToSettings);
+    if (startGameBtn) startGameBtn.addEventListener('click', startGame);
+    if (backBtn) backBtn.addEventListener('click', goToMainMenu);
+    if (resumeBtn) resumeBtn.addEventListener('click', togglePause);
+    if (quitBtn) quitBtn.addEventListener('click', goToMainMenu);
+    if (playAgainBtn) playAgainBtn.addEventListener('click', () => { resetGame(); initGame(); game.status = 'PLAYING'; showScreen('mainMenu'); document.getElementById('mainMenu').classList.add('hidden'); });
+    if (retryBtn) retryBtn.addEventListener('click', () => { resetGame(); initGame(); game.status = 'PLAYING'; showScreen('mainMenu'); document.getElementById('mainMenu').classList.add('hidden'); });
+
+    menuReturnBtns.forEach(btn => {
+        btn.addEventListener('click', goToMainMenu);
+    });
+}
+
+// ============================================
+// GAME INITIALIZATION
+// ============================================
 
 function initGame() {
     generateMap();
 
+    // Balanced game start: HQ + Harvester only for both players
     // Player base (bottom-left area)
     createBuilding('hq', 0, 10, 10);
-    spawnUnit('infantry', 0, 12, 10);
-    spawnUnit('infantry', 0, 12, 11);
-    spawnUnit('infantry', 0, 13, 10);
     spawnUnit('harvester', 0, 11, 12);
 
     // Enemy base (top-right area)
     createBuilding('hq', 1, MAP_SIZE - 12, MAP_SIZE - 12);
-    spawnUnit('infantry', 1, MAP_SIZE - 14, MAP_SIZE - 12);
-    spawnUnit('infantry', 1, MAP_SIZE - 14, MAP_SIZE - 13);
-    spawnUnit('infantry', 1, MAP_SIZE - 15, MAP_SIZE - 12);
+    spawnUnit('harvester', 1, MAP_SIZE - 13, MAP_SIZE - 14);
 
     // Center camera on player base
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
@@ -2184,7 +2393,6 @@ let lastTime = 0;
 
 function gameLoop(timestamp) {
     if (!canvas || !ctx) {
-        // Canvas not yet initialized, try again next frame
         requestAnimationFrame(gameLoop);
         return;
     }
@@ -2192,10 +2400,16 @@ function gameLoop(timestamp) {
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
 
-    updateCamera();
-    update(dt);
-    render();
+    // Only update and render game if playing (not paused/menu)
+    if (game.status === 'PLAYING') {
+        updateCamera();
+        update(dt);
+        updateGameTimer();
+        checkWinCondition();
+        checkLoseCondition();
+    }
 
+    render();
     requestAnimationFrame(gameLoop);
 }
 
@@ -2208,15 +2422,16 @@ try {
     } else {
         console.log('Canvases initialized successfully');
         initializeEventHandlers();
+        setupMenuHandlers();
         try {
-            // Start game immediately (welcome screen disabled for now)
-            console.log('Initializing game...');
-            initGame();
-            console.log('Game initialized, starting render loop');
+            // Show main menu
+            console.log('Showing main menu');
+            showScreen('mainMenu');
+            console.log('Starting render loop');
             requestAnimationFrame(gameLoop);
         } catch (gameError) {
-            console.error('Error during game init:', gameError);
-            alert('Error starting game: ' + gameError.message);
+            console.error('Error during initialization:', gameError);
+            alert('Error: ' + gameError.message);
         }
     }
 } catch (e) {
