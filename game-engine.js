@@ -2177,16 +2177,6 @@ function canBuildAt(buildingType, x, y) {
     // Check map bounds
     if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) return false;
 
-    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
-
-    // Cannot build on water or hill
-    if (tileType === 'water' || tileType === 'hill') return false;
-
-    // Derrick requires oil tile
-    if (buildingType === 'derrick') {
-        if (!game.map[Math.floor(y)]?.[Math.floor(x)]?.oil) return false;
-    }
-
     // Check for building collision (don't build on top of other buildings)
     const bSize = type.size;
     let canPlaceHere = true;
@@ -2204,29 +2194,7 @@ function canBuildAt(buildingType, x, y) {
         }
     }
 
-    if (!canPlaceHere) return false;
-
-    // Check distance: must be within 5 tiles of any own building
-    const playerBuildings = game.buildings.filter(b => b.playerId === 0);
-
-    if (playerBuildings.length === 0) {
-        // No buildings yet - can build anywhere valid
-        return true;
-    }
-
-    // Check if within 5 tiles of any own building
-    for (const building of playerBuildings) {
-        const dx = Math.abs(x - building.x);
-        const dy = Math.abs(y - building.y);
-        const dist = Math.max(dx, dy); // Chebyshev distance
-
-        if (dist <= 5) {
-            return true;
-        }
-    }
-
-    // Not within 5 tiles of any own building
-    return false;
+    return canPlaceHere;
 }
 
 function unlockTech(buildingType, playerId) {
