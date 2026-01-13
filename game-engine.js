@@ -72,8 +72,21 @@ const gameSettings = {
     difficulty: 'normal',
     mapSize: 'medium',
     startingOil: 1200,
-    MAP_SIZE: MAP_SIZE
+    MAP_SIZE: MAP_SIZE,
+    zoom: 1.0,
+    minZoom: 0.5,
+    maxZoom: 2.0
 };
+
+// Helper function to get current map size (use this instead of MAP_SIZE constant)
+function getMapSize() {
+    return gameSettings.MAP_SIZE || MAP_SIZE;
+}
+
+// Helper function to get current zoom level
+function getZoom() {
+    return gameSettings.zoom || 1.0;
+}
 
 // Game State (Constants imported from constants.js)
 const game = {
@@ -148,12 +161,13 @@ const game = {
 function generateMap() {
     game.map = [];
     game.fogOfWar = [];
+    const mapSize = getMapSize();
 
     // Initialize with grass
-    for (let y = 0; y < MAP_SIZE; y++) {
+    for (let y = 0; y < mapSize; y++) {
         game.map[y] = [];
         game.fogOfWar[y] = [];
-        for (let x = 0; x < MAP_SIZE; x++) {
+        for (let x = 0; x < mapSize; x++) {
             game.map[y][x] = {
                 type: 'grass',
                 height: 0,
@@ -163,16 +177,19 @@ function generateMap() {
         }
     }
 
+    // Scale terrain features based on map size
+    const sizeMultiplier = mapSize / 64;
+
     // Add hill areas (15% of map = mostly grass)
-    const hillCount = 4 + Math.floor(Math.random() * 3);
+    const hillCount = Math.floor((4 + Math.floor(Math.random() * 3)) * sizeMultiplier);
     for (let h = 0; h < hillCount; h++) {
-        const centerX = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
-        const centerY = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const centerX = 10 + Math.floor(Math.random() * (mapSize - 20));
+        const centerY = 10 + Math.floor(Math.random() * (mapSize - 20));
         const hillSize = 2 + Math.floor(Math.random() * 3);
 
         for (let y = centerY - hillSize; y <= centerY + hillSize; y++) {
             for (let x = centerX - hillSize; x <= centerX + hillSize; x++) {
-                if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+                if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) continue;
                 const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
                 if (dist <= hillSize) {
                     const tile = game.map[y][x];
@@ -187,15 +204,15 @@ function generateMap() {
     }
 
     // Add small rivers/lakes (a few small water features, not large seas)
-    const waterCount = 2 + Math.floor(Math.random() * 2);
+    const waterCount = Math.floor((2 + Math.floor(Math.random() * 2)) * sizeMultiplier);
     for (let w = 0; w < waterCount; w++) {
-        const centerX = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
-        const centerY = 10 + Math.floor(Math.random() * (MAP_SIZE - 20));
+        const centerX = 10 + Math.floor(Math.random() * (mapSize - 20));
+        const centerY = 10 + Math.floor(Math.random() * (mapSize - 20));
         const waterSize = 1 + Math.floor(Math.random() * 2); // Small lakes/rivers
 
         for (let y = centerY - waterSize; y <= centerY + waterSize; y++) {
             for (let x = centerX - waterSize; x <= centerX + waterSize; x++) {
-                if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+                if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) continue;
                 const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
                 if (dist <= waterSize) {
                     const tile = game.map[y][x];
@@ -209,11 +226,11 @@ function generateMap() {
         }
     }
 
-    // Add oil deposits
-    const oilCount = 8 + Math.floor(Math.random() * 5);
+    // Add oil deposits - scale with map size
+    const oilCount = Math.floor((8 + Math.floor(Math.random() * 5)) * sizeMultiplier);
     for (let i = 0; i < oilCount; i++) {
-        const x = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
-        const y = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
+        const x = 5 + Math.floor(Math.random() * (mapSize - 10));
+        const y = 5 + Math.floor(Math.random() * (mapSize - 10));
         if (game.map[y][x].type === 'grass') {
             game.map[y][x].oil = true;
         }
@@ -225,17 +242,19 @@ function generateMap() {
 // ============================================
 
 function worldToScreen(x, y) {
-    const isoX = (x - y) * (TILE_WIDTH / 2);
-    const isoY = (x + y) * (TILE_HEIGHT / 2);
+    const zoom = getZoom();
+    const isoX = (x - y) * (TILE_WIDTH / 2) * zoom;
+    const isoY = (x + y) * (TILE_HEIGHT / 2) * zoom;
     return {
-        x: isoX - game.camera.x + canvas.offsetWidth / 2,
-        y: isoY - game.camera.y + canvas.offsetHeight / 2
+        x: isoX - game.camera.x * zoom + canvas.offsetWidth / 2,
+        y: isoY - game.camera.y * zoom + canvas.offsetHeight / 2
     };
 }
 
 function screenToWorld(sx, sy) {
-    const x = sx + game.camera.x - canvas.offsetWidth / 2;
-    const y = sy + game.camera.y - canvas.offsetHeight / 2;
+    const zoom = getZoom();
+    const x = (sx - canvas.offsetWidth / 2) / zoom + game.camera.x;
+    const y = (sy - canvas.offsetHeight / 2) / zoom + game.camera.y;
     const worldX = (x / (TILE_WIDTH / 2) + y / (TILE_HEIGHT / 2)) / 2;
     const worldY = (y / (TILE_HEIGHT / 2) - x / (TILE_WIDTH / 2)) / 2;
     return { x: worldX, y: worldY };
@@ -259,9 +278,9 @@ function render() {
     const endTile = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
 
     const minX = Math.max(0, Math.floor(startTile.x) - 2);
-    const maxX = Math.min(MAP_SIZE, Math.ceil(endTile.x) + 4);
+    const maxX = Math.min(getMapSize(), Math.ceil(endTile.x) + 4);
     const minY = Math.max(0, Math.floor(startTile.y) - 2);
-    const maxY = Math.min(MAP_SIZE, Math.ceil(endTile.y) + 4);
+    const maxY = Math.min(getMapSize(), Math.ceil(endTile.y) + 4);
 
     // Draw tiles
     for (let y = minY; y < maxY; y++) {
@@ -381,6 +400,11 @@ function drawTile(tx, ty) {
 
     const fog = game.fogOfWar[ty]?.[tx] ?? 0;
     const screen = worldToScreen(tx, ty);
+    const zoom = getZoom();
+
+    // Scaled tile dimensions
+    const tileW = TILE_WIDTH * zoom;
+    const tileH = TILE_HEIGHT * zoom;
 
     // Tile colors
     const colors = {
@@ -402,10 +426,10 @@ function drawTile(tx, ty) {
 
     // Draw isometric tile
     ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y - TILE_HEIGHT / 2);
-    ctx.lineTo(screen.x + TILE_WIDTH / 2, screen.y);
-    ctx.lineTo(screen.x, screen.y + TILE_HEIGHT / 2);
-    ctx.lineTo(screen.x - TILE_WIDTH / 2, screen.y);
+    ctx.moveTo(screen.x, screen.y - tileH / 2);
+    ctx.lineTo(screen.x + tileW / 2, screen.y);
+    ctx.lineTo(screen.x, screen.y + tileH / 2);
+    ctx.lineTo(screen.x - tileW / 2, screen.y);
     ctx.closePath();
 
     ctx.fillStyle = color;
@@ -416,15 +440,15 @@ function drawTile(tx, ty) {
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.3;
     ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y - TILE_HEIGHT / 2);
-    ctx.lineTo(screen.x + TILE_WIDTH / 2, screen.y);
+    ctx.moveTo(screen.x, screen.y - tileH / 2);
+    ctx.lineTo(screen.x + tileW / 2, screen.y);
     ctx.stroke();
 
     // Tile shadow (bottom edge)
     ctx.strokeStyle = shadeColor(color, -30);
     ctx.beginPath();
-    ctx.moveTo(screen.x + TILE_WIDTH / 2, screen.y);
-    ctx.lineTo(screen.x, screen.y + TILE_HEIGHT / 2);
+    ctx.moveTo(screen.x + tileW / 2, screen.y);
+    ctx.lineTo(screen.x, screen.y + tileH / 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
 
@@ -432,11 +456,11 @@ function drawTile(tx, ty) {
     if (tile.oil && fog >= 1) {
         ctx.fillStyle = '#222';
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 8, 0, Math.PI * 2);
+        ctx.arc(screen.x, screen.y, 8 * zoom, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#111';
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y - 2, 5, 0, Math.PI * 2);
+        ctx.arc(screen.x, screen.y - 2 * zoom, 5 * zoom, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -1014,15 +1038,16 @@ function drawParticle(particle) {
 function renderMinimap() {
     // Calculate minimap size: 24 tiles wide = 480px (24 * 20px per tile)
     const minimapSize = Math.min(480, 24 * 20);
-    const scale = minimapSize / MAP_SIZE;
+    const scale = minimapSize / getMapSize();
 
     minimapCtx.fillStyle = '#111';
     minimapCtx.fillRect(0, 0, minimapSize, minimapSize);
 
     // Draw terrain
-    for (let y = 0; y < MAP_SIZE; y++) {
+    const mapSize = getMapSize();
+    for (let y = 0; y < mapSize; y++) {
         if (!game.map[y]) continue;
-        for (let x = 0; x < MAP_SIZE; x++) {
+        for (let x = 0; x < mapSize; x++) {
             const tile = game.map[y][x];
             if (!tile) continue;
             const fog = game.fogOfWar[y]?.[x] ?? 0;
@@ -1210,15 +1235,15 @@ function updateUnits(dt) {
         }
 
         // Keep in bounds and avoid hills/water/rocks
-        unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x));
-        unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y));
+        unit.x = Math.max(0, Math.min(getMapSize() - 1, unit.x));
+        unit.y = Math.max(0, Math.min(getMapSize() - 1, unit.y));
 
         const tileType = game.map[Math.floor(unit.y)]?.[Math.floor(unit.x)]?.type;
         if (tileType === 'water' || tileType === 'hill') {
             // Push unit back slightly if stuck on impassable terrain
             const backDist = Math.sqrt((unit.x) ** 2 + (unit.y) ** 2) || 1;
-            unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x - 0.5 * (unit.x / backDist)));
-            unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y - 0.5 * (unit.y / backDist)));
+            unit.x = Math.max(0, Math.min(getMapSize() - 1, unit.x - 0.5 * (unit.x / backDist)));
+            unit.y = Math.max(0, Math.min(getMapSize() - 1, unit.y - 0.5 * (unit.y / backDist)));
         }
     }
 }
@@ -1267,9 +1292,10 @@ function updateHarvester(unit, type) {
         // Find oil
         let nearestOil = null;
         let nearestDist = Infinity;
+        const oilMapSize = getMapSize();
 
-        for (let y = 0; y < MAP_SIZE; y++) {
-            for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < oilMapSize; y++) {
+            for (let x = 0; x < oilMapSize; x++) {
                 if (game.map[y][x].oil) {
                     // Check if not already occupied by derrick
                     const hasDerrick = game.buildings.some(b =>
@@ -1376,12 +1402,19 @@ function updateBuildings(dt) {
         // Production queue
         if (building.productionQueue.length > 0 && !building.isUnderConstruction) {
             const current = building.productionQueue[0];
-            building.produceProgress++;
+            const player = game.players[building.playerId];
+            // Slow production if low power (50% speed)
+            const powerMultiplier = player.lowPower ? 0.5 : 1.0;
+            building.produceProgress += powerMultiplier;
             building.produceTime = current.time;
 
             if (building.produceProgress >= building.produceTime) {
-                // Spawn unit
-                spawnUnit(current.type, building.playerId, building.x + 2, building.y + 2);
+                // Spawn unit with offset to avoid clustering
+                const angle = Math.random() * Math.PI * 2;
+                const offset = 1.5 + Math.random() * 1.5;
+                const spawnX = building.x + Math.cos(angle) * offset;
+                const spawnY = building.y + Math.sin(angle) * offset;
+                spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 building.productionQueue.shift();
                 building.produceProgress = 0;
             }
@@ -1416,7 +1449,17 @@ function updateProjectiles(dt) {
         if (dist < 1 || proj.life <= 0) {
             // Deal damage
             if (proj.target && proj.target.hp > 0) {
-                proj.target.hp -= proj.damage;
+                let finalDamage = proj.damage;
+
+                // Apply versus bonus (50% extra damage against matching category)
+                if (proj.versus && proj.target.type) {
+                    const targetType = UNIT_TYPES[proj.target.type];
+                    if (targetType && targetType.category === proj.versus) {
+                        finalDamage = Math.floor(proj.damage * 1.5);
+                    }
+                }
+
+                proj.target.hp -= finalDamage;
                 createImpact(proj.x, proj.y);
             }
             game.projectiles.splice(i, 1);
@@ -1440,10 +1483,11 @@ function updateParticles(dt) {
 }
 
 function updateFogOfWar() {
+    const fogMapSize = getMapSize();
     // Reset explored areas to "seen but not visible"
-    for (let y = 0; y < MAP_SIZE; y++) {
-        for (let x = 0; x < MAP_SIZE; x++) {
-            if (game.fogOfWar[y][x] === 2) {
+    for (let y = 0; y < fogMapSize; y++) {
+        for (let x = 0; x < fogMapSize; x++) {
+            if (game.fogOfWar[y]?.[x] === 2) {
                 game.fogOfWar[y][x] = 1;
             }
         }
@@ -1464,7 +1508,7 @@ function updateFogOfWar() {
                 if (dx * dx + dy * dy <= sight * sight) {
                     const tx = Math.floor(entity.x + dx);
                     const ty = Math.floor(entity.y + dy);
-                    if (tx >= 0 && tx < MAP_SIZE && ty >= 0 && ty < MAP_SIZE) {
+                    if (tx >= 0 && tx < fogMapSize && ty >= 0 && ty < fogMapSize) {
                         game.fogOfWar[ty][tx] = 2;
                     }
                 }
@@ -1499,8 +1543,13 @@ function updateAI() {
 
     executeAIStrategy(ai, aiMode, aiUnits, aiBuildings, playerUnits, playerBuildings);
 
-    // Give AI some oil (reduced from 20 to 10 for fair play)
-    ai.oil += 10;
+    // Give AI oil based on difficulty setting
+    const difficultyOilBonus = {
+        easy: 5,
+        normal: 10,
+        hard: 18
+    };
+    ai.oil += difficultyOilBonus[gameSettings.difficulty] || 10;
 }
 
 function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBuildings) {
@@ -1510,6 +1559,14 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     const aiDerricks = aiBuildings.filter(b => b.type === 'derrick');
 
     if (!aiHQ) return;
+
+    // Difficulty-based attack thresholds (lower = more aggressive)
+    const attackThresholds = {
+        easy: { rusher: 5, tech: 12, balanced: 8 },
+        normal: { rusher: 3, tech: 8, balanced: 5 },
+        hard: { rusher: 2, tech: 6, balanced: 4 }
+    };
+    const thresholds = attackThresholds[gameSettings.difficulty] || attackThresholds.normal;
 
     // Universal: Build more derricks for economy
     if (ai.oil >= 200 && aiDerricks.length < 5) {
@@ -1600,7 +1657,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
         // Attack early and often
-        if (aiUnits.length >= 3) {
+        if (aiUnits.length >= thresholds.rusher) {
             attackPlayerBase(playerBuildings, playerUnits, aiUnits);
         }
 
@@ -1701,7 +1758,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
         // Powerful late-game attack
-        if (aiUnits.length >= 8) {
+        if (aiUnits.length >= thresholds.tech) {
             attackPlayerBase(playerBuildings, playerUnits, aiUnits);
         }
 
@@ -1762,7 +1819,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
         // Attack when ready
-        if (aiUnits.length >= 5) {
+        if (aiUnits.length >= thresholds.balanced) {
             attackPlayerBase(playerBuildings, playerUnits, aiUnits);
         }
     }
@@ -1784,15 +1841,42 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
 }
 
 function updateResources() {
+    // Calculate power for each player
+    for (const player of game.players) {
+        let powerProduced = 100; // Base power
+        let powerConsumed = 0;
+
+        for (const building of game.buildings) {
+            if (building.playerId !== player.id || building.isUnderConstruction) continue;
+
+            const type = BUILDING_TYPES[building.type];
+
+            // Power production from power plants
+            if (type.powerGen) {
+                powerProduced += type.powerGen;
+            }
+
+            // Power consumption from buildings
+            if (type.powerUse) {
+                powerConsumed += type.powerUse;
+            }
+        }
+
+        // Store power balance (can be negative)
+        player.powerProduced = powerProduced;
+        player.powerConsumed = powerConsumed;
+        player.power = powerProduced - powerConsumed;
+        player.lowPower = player.power < 0;
+    }
+
     // Derricks generate oil
     for (const building of game.buildings) {
         if (building.type === 'derrick' && !building.isUnderConstruction) {
             const type = BUILDING_TYPES.derrick;
-            game.players[building.playerId].oil += type.generates / 60;
-        }
-        if (building.type === 'powerplant') {
-            const type = BUILDING_TYPES.powerplant;
-            // Power is just tracked, not consumed for now
+            const player = game.players[building.playerId];
+            // Reduced oil generation if low power
+            const powerMultiplier = player.lowPower ? 0.5 : 1.0;
+            player.oil += (type.generates / 60) * powerMultiplier;
         }
     }
 
@@ -1815,7 +1899,19 @@ function updateUI() {
     }
 
     oilEl.textContent = Math.floor(game.players[0].oil);
-    powerEl.textContent = Math.floor(game.players[0].power);
+
+    // Show power balance with color coding
+    const player = game.players[0];
+    const powerBalance = player.power || 0;
+    powerEl.textContent = powerBalance >= 0 ? `+${Math.floor(powerBalance)}` : Math.floor(powerBalance);
+    powerEl.style.color = powerBalance >= 0 ? '#0f0' : '#f00';
+
+    // Show warning if low power
+    if (player.lowPower) {
+        powerEl.title = 'LOW POWER! Production slowed 50%';
+    } else {
+        powerEl.title = `Power: ${player.powerProduced || 100} produced, ${player.powerConsumed || 0} consumed`;
+    }
 
     // Unit counts
     const playerUnits = game.units.filter(u => u.playerId === 0).length;
@@ -2048,7 +2144,7 @@ function canBuildAt(buildingType, x, y) {
     if (!type) return false;
 
     // Check map bounds
-    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) return false;
 
     const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
 
@@ -2178,6 +2274,7 @@ function fireProjectile(source, target, customDamage) {
         targetY: target.y,
         target,
         damage,
+        versus: type.versus || null,
         life: 100,
         blockadeIndex: blockadeIndex
     });
@@ -2190,7 +2287,7 @@ function checkLineOfSight(x1, y1, x2, y2) {
         const t = i / steps;
         const x = Math.round(x1 + (x2 - x1) * t);
         const y = Math.round(y1 + (y2 - y1) * t);
-        if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+        if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) continue;
 
         const tile = game.map[y]?.[x];
         if (tile && tile.type === 'hill') {
@@ -2264,7 +2361,7 @@ function findBuildPosition(nearX, nearY, playerId) {
             const x = Math.floor(nearX + Math.cos(angle) * r);
             const y = Math.floor(nearY + Math.sin(angle) * r);
 
-            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+            if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) continue;
             if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock' || game.map[y][x].type === 'hill') continue;
 
             const blocked = game.buildings.some(b => {
@@ -2325,15 +2422,12 @@ function initializeEventHandlers() {
             game.placingBuildingFrom = null;
         } else {
             // Check if clicking on own building to build from it
-            const rect = canvas.getBoundingClientRect();
-            const screenX = e.clientX - rect.left;
-            const screenY = e.clientY - rect.top;
-
+            // Reuse x, y from above (no duplicate calculation needed)
             const clickedBuilding = game.buildings.find(b => {
                 if (b.playerId !== 0) return false;
                 const screen = worldToScreen(b.x, b.y);
-                const dx = screen.x - screenX;
-                const dy = screen.y - screenY;
+                const dx = screen.x - x;
+                const dy = screen.y - y;
                 return Math.sqrt(dx * dx + dy * dy) < 25;
             });
 
@@ -2478,12 +2572,18 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
 
-    // Trackpad pinch zoom (Cmd+Scroll on Mac)
+    // Trackpad pinch zoom (Cmd+Scroll on Mac) or Ctrl+Scroll
     if (e.ctrlKey || e.metaKey) {
-        // TODO: Implement zoom (would need to modify camera/zoom system)
+        // Zoom in/out
+        const zoomSpeed = 0.1;
+        const zoomDelta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+        gameSettings.zoom = Math.max(
+            gameSettings.minZoom,
+            Math.min(gameSettings.maxZoom, gameSettings.zoom + zoomDelta)
+        );
     } else {
         // Regular scroll for camera movement
-        const scrollSpeed = 20;
+        const scrollSpeed = 20 / getZoom(); // Adjust scroll speed based on zoom
         game.camera.x += (e.deltaX / Math.abs(e.deltaX || 1)) * scrollSpeed;
         game.camera.y += (e.deltaY / Math.abs(e.deltaY || 1)) * scrollSpeed;
     }
@@ -2499,7 +2599,7 @@ canvas.addEventListener('wheel', (e) => {
             const y = e.clientY - rect.top;
 
             const minimapSize = minimapCanvas.width;
-            const scale = MAP_SIZE / minimapSize;
+            const scale = getMapSize() / minimapSize;
             game.camera.x = x * scale * TILE_WIDTH / 2;
             game.camera.y = y * scale * TILE_HEIGHT;
         });
@@ -2591,6 +2691,21 @@ canvas.addEventListener('wheel', (e) => {
         game.placingBuildingFrom = null;
         game.selection = [];
     }
+
+    // Zoom controls: + and - keys, or = and -
+    if (e.key === '+' || e.key === '=' || e.key === 'NumpadAdd') {
+        gameSettings.zoom = Math.min(gameSettings.maxZoom, gameSettings.zoom + 0.1);
+        e.preventDefault();
+    }
+    if (e.key === '-' || e.key === '_' || e.key === 'NumpadSubtract') {
+        gameSettings.zoom = Math.max(gameSettings.minZoom, gameSettings.zoom - 0.1);
+        e.preventDefault();
+    }
+    // Reset zoom with 0
+    if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+        gameSettings.zoom = 1.0;
+        e.preventDefault();
+    }
     });
 
     document.addEventListener('keyup', (e) => {
@@ -2670,6 +2785,14 @@ function startGame() {
     gameSettings.mapSize = mapSizeEl.value;
     gameSettings.startingOil = parseInt(oilEl.value);
 
+    // Set actual map size based on selection
+    const mapSizes = {
+        small: 32,
+        medium: 64,
+        large: 96
+    };
+    gameSettings.MAP_SIZE = mapSizes[gameSettings.mapSize] || 64;
+
     resetGame();
     initGame();
     game.status = 'PLAYING';
@@ -2734,7 +2857,7 @@ function resetGame() {
     game.group5 = [];
     // Reset camera to center of map
     game.camera.x = 0;
-    game.camera.y = (MAP_SIZE / 2) * TILE_HEIGHT;
+    game.camera.y = (getMapSize() / 2) * TILE_HEIGHT;
     game.players[0].oil = gameSettings.startingOil;
     game.players[0].power = 100;
     // Initialize all building techs - all available by default except specialized ones
@@ -2901,8 +3024,9 @@ function initGame() {
     spawnUnit('harvester', 0, 11, 12);
 
     // Enemy base (top-right area)
-    createBuilding('hq', 1, MAP_SIZE - 12, MAP_SIZE - 12);
-    spawnUnit('harvester', 1, MAP_SIZE - 13, MAP_SIZE - 14);
+    const mapSizeVal = getMapSize();
+    createBuilding('hq', 1, mapSizeVal - 12, mapSizeVal - 12);
+    spawnUnit('harvester', 1, mapSizeVal - 13, mapSizeVal - 14);
 
     // Center camera on player base using isometric coordinates
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');

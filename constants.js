@@ -19,7 +19,8 @@ const UNIT_TYPES = {
         damage: 10,
         attackSpeed: 600,
         sight: 140,
-        size: 8
+        size: 8,
+        category: 'infantry'
     },
     lightTank: {
         name: 'Light Tank',
@@ -31,7 +32,8 @@ const UNIT_TYPES = {
         damage: 20,
         attackSpeed: 800,
         sight: 200,
-        size: 14
+        size: 14,
+        category: 'armor'
     },
     mediumTank: {
         name: 'Battle Tank',
@@ -43,7 +45,8 @@ const UNIT_TYPES = {
         damage: 35,
         attackSpeed: 1200,
         sight: 180,
-        size: 16
+        size: 16,
+        category: 'armor'
     },
     heavyTank: {
         name: 'Heavy Tank',
@@ -55,7 +58,8 @@ const UNIT_TYPES = {
         damage: 55,
         attackSpeed: 1500,
         sight: 160,
-        size: 18
+        size: 18,
+        category: 'armor'
     },
     harvester: {
         name: 'Harvester',
@@ -68,7 +72,8 @@ const UNIT_TYPES = {
         attackSpeed: 0,
         sight: 120,
         size: 18,
-        capacity: 500
+        capacity: 500,
+        category: 'armor'
     },
     artillery: {
         name: 'Artillery',
@@ -80,7 +85,8 @@ const UNIT_TYPES = {
         damage: 60,
         attackSpeed: 2000,
         sight: 200,
-        size: 14
+        size: 14,
+        category: 'armor'
     },
     flak: {
         name: 'Flak Cannon',
@@ -92,7 +98,8 @@ const UNIT_TYPES = {
         damage: 25,
         attackSpeed: 600,
         sight: 220,
-        size: 12
+        size: 12,
+        category: 'armor'
     },
     scout: {
         name: 'Scout',
@@ -104,7 +111,8 @@ const UNIT_TYPES = {
         damage: 8,
         attackSpeed: 400,
         sight: 220,
-        size: 10
+        size: 10,
+        category: 'infantry'
     },
     rocket: {
         name: 'Rocket Soldier',
@@ -116,7 +124,8 @@ const UNIT_TYPES = {
         damage: 35,
         attackSpeed: 1000,
         sight: 160,
-        size: 12
+        size: 12,
+        category: 'infantry'
     }
 };
 
@@ -138,7 +147,8 @@ const BUILDING_TYPES = {
         hp: 400,
         size: 2,
         produces: ['infantry', 'scout', 'rocket'],
-        sight: 150
+        sight: 150,
+        powerUse: 10
     },
     factory: {
         name: 'Factory',
@@ -147,7 +157,8 @@ const BUILDING_TYPES = {
         hp: 600,
         size: 3,
         produces: ['lightTank', 'mediumTank', 'heavyTank', 'harvester', 'artillery', 'flak'],
-        sight: 150
+        sight: 150,
+        powerUse: 20
     },
     derrick: {
         name: 'Derrick',
@@ -157,7 +168,8 @@ const BUILDING_TYPES = {
         size: 1,
         produces: [],
         generates: 10,
-        sight: 100
+        sight: 100,
+        powerUse: 5
     },
     turret: {
         name: 'Turret',
@@ -169,7 +181,8 @@ const BUILDING_TYPES = {
         range: 250,
         damage: 20,
         attackSpeed: 800,
-        sight: 200
+        sight: 200,
+        powerUse: 8
     },
     rifleTurret: {
         name: 'Rifle Turret',
@@ -182,7 +195,8 @@ const BUILDING_TYPES = {
         damage: 35,
         attackSpeed: 600,
         sight: 220,
-        versus: 'infantry'
+        versus: 'infantry',
+        powerUse: 10
     },
     missileTurret: {
         name: 'Missile Turret',
@@ -195,7 +209,8 @@ const BUILDING_TYPES = {
         damage: 50,
         attackSpeed: 1200,
         sight: 250,
-        versus: 'armor'
+        versus: 'armor',
+        powerUse: 15
     },
     researchLab: {
         name: 'Research Lab',
@@ -205,7 +220,8 @@ const BUILDING_TYPES = {
         size: 2,
         produces: [],
         sight: 150,
-        researches: ['rifleTurret', 'missileTurret']
+        researches: ['rifleTurret', 'missileTurret'],
+        powerUse: 15
     },
     powerplant: {
         name: 'Power Plant',
@@ -216,6 +232,26 @@ const BUILDING_TYPES = {
         produces: [],
         powerGen: 50,
         sight: 100
+    },
+    academy: {
+        name: 'Academy',
+        icon: '&#127891;',
+        cost: 450,
+        hp: 350,
+        size: 2,
+        produces: [],
+        sight: 150,
+        bonuses: { infantryDamage: 1.15, infantryHP: 1.1 }
+    },
+    techLab: {
+        name: 'Tech Lab',
+        icon: '&#128300;',
+        cost: 550,
+        hp: 400,
+        size: 2,
+        produces: [],
+        sight: 150,
+        bonuses: { vehicleDamage: 1.15, vehicleHP: 1.1 }
     }
 };
 
