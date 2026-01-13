@@ -10,6 +10,19 @@
     <script src="assetLoader.js"></script>
     <script src="spriteGenerator.js"></script>
     <script src="loadCustomAssets.js"></script>
+    <script>
+        // Preload background image before initializing game
+        window.addEventListener('DOMContentLoaded', () => {
+            const bgImg = new Image();
+            bgImg.src = 'assets/mainmenu-bg.png';
+            bgImg.onload = () => {
+                console.log('✓ Background image loaded');
+            };
+            bgImg.onerror = () => {
+                console.log('⚠ Background image not found, using gradient fallback');
+            };
+        });
+    </script>
 </head>
 <body>
     <div id="header">
@@ -68,11 +81,8 @@
     <!-- Main Menu Screen -->
     <div id="mainMenu" class="fullscreen-overlay">
         <div class="menu-container">
-            <h1 class="menu-title">XFIRE</h1>
-            <p class="menu-subtitle">Skirmish RTS</p>
             <div class="menu-buttons">
                 <button id="newGameBtn" class="menu-btn">New Game</button>
-                <button id="settingsBtn" class="menu-btn">Settings</button>
             </div>
         </div>
     </div>

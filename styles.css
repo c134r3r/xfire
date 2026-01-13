@@ -250,7 +250,8 @@ body {
     background-attachment: fixed;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
+    padding-top: 70px;
     z-index: 2000;
 }
 
@@ -260,11 +261,11 @@ body {
 
 .menu-container {
     text-align: center;
-    padding: 60px 50px;
+    padding: 30px 35px;
     background: rgba(0, 0, 0, 0.5);
     border: 2px solid #ff6b35;
     border-radius: 5px;
-    max-width: 600px;
+    max-width: 350px;
     box-shadow: 0 0 50px rgba(255, 107, 53, 0.8),
                 inset 0 0 20px rgba(255, 107, 53, 0.2);
     backdrop-filter: blur(5px);
@@ -272,9 +273,9 @@ body {
 
 .menu-title {
     color: #ff6b35;
-    font-size: 56px;
+    font-size: 36px;
     font-weight: bold;
-    margin: 0 0 20px 0;
+    margin: 0 0 15px 0;
     text-shadow: 0 0 20px rgba(255, 107, 53, 1),
                  0 0 40px rgba(255, 107, 53, 0.6),
                  0 0 60px rgba(255, 60, 0, 0.4);
@@ -294,8 +295,8 @@ body {
 
 .menu-subtitle {
     color: #ff9d6b;
-    font-size: 18px;
-    margin: 0 0 40px 0;
+    font-size: 14px;
+    margin: 0 0 20px 0;
     letter-spacing: 2px;
     text-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
 }
@@ -315,13 +316,13 @@ body {
 .menu-buttons {
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    margin-top: 40px;
+    gap: 10px;
+    margin-top: 20px;
 }
 
 .menu-btn {
-    padding: 15px 40px;
-    font-size: 18px;
+    padding: 12px 30px;
+    font-size: 16px;
     font-weight: bold;
     background: linear-gradient(180deg, #ff6b35 0%, #d94a1f 100%);
     color: white;
