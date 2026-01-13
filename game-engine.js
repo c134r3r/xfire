@@ -519,7 +519,7 @@ function drawBuilding(building) {
     }
 
     // Production progress
-    if (building.producing) {
+    if (building.productionQueue.length > 0) {
         const progress = building.produceProgress / building.produceTime;
         ctx.fillStyle = '#555';
         ctx.fillRect(screen.x - 15, screen.y + 5, 30, 3);
@@ -1222,13 +1222,16 @@ function updateBuildings(dt) {
             }
         }
 
-        // Production
-        if (building.producing) {
+        // Production queue
+        if (building.productionQueue.length > 0) {
+            const current = building.productionQueue[0];
             building.produceProgress++;
+            building.produceTime = current.time;
+
             if (building.produceProgress >= building.produceTime) {
                 // Spawn unit
-                spawnUnit(building.producing, building.playerId, building.x + 2, building.y + 2);
-                building.producing = null;
+                spawnUnit(current.type, building.playerId, building.x + 2, building.y + 2);
+                building.productionQueue.shift();
                 building.produceProgress = 0;
             }
         }
@@ -1354,7 +1357,6 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     const aiBarracks = aiBuildings.filter(b => b.type === 'barracks');
     const aiFactory = aiBuildings.filter(b => b.type === 'factory');
     const aiDerricks = aiBuildings.filter(b => b.type === 'derrick');
-    const aiTurrets = aiBuildings.filter(b => b.type === 'turret');
 
     if (!aiHQ) return;
 
@@ -1367,6 +1369,45 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
     }
 
+    // Universal: Build research lab for tower tech
+    const aiResearchLabs = aiBuildings.filter(b => b.type === 'researchLab');
+    if (ai.oil >= 500 && aiResearchLabs.length < 1) {
+        const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+        if (pos) {
+            createBuilding('researchLab', 1, pos.x, pos.y);
+            ai.oil -= 500;
+        }
+    }
+
+    // Universal: Research tower tech
+    if (aiResearchLabs.length > 0) {
+        if (ai.oil >= 300 && !ai.tech.rifleTurret) {
+            researchTechnology('rifleTurret', 1);
+            ai.oil -= 300;
+        } else if (ai.oil >= 450 && !ai.tech.missileTurret) {
+            researchTechnology('missileTurret', 1);
+            ai.oil -= 450;
+        }
+    }
+
+    // Universal: Build defensive towers
+    const aiTurrets = aiBuildings.filter(b => b.type === 'turret' || b.type === 'rifleTurret' || b.type === 'missileTurret');
+    const buildDefense = () => {
+        if (ai.oil >= 300 && ai.tech.rifleTurret && Math.random() > 0.5) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('rifleTurret', 1, pos.x, pos.y);
+                ai.oil -= 300;
+            }
+        } else if (ai.oil >= 450 && ai.tech.missileTurret) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('missileTurret', 1, pos.x, pos.y);
+                ai.oil -= 450;
+            }
+        }
+    };
+
     if (mode === 'rusher') {
         // Build barracks quickly, mass produce infantry + rockets
         if (ai.oil >= 400 && aiBarracks.length < 3) {
@@ -1377,16 +1418,33 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
+        // Build factory for light tanks
+        if (ai.oil >= 600 && aiFactory.length < 1) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('factory', 1, pos.x, pos.y);
+                ai.oil -= 600;
+            }
+        }
+
         // Produce infantry and rockets constantly
         for (const barracks of aiBarracks) {
-            if (!barracks.producing) {
+            if (barracks.productionQueue.length < 10) {
                 if (ai.oil >= 80 && Math.random() > 0.3) {
-                    startProduction(barracks, 'infantry');
+                    addToProductionQueue(barracks, 'infantry');
                     ai.oil -= 80;
                 } else if (ai.oil >= 200) {
-                    startProduction(barracks, 'rocket');
+                    addToProductionQueue(barracks, 'rocket');
                     ai.oil -= 200;
                 }
+            }
+        }
+
+        // Produce light tanks for fast raids
+        for (const factory of aiFactory) {
+            if (factory.productionQueue.length < 10 && ai.oil >= 250) {
+                addToProductionQueue(factory, 'lightTank');
+                ai.oil -= 250;
             }
         }
 
@@ -1396,8 +1454,10 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
     } else if (mode === 'defender') {
-        // Build turrets for defense
-        if (ai.oil >= 350 && aiTurrets.length < 4) {
+        // Build defensive turrets - prefer specialized ones
+        if (aiTurrets.length < 6) {
+            buildDefense();
+        } else if (ai.oil >= 350 && aiTurrets.length < 8) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
                 createBuilding('turret', 1, pos.x, pos.y);
@@ -1414,18 +1474,23 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce tanks mainly
+        // Produce medium and heavy tanks for defense
         for (const factory of aiFactory) {
-            if (!factory.producing && ai.oil >= 350) {
-                startProduction(factory, 'tank');
-                ai.oil -= 350;
+            if (factory.productionQueue.length < 10) {
+                if (ai.oil >= 500 && Math.random() > 0.6) {
+                    addToProductionQueue(factory, 'heavyTank');
+                    ai.oil -= 500;
+                } else if (ai.oil >= 350) {
+                    addToProductionQueue(factory, 'mediumTank');
+                    ai.oil -= 350;
+                }
             }
         }
 
         // Produce scout for intel
         for (const barracks of aiBarracks) {
-            if (!barracks.producing && ai.oil >= 120 && aiUnits.filter(u => u.type === 'scout').length < 2) {
-                startProduction(barracks, 'scout');
+            if (barracks.productionQueue.length < 10 && ai.oil >= 120 && aiUnits.filter(u => u.type === 'scout').length < 2) {
+                addToProductionQueue(barracks, 'scout');
                 ai.oil -= 120;
             }
         }
@@ -1453,15 +1518,19 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce artillery and tanks
+        // Produce heavy tanks, artillery and flak for late-game power
         for (const factory of aiFactory) {
-            if (!factory.producing) {
-                if (ai.oil >= 500 && Math.random() > 0.5) {
-                    startProduction(factory, 'artillery');
+            if (factory.productionQueue.length < 10) {
+                const rand = Math.random();
+                if (ai.oil >= 500 && rand > 0.4) {
+                    addToProductionQueue(factory, 'heavyTank');
                     ai.oil -= 500;
-                } else if (ai.oil >= 350) {
-                    startProduction(factory, 'tank');
-                    ai.oil -= 350;
+                } else if (ai.oil >= 500 && rand > 0.2) {
+                    addToProductionQueue(factory, 'artillery');
+                    ai.oil -= 500;
+                } else if (ai.oil >= 300) {
+                    addToProductionQueue(factory, 'flak');
+                    ai.oil -= 300;
                 }
             }
         }
@@ -1469,10 +1538,15 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         // Build some harvesters
         if (ai.oil >= 450 && aiUnits.filter(u => u.type === 'harvester').length < 2) {
             const factory = aiFactory[0];
-            if (factory && !factory.producing) {
-                startProduction(factory, 'harvester');
+            if (factory && factory.productionQueue.length < 10) {
+                addToProductionQueue(factory, 'harvester');
                 ai.oil -= 450;
             }
+        }
+
+        // Build missile turrets for late-game defense
+        if (aiTurrets.length < 3) {
+            buildDefense();
         }
 
         // Powerful late-game attack
@@ -1500,26 +1574,40 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
 
         // Mix of unit types
         for (const barracks of aiBarracks) {
-            if (!barracks.producing) {
+            if (barracks.productionQueue.length < 10) {
                 const rand = Math.random();
                 if (ai.oil >= 80 && rand > 0.5) {
-                    startProduction(barracks, 'infantry');
+                    addToProductionQueue(barracks, 'infantry');
                     ai.oil -= 80;
                 } else if (ai.oil >= 120 && rand > 0.7) {
-                    startProduction(barracks, 'scout');
+                    addToProductionQueue(barracks, 'scout');
                     ai.oil -= 120;
                 } else if (ai.oil >= 200) {
-                    startProduction(barracks, 'rocket');
+                    addToProductionQueue(barracks, 'rocket');
                     ai.oil -= 200;
                 }
             }
         }
 
+        // Balanced mix of light and medium tanks
         for (const factory of aiFactory) {
-            if (!factory.producing && ai.oil >= 350) {
-                startProduction(factory, 'tank');
-                ai.oil -= 350;
+            if (factory.productionQueue.length < 10) {
+                if (ai.oil >= 350 && Math.random() > 0.5) {
+                    addToProductionQueue(factory, 'mediumTank');
+                    ai.oil -= 350;
+                } else if (ai.oil >= 250) {
+                    addToProductionQueue(factory, 'lightTank');
+                    ai.oil -= 250;
+                } else if (ai.oil >= 240) {
+                    addToProductionQueue(factory, 'harvester');
+                    ai.oil -= 240;
+                }
             }
+        }
+
+        // Build some defensive towers for balance
+        if (aiTurrets.length < 2) {
+            buildDefense();
         }
 
         // Attack when ready
@@ -1601,9 +1689,13 @@ function updateUI() {
         if (sel.cargo !== undefined) {
             infoText += `<br>Cargo: ${sel.cargo}/${type.capacity}`;
         }
-        if (sel.producing) {
+        if (sel.productionQueue && sel.productionQueue.length > 0) {
             const progress = Math.round((sel.produceProgress / sel.produceTime) * 100);
-            infoText += `<br>Building: ${sel.producing} (${progress}%)`;
+            const current = sel.productionQueue[0];
+            infoText += `<br>Building: ${UNIT_TYPES[current.type].name} (${progress}%)`;
+            if (sel.productionQueue.length > 1) {
+                infoText += ` [Queue: ${sel.productionQueue.length}]`;
+            }
         }
         infoEl.innerHTML = infoText;
     } else {
@@ -1625,25 +1717,83 @@ function updateBuildMenu() {
         const type = BUILDING_TYPES[selectedBuilding.type];
         menu.innerHTML = '';
 
-        for (const unitType of type.produces) {
-            const uType = UNIT_TYPES[unitType];
-            const btn = document.createElement('button');
-            btn.className = 'build-btn';
-            btn.innerHTML = `${uType.icon}<span>${uType.cost}</span>`;
-            btn.title = `${uType.name} - ${uType.cost} oil`;
-            btn.disabled = player.oil < uType.cost || selectedBuilding.producing;
-            btn.onclick = () => {
-                if (player.oil >= uType.cost && !selectedBuilding.producing) {
-                    player.oil -= uType.cost;
-                    startProduction(selectedBuilding, unitType);
+        // Show research options for Research Lab
+        if (selectedBuilding.type === 'researchLab' && type.researches) {
+            const researchInfo = document.createElement('div');
+            researchInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
+            researchInfo.innerHTML = `<strong>Research Technologies</strong>`;
+            menu.appendChild(researchInfo);
+
+            // Research buttons
+            for (const techType of type.researches) {
+                const techDef = BUILDING_TYPES[techType];
+                if (!techDef) continue;
+
+                const btn = document.createElement('button');
+                btn.className = 'build-btn';
+
+                // Check if already researched
+                const isResearched = player.tech[techType];
+                if (isResearched) {
+                    btn.innerHTML = `${techDef.icon} <span>✓</span>`;
+                    btn.title = `${techDef.name} - Already researched`;
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                } else {
+                    btn.innerHTML = `${techDef.icon}<span>${techDef.cost}</span>`;
+                    btn.title = `${techDef.name} - ${techDef.cost} oil to research`;
+                    btn.disabled = player.oil < techDef.cost;
+                    btn.onclick = () => {
+                        if (player.oil >= techDef.cost && !player.tech[techType]) {
+                            player.oil -= techDef.cost;
+                            researchTechnology(techType, 0);
+                            updateBuildMenu();
+                        }
+                    };
                 }
-            };
-            menu.appendChild(btn);
+                menu.appendChild(btn);
+            }
+        }
+        // Show production queue if building can produce
+        else if (type.produces.length > 0) {
+            // Queue info
+            const queueInfo = document.createElement('div');
+            queueInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
+            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong>`;
+            menu.appendChild(queueInfo);
+
+            // Production progress bar
+            if (selectedBuilding.productionQueue.length > 0) {
+                const current = selectedBuilding.productionQueue[0];
+                const progress = Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100);
+                const progressBar = document.createElement('div');
+                progressBar.style.cssText = `height: 4px; background: #333; margin: 8px; border-radius: 2px; overflow: hidden;`;
+                progressBar.innerHTML = `<div style="height: 100%; background: #4488ff; width: ${progress}%; transition: width 0.1s;"></div>`;
+                menu.appendChild(progressBar);
+            }
+
+            // Unit production buttons
+            for (const unitType of type.produces) {
+                const uType = UNIT_TYPES[unitType];
+                const btn = document.createElement('button');
+                btn.className = 'build-btn';
+                btn.innerHTML = `${uType.icon}<span>${uType.cost}</span>`;
+                btn.title = `${uType.name} - ${uType.cost} oil`;
+                btn.disabled = player.oil < uType.cost || selectedBuilding.productionQueue.length >= 10;
+                btn.onclick = () => {
+                    if (player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10) {
+                        player.oil -= uType.cost;
+                        addToProductionQueue(selectedBuilding, unitType);
+                        updateBuildMenu();
+                    }
+                };
+                menu.appendChild(btn);
+            }
         }
     } else {
         // Show building options (only available techs)
         menu.innerHTML = '';
-        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab'];
+        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'researchLab', 'powerplant', 'academy', 'techLab'];
 
         for (const bType of buildable) {
             const type = BUILDING_TYPES[bType];
@@ -1691,7 +1841,7 @@ function createBuilding(type, playerId, x, y) {
         playerId,
         x, y,
         hp: bType.hp,
-        producing: null,
+        productionQueue: [],
         produceProgress: 0,
         produceTime: 0
     });
@@ -1715,12 +1865,44 @@ function unlockTech(buildingType, playerId) {
     }
 }
 
-function startProduction(building, unitType) {
-    building.producing = unitType;
-    building.produceProgress = 0;
-    // Production times: infantry 90 (1.5s), scout 60 (1s), rocket 90, tank 180 (3s), harvester 240 (4s), artillery 200
-    const times = { infantry: 90, scout: 60, rocket: 90, tank: 180, harvester: 240, artillery: 200 };
-    building.produceTime = times[unitType] || 120;
+function researchTechnology(techType, playerId) {
+    const player = game.players[playerId];
+    if (!player || !player.tech) return;
+
+    // Mark technology as researched
+    player.tech[techType] = true;
+
+    // Unlock dependent techs
+    for (const [tech, deps] of Object.entries(TECH_TREE)) {
+        if (deps.requires.includes(techType)) {
+            player.tech[tech] = true;
+        }
+    }
+}
+
+function addToProductionQueue(building, unitType) {
+    // Max 10 units in queue
+    if (building.productionQueue.length >= 10) {
+        return false;
+    }
+
+    const times = {
+        infantry: 90,
+        scout: 60,
+        rocket: 90,
+        lightTank: 120,
+        mediumTank: 180,
+        heavyTank: 240,
+        harvester: 240,
+        artillery: 200,
+        flak: 140
+    };
+    building.productionQueue.push({
+        type: unitType,
+        time: times[unitType] || 120
+    });
+
+    return true;
 }
 
 function fireProjectile(source, target, customDamage) {
@@ -1824,7 +2006,8 @@ function createImpact(x, y) {
 }
 
 function findBuildPosition(nearX, nearY, playerId) {
-    for (let r = 3; r < 10; r++) {
+    // Search up to 6 tiles away from the base
+    for (let r = 1; r <= 6; r++) {
         for (let angle = 0; angle < Math.PI * 2; angle += 0.5) {
             const x = Math.floor(nearX + Math.cos(angle) * r);
             const y = Math.floor(nearY + Math.sin(angle) * r);
@@ -1881,6 +2064,26 @@ function initializeEventHandlers() {
             const type = BUILDING_TYPES[game.placingBuilding];
 
             if (game.players[0].oil >= type.cost) {
+                // Find player's HQ
+                const hq = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
+
+                // Check distance from HQ (max 6 tiles)
+                let isWithinRange = false;
+                if (hq) {
+                    const dx = tx - hq.x;
+                    const dy = ty - hq.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    isWithinRange = dist <= 6;
+                } else {
+                    isWithinRange = true; // Allow building if HQ doesn't exist yet
+                }
+
+                if (!isWithinRange) {
+                    console.log('Building must be within 6 tiles of HQ');
+                    game.placingBuilding = null;
+                    return;
+                }
+
                 // Check if on oil for derrick
                 if (game.placingBuilding === 'derrick') {
                     if (!game.map[ty]?.[tx]?.oil) {
