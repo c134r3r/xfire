@@ -243,6 +243,10 @@ body {
     width: 100%;
     height: 100%;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+    background-image: url('assets/mainmenu-bg.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -255,21 +259,26 @@ body {
 
 .menu-container {
     text-align: center;
-    padding: 60px 40px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 3px solid #ff6b35;
-    border-radius: 15px;
+    padding: 60px 50px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid #ff6b35;
+    border-radius: 5px;
     max-width: 600px;
-    box-shadow: 0 0 30px rgba(255, 107, 53, 0.5);
+    box-shadow: 0 0 50px rgba(255, 107, 53, 0.8),
+                inset 0 0 20px rgba(255, 107, 53, 0.2);
+    backdrop-filter: blur(5px);
 }
 
 .menu-title {
     color: #ff6b35;
-    font-size: 48px;
+    font-size: 56px;
     font-weight: bold;
     margin: 0 0 20px 0;
-    text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
-    letter-spacing: 3px;
+    text-shadow: 0 0 20px rgba(255, 107, 53, 1),
+                 0 0 40px rgba(255, 107, 53, 0.6),
+                 0 0 60px rgba(255, 60, 0, 0.4);
+    letter-spacing: 4px;
+    font-family: 'Arial Black', sans-serif;
 }
 
 .menu-title.victory-title {
@@ -283,10 +292,11 @@ body {
 }
 
 .menu-subtitle {
-    color: #aaa;
+    color: #ff9d6b;
     font-size: 18px;
     margin: 0 0 40px 0;
     letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
 }
 
 .victory-info {
@@ -314,18 +324,23 @@ body {
     font-weight: bold;
     background: linear-gradient(180deg, #ff6b35 0%, #d94a1f 100%);
     color: white;
-    border: none;
-    border-radius: 8px;
+    border: 2px solid #ff6b35;
+    border-radius: 4px;
     cursor: pointer;
     transition: all 0.3s;
     text-transform: uppercase;
     letter-spacing: 2px;
-    box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.6),
+                inset 0 0 10px rgba(255, 107, 53, 0.2);
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
 }
 
 .menu-btn:hover {
     transform: scale(1.05);
-    box-shadow: 0 0 25px rgba(255, 107, 53, 0.8);
+    box-shadow: 0 0 40px rgba(255, 107, 53, 0.9),
+                inset 0 0 20px rgba(255, 107, 53, 0.3),
+                0 0 60px rgba(255, 60, 0, 0.4);
+    background: linear-gradient(180deg, #ff8855 0%, #ff5500 100%);
 }
 
 .menu-btn:active {
