@@ -62,7 +62,7 @@ const UNIT_TYPES = {
         icon: '&#9819;',
         cost: 450,
         hp: 150,
-        speed: 0.5,
+        speed: 0.15,
         range: 0,
         damage: 0,
         attackSpeed: 0,
