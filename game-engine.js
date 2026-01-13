@@ -1916,12 +1916,14 @@ function updateBuildMenu() {
             }
 
             // Unit production buttons
-            for (const unitType of type.produces) {
+            for (let i = 0; i < type.produces.length; i++) {
+                const unitType = type.produces[i];
                 const uType = UNIT_TYPES[unitType];
+                const keyNum = i + 1; // 1-N
                 const btn = document.createElement('button');
                 btn.className = 'build-btn';
-                btn.innerHTML = `${uType.icon}<span>${uType.cost}</span>`;
-                btn.title = `${uType.name} - ${uType.cost} oil`;
+                btn.innerHTML = `<div>${uType.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${uType.cost}</span>`;
+                btn.title = `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
                 btn.disabled = player.oil < uType.cost || selectedBuilding.productionQueue.length >= 10;
                 btn.onclick = () => {
                     if (player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10) {
@@ -2032,6 +2034,29 @@ function canBuildAt(buildingType, x, y) {
     const type = BUILDING_TYPES[buildingType];
     if (!type) return false;
 
+    // Check terrain first (basic validity)
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
+    if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') return false;
+
+    // Check if on oil for derrick ONLY
+    if (buildingType === 'derrick') {
+        if (!game.map[Math.floor(y)]?.[Math.floor(x)]?.oil) return false;
+    }
+
+    // Check for building collision
+    const bSize = type.size;
+    for (const building of game.buildings) {
+        const bType = BUILDING_TYPES[building.type];
+        const bdx = Math.abs(x - building.x);
+        const bdy = Math.abs(y - building.y);
+        // Using Chebyshev distance for tile-based collision
+        const dist = Math.max(bdx, bdy);
+        if (dist < bSize + bType.size) {
+            return false;
+        }
+    }
+
     // Determine max distance based on source
     let maxDist = 6;
     let sourceBuilding = null;
@@ -2044,33 +2069,12 @@ function canBuildAt(buildingType, x, y) {
         maxDist = 6;
     }
 
-    // Check distance from source building
+    // Check distance from source building using Chebyshev distance (tile-based)
     if (sourceBuilding) {
-        const dx = x - sourceBuilding.x;
-        const dy = y - sourceBuilding.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dx = Math.abs(x - sourceBuilding.x);
+        const dy = Math.abs(y - sourceBuilding.y);
+        const dist = Math.max(dx, dy);  // Chebyshev distance for isometric grid
         if (dist > maxDist) return false;
-    }
-
-    // Check terrain
-    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
-    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
-    if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') return false;
-
-    // Check if on oil for derrick
-    if (buildingType === 'derrick') {
-        if (!game.map[Math.floor(y)]?.[Math.floor(x)]?.oil) return false;
-    }
-
-    // Check for building collision
-    const bSize = type.size;
-    for (const building of game.buildings) {
-        const bType = BUILDING_TYPES[building.type];
-        const bdx = x - building.x;
-        const bdy = y - building.y;
-        if (Math.abs(bdx) < bSize + bType.size && Math.abs(bdy) < bSize + bType.size) {
-            return false;
-        }
     }
 
     return true;
@@ -2481,28 +2485,54 @@ canvas.addEventListener('wheel', (e) => {
     document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    // Number keys 1-8 for building placement (if not building placement mode already)
-    if (e.key >= '1' && e.key <= '8' && !(e.metaKey || e.ctrlKey)) {
-        const buildingIndex = parseInt(e.key) - 1;
-        const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
+    // Number keys 1-8: Context-dependent
+    if (e.key >= '1' && e.key <= '8' && !(e.metaKey || e.ctrlKey) && game.status === 'PLAYING') {
+        const keyNum = parseInt(e.key);
 
-        if (buildableList[buildingIndex]) {
-            const bType = buildableList[buildingIndex];
-            const type = BUILDING_TYPES[bType];
-            const player = game.players[0];
+        // Check if a building with production is selected
+        const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
 
-            // Check if building is affordable and tech available
-            const isTechAvailable = player.tech[bType] !== false;
-            if (player.oil >= type.cost && isTechAvailable && game.status === 'PLAYING') {
-                game.placingBuilding = bType;
-                // If a building is selected, set it as source
-                const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
-                if (selectedBuilding && selectedBuilding.playerId === 0) {
-                    game.placingBuildingFrom = selectedBuilding;
-                } else {
-                    game.placingBuildingFrom = null;
+        if (selectedBuilding && selectedBuilding.playerId === 0 && BUILDING_TYPES[selectedBuilding.type].produces.length > 0) {
+            // Building with production is selected - use numbers for units
+            const produces = BUILDING_TYPES[selectedBuilding.type].produces;
+            const unitIndex = keyNum - 1;
+
+            if (produces[unitIndex]) {
+                const unitType = produces[unitIndex];
+                const uType = UNIT_TYPES[unitType];
+                const player = game.players[0];
+
+                // Check if affordable and queue not full
+                if (player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10) {
+                    player.oil -= uType.cost;
+                    addToProductionQueue(selectedBuilding, unitType);
+                    updateBuildMenu();
+                    e.preventDefault();
                 }
-                e.preventDefault();
+            }
+        } else {
+            // No building selected or building has no production - use numbers for buildings
+            const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab', 'researchLab'];
+            const buildingIndex = keyNum - 1;
+
+            if (buildableList[buildingIndex]) {
+                const bType = buildableList[buildingIndex];
+                const type = BUILDING_TYPES[bType];
+                const player = game.players[0];
+
+                // Check if building is affordable and tech available
+                const isTechAvailable = player.tech[bType] !== false;
+                if (player.oil >= type.cost && isTechAvailable) {
+                    game.placingBuilding = bType;
+                    // If a building is selected, set it as source
+                    const selectedBuildingForBuild = game.selection.find(s => BUILDING_TYPES[s.type]);
+                    if (selectedBuildingForBuild && selectedBuildingForBuild.playerId === 0) {
+                        game.placingBuildingFrom = selectedBuildingForBuild;
+                    } else {
+                        game.placingBuildingFrom = null;
+                    }
+                    e.preventDefault();
+                }
             }
         }
     }
@@ -2511,11 +2541,6 @@ canvas.addEventListener('wheel', (e) => {
         // Assign group
         game[`group${e.key}`] = [...game.selection];
         e.preventDefault();
-    }
-    // Number keys for selecting groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
-    else if (e.key >= '1' && e.key <= '5' && !(e.metaKey || e.ctrlKey) && game.status !== 'PLAYING') {
-        // Select group (only in menu)
-        game.selection = game[`group${e.key}`] || [];
     }
 
     // A for attack move
