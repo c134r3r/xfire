@@ -361,17 +361,8 @@ function drawBuilding(building) {
         ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
     }
 
-    // Draw emoji/icon
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#eee';
-    const iconMatch = type.icon.match(/&#(\d+);/);
-    if (iconMatch) {
-        ctx.fillText(String.fromCharCode(parseInt(iconMatch[1])), screen.x, screen.y);
-    } else {
-        ctx.fillText(type.icon, screen.x, screen.y);
-    }
+    // Draw emoji/icon (simple colored box, no emoji needed)
+    // Just draw the colored rectangle below
 
     const size = type.size * 20;
 
@@ -564,17 +555,7 @@ function drawUnit(unit) {
         ctx.strokeRect(screen.x - 12, screen.y - 18, 24, 3);
     }
 
-    // Draw emoji/icon
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#eee';
-    const unitIconMatch = type.icon.match(/&#(\d+);/);
-    if (unitIconMatch) {
-        ctx.fillText(String.fromCharCode(parseInt(unitIconMatch[1])), screen.x, screen.y);
-    } else {
-        ctx.fillText(type.icon, screen.x, screen.y);
-    }
+    // Draw unit (colored circle, specific type drawn below)
 
     const angle = unit.angle || 0;
     const cosA = Math.cos(angle);
