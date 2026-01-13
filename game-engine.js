@@ -347,21 +347,31 @@ function drawBuilding(building) {
     const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
     if (fog < 2 && building.playerId !== 0) return; // Hide enemy buildings in fog
 
-    // Shadow with blur effect
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 6;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y + 10, type.size * 15, type.size * 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw base structure
+    ctx.fillStyle = player.color;
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(screen.x - 20, screen.y - 20, 40, 40);
+    ctx.globalAlpha = 1;
 
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Draw health bar
+    if (building.hp < type.hp) {
+        ctx.fillStyle = '#f00';
+        ctx.fillRect(screen.x - 20, screen.y - 30, 40 * (building.hp / type.hp), 5);
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
+    }
+
+    // Draw emoji/icon
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#eee';
+    const iconMatch = type.icon.match(/&#(\d+);/);
+    if (iconMatch) {
+        ctx.fillText(String.fromCharCode(parseInt(iconMatch[1])), screen.x, screen.y);
+    } else {
+        ctx.fillText(type.icon, screen.x, screen.y);
+    }
 
     const size = type.size * 20;
 
@@ -538,21 +548,33 @@ function drawUnit(unit) {
     const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
     if (fog < 2 && unit.playerId !== 0) return; // Hide enemy units in fog
 
-    // Shadow with blur effect
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    // Draw unit circle background
+    ctx.fillStyle = player.color;
+    ctx.globalAlpha = 0.7;
     ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y, type.size * 0.8, type.size * 0.4, 0, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, 12, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Draw health bar on top
+    if (unit.hp < type.hp) {
+        ctx.fillStyle = '#f00';
+        ctx.fillRect(screen.x - 12, screen.y - 18, 24 * (unit.hp / type.hp), 3);
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(screen.x - 12, screen.y - 18, 24, 3);
+    }
+
+    // Draw emoji/icon
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#eee';
+    const unitIconMatch = type.icon.match(/&#(\d+);/);
+    if (unitIconMatch) {
+        ctx.fillText(String.fromCharCode(parseInt(unitIconMatch[1])), screen.x, screen.y);
+    } else {
+        ctx.fillText(type.icon, screen.x, screen.y);
+    }
 
     const angle = unit.angle || 0;
     const cosA = Math.cos(angle);
