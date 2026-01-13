@@ -416,3 +416,20 @@ body {
         text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
     }
 }
+
+/* Building Placement Mode */
+#canvas.placing-building {
+    cursor: none;
+}
+
+/* Building preview valid state */
+.building-preview.valid {
+    color: #00ff00;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+
+/* Building preview invalid state */
+.building-preview.invalid {
+    color: #ff0000;
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+}
