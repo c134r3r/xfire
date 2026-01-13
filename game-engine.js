@@ -2,7 +2,9 @@
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 if (isMac) {
     const helpEl = document.getElementById('controlsHelp');
-    helpEl.innerHTML = 'Controls: Left-click select | ⌘+Click or right-click move/attack | Drag to box-select | WASD/Arrows scroll | ⌘+1–5 unit groups';
+    if (helpEl) {
+        helpEl.innerHTML = 'Controls: Left-click select | ⌘+Click or right-click move/attack | Drag to box-select | WASD/Arrows scroll | ⌘+1–5 unit groups';
+    }
 }
 
 // ============================================
@@ -40,7 +42,16 @@ function initializeCanvases() {
     ctx.imageSmoothingQuality = 'high';
 
     minimapCanvas = document.getElementById('minimap');
+    if (!minimapCanvas) {
+        console.error('Minimap canvas element not found!');
+        return false;
+    }
+
     minimapCtx = minimapCanvas.getContext('2d');
+    if (!minimapCtx) {
+        console.error('Could not get minimap 2D context!');
+        return false;
+    }
 
     // Initialize asset loader with placeholder graphics
     if (typeof AssetLoader !== 'undefined') {
@@ -55,12 +66,7 @@ function initializeCanvases() {
     return true;
 }
 
-// Game Constants
-const TILE_WIDTH = 64;
-const TILE_HEIGHT = 32;
-const MAP_SIZE = 64;
-
-// Game State
+// Game State (Constants imported from constants.js)
 const game = {
     running: true,
     tick: 0,
@@ -1593,31 +1599,39 @@ function updateResources() {
 }
 
 function updateUI() {
-    document.getElementById('oil').textContent = Math.floor(game.players[0].oil);
-    document.getElementById('power').textContent = Math.floor(game.players[0].power);
+    const oilEl = document.getElementById('oil');
+    const powerEl = document.getElementById('power');
+    const playerUnitsEl = document.getElementById('playerUnits');
+    const enemyUnitsEl = document.getElementById('enemyUnits');
+    const infoEl = document.getElementById('selectionInfo');
+
+    if (!oilEl || !powerEl || !playerUnitsEl || !enemyUnitsEl || !infoEl) {
+        console.warn('UI elements not found - skipping UI update');
+        return;
+    }
+
+    oilEl.textContent = Math.floor(game.players[0].oil);
+    powerEl.textContent = Math.floor(game.players[0].power);
 
     // Unit counts
     const playerUnits = game.units.filter(u => u.playerId === 0).length;
     const enemyUnits = game.units.filter(u => u.playerId === 1).length;
-    document.getElementById('playerUnits').textContent = `${playerUnits} units`;
-    document.getElementById('enemyUnits').textContent = `${enemyUnits} units`;
+    playerUnitsEl.textContent = `${playerUnits} units`;
+    enemyUnitsEl.textContent = `${enemyUnits} units`;
 
     // Color code: green if ahead, red if behind, yellow if equal
-    const playerEl = document.getElementById('playerUnits');
-    const enemyEl = document.getElementById('enemyUnits');
     if (playerUnits > enemyUnits) {
-        playerEl.style.color = '#0f0';
-        enemyEl.style.color = '#f00';
+        playerUnitsEl.style.color = '#0f0';
+        enemyUnitsEl.style.color = '#f00';
     } else if (playerUnits < enemyUnits) {
-        playerEl.style.color = '#f00';
-        enemyEl.style.color = '#0f0';
+        playerUnitsEl.style.color = '#f00';
+        enemyUnitsEl.style.color = '#0f0';
     } else {
-        playerEl.style.color = '#ff0';
-        enemyEl.style.color = '#ff0';
+        playerUnitsEl.style.color = '#ff0';
+        enemyUnitsEl.style.color = '#ff0';
     }
 
     // Selection info
-    const infoEl = document.getElementById('selectionInfo');
     if (game.selection.length === 0) {
         infoEl.innerHTML = 'No selection';
     } else if (game.selection.length === 1) {
@@ -1884,7 +1898,13 @@ function shadeColor(color, percent) {
 
 const keys = {};
 
-canvas.addEventListener('mousedown', (e) => {
+function initializeEventHandlers() {
+    if (!canvas) {
+        console.error('Cannot initialize event handlers: canvas not found');
+        return;
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -2061,193 +2081,22 @@ canvas.addEventListener('wheel', (e) => {
     }
 }, { passive: false });
 
-// ============================================
-// TOUCH SUPPORT (Mobile)
-// ============================================
+    // Browser-only support (Mobile removed)
 
-let touchStartX = 0;
-let touchStartY = 0;
-let touchStartTime = 0;
-let touchDist = 0;
-let lastTouchDist = 0;
+    // Minimap click
+    if (minimapCanvas) {
+        minimapCanvas.addEventListener('click', (e) => {
+            const rect = minimapCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-
-    touchStartX = touch.clientX - rect.left;
-    touchStartY = touch.clientY - rect.top;
-    touchStartTime = Date.now();
-
-    // Two-finger touch: start camera pan
-    if (e.touches.length === 2) {
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        const dx = t2.clientX - t1.clientX;
-        const dy = t2.clientY - t1.clientY;
-        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+            const scale = MAP_SIZE / 180;
+            game.camera.x = x * scale * TILE_WIDTH / 2;
+            game.camera.y = y * scale * TILE_HEIGHT;
+        });
     }
 
-    // Single tap: start selection box
-    if (e.touches.length === 1) {
-        game.selectionBox = { x1: touchStartX, y1: touchStartY, x2: touchStartX, y2: touchStartY };
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-
-    if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
-
-        game.mouse.x = x;
-        game.mouse.y = y;
-        const world = screenToWorld(x, y);
-        game.mouse.worldX = world.x;
-        game.mouse.worldY = world.y;
-
-        // Update selection box
-        if (game.selectionBox) {
-            game.selectionBox.x2 = x;
-            game.selectionBox.y2 = y;
-        }
-    } else if (e.touches.length === 2) {
-        // Two-finger pan: move camera
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        const dx = t2.clientX - t1.clientX;
-        const dy = t2.clientY - t1.clientY;
-        touchDist = Math.sqrt(dx * dx + dy * dy);
-
-        // Calculate movement delta
-        const avgX = (t1.clientX + t2.clientX) / 2;
-        const avgY = (t1.clientY + t2.clientY) / 2;
-
-        // Pan camera by touch movement
-        if (lastTouchDist > 0) {
-            const panSpeed = 0.5;
-            game.camera.x -= (avgX - (touchStartX + (t1.clientX - t2.clientX) / 2)) * panSpeed;
-            game.camera.y -= (avgY - (touchStartY + (t1.clientY - t2.clientY) / 2)) * panSpeed;
-        }
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    const timeDiff = Date.now() - touchStartTime;
-    const rect = canvas.getBoundingClientRect();
-
-    if (e.touches.length === 0 && game.selectionBox) {
-        const box = game.selectionBox;
-        const minX = Math.min(box.x1, box.x2);
-        const maxX = Math.max(box.x1, box.x2);
-        const minY = Math.min(box.y1, box.y2);
-        const maxY = Math.max(box.y1, box.y2);
-
-        // Short tap (< 300ms) = click select
-        if (timeDiff < 300 && Math.abs(box.x2 - box.x1) < 10 && Math.abs(box.y2 - box.y1) < 10) {
-            // Single tap: select unit
-            game.selection = [];
-            const clicked = [...game.units, ...game.buildings].find(entity => {
-                const screen = worldToScreen(entity.x, entity.y);
-                const dx = screen.x - touchStartX;
-                const dy = screen.y - touchStartY;
-                return Math.sqrt(dx * dx + dy * dy) < 25 && entity.playerId === 0;
-            });
-
-            if (clicked) {
-                game.selection = [clicked];
-            }
-        } else if (timeDiff < 500 && Math.abs(box.x2 - box.x1) < 5 && Math.abs(box.y2 - box.y1) < 5) {
-            // Double tap: select all same type
-            const clicked = game.units.find(entity => {
-                const screen = worldToScreen(entity.x, entity.y);
-                const dx = screen.x - touchStartX;
-                const dy = screen.y - touchStartY;
-                return Math.sqrt(dx * dx + dy * dy) < 25 && entity.playerId === 0;
-            });
-
-            if (clicked) {
-                game.selection = game.units.filter(u => u.playerId === 0 && u.type === clicked.type);
-            }
-        } else {
-            // Drag: box select
-            game.selection = [];
-            for (const unit of game.units) {
-                if (unit.playerId !== 0) continue;
-                const screen = worldToScreen(unit.x, unit.y);
-                if (screen.x >= minX && screen.x <= maxX &&
-                    screen.y >= minY && screen.y <= maxY) {
-                    game.selection.push(unit);
-                }
-            }
-        }
-
-        game.selectionBox = null;
-    }
-}, { passive: false });
-
-// Long press for right-click behavior (move/attack)
-canvas.addEventListener('touchhold', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-    const world = screenToWorld(x, y);
-
-    // Check if clicking on enemy
-    const enemy = game.units.find(u => {
-        const screen = worldToScreen(u.x, u.y);
-        const dx = screen.x - x;
-        const dy = screen.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < 25 && u.playerId !== 0;
-    });
-
-    for (const sel of game.selection) {
-        if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
-            if (enemy) {
-                sel.attackTarget = enemy;
-                sel.targetX = undefined;
-                sel.targetY = undefined;
-            } else {
-                sel.targetX = world.x;
-                sel.targetY = world.y;
-                sel.attackTarget = null;
-            }
-        }
-    }
-}, { passive: false });
-
-// Simulate long press with timeout
-let touchTimeout = null;
-document.addEventListener('touchstart', () => {
-    touchTimeout = setTimeout(() => {
-        const event = new Event('touchhold');
-        canvas.dispatchEvent(event);
-    }, 500);
-}, { passive: false });
-
-document.addEventListener('touchend', () => {
-    clearTimeout(touchTimeout);
-}, { passive: false });
-
-// Minimap click
-minimapCanvas.addEventListener('click', (e) => {
-    const rect = minimapCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const scale = MAP_SIZE / 180;
-    game.camera.x = x * scale * TILE_WIDTH / 2;
-    game.camera.y = y * scale * TILE_HEIGHT;
-});
-
-document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
     // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
@@ -2280,11 +2129,12 @@ document.addEventListener('keydown', (e) => {
         game.placingBuilding = null;
         game.selection = [];
     }
-});
+    });
 
-document.addEventListener('keyup', (e) => {
-    keys[e.key] = false;
-});
+    document.addEventListener('keyup', (e) => {
+        keys[e.key] = false;
+    });
+}
 
 // Camera scrolling
 function updateCamera() {
@@ -2357,6 +2207,7 @@ try {
         alert('Error: Could not initialize game canvases');
     } else {
         console.log('Canvases initialized successfully');
+        initializeEventHandlers();
         try {
             // Start game immediately (welcome screen disabled for now)
             console.log('Initializing game...');
