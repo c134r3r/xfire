@@ -2447,6 +2447,13 @@ function goToMainMenu() {
     game.buildings = [];
     game.selection = [];
     showScreen('mainMenu');
+
+    // Stop background music
+    const bgMusic = document.getElementById('backgroundMusic');
+    if (bgMusic) {
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+    }
 }
 
 function goToSettings() {
@@ -2475,20 +2482,33 @@ function startGame() {
     showScreen('mainMenu');
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('timerDisplay').style.display = 'block';
+
+    // Play background music
+    const bgMusic = document.getElementById('backgroundMusic');
+    if (bgMusic) {
+        bgMusic.volume = 0.3; // 30% Lautstärke
+        bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+    }
 }
 
 function togglePause() {
     if (game.status !== 'PLAYING' && game.status !== 'PAUSED') return;
 
+    const bgMusic = document.getElementById('backgroundMusic');
+
     if (game.status === 'PLAYING') {
         game.status = 'PAUSED';
         game.paused = true;
         showScreen('pauseScreen');
+        // Pause music
+        if (bgMusic) bgMusic.pause();
     } else if (game.status === 'PAUSED') {
         game.status = 'PLAYING';
         game.paused = false;
         showScreen('mainMenu');
         document.getElementById('mainMenu').classList.add('hidden');
+        // Resume music
+        if (bgMusic) bgMusic.play().catch(e => console.log('Resume music prevented:', e));
     }
 }
 
