@@ -1357,7 +1357,6 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     const aiBarracks = aiBuildings.filter(b => b.type === 'barracks');
     const aiFactory = aiBuildings.filter(b => b.type === 'factory');
     const aiDerricks = aiBuildings.filter(b => b.type === 'derrick');
-    const aiTurrets = aiBuildings.filter(b => b.type === 'turret');
 
     if (!aiHQ) return;
 
@@ -1369,6 +1368,45 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             ai.oil -= 200;
         }
     }
+
+    // Universal: Build research lab for tower tech
+    const aiResearchLabs = aiBuildings.filter(b => b.type === 'researchLab');
+    if (ai.oil >= 500 && aiResearchLabs.length < 1) {
+        const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+        if (pos) {
+            createBuilding('researchLab', 1, pos.x, pos.y);
+            ai.oil -= 500;
+        }
+    }
+
+    // Universal: Research tower tech
+    if (aiResearchLabs.length > 0) {
+        if (ai.oil >= 300 && !ai.tech.rifleTurret) {
+            researchTechnology('rifleTurret', 1);
+            ai.oil -= 300;
+        } else if (ai.oil >= 450 && !ai.tech.missileTurret) {
+            researchTechnology('missileTurret', 1);
+            ai.oil -= 450;
+        }
+    }
+
+    // Universal: Build defensive towers
+    const aiTurrets = aiBuildings.filter(b => b.type === 'turret' || b.type === 'rifleTurret' || b.type === 'missileTurret');
+    const buildDefense = () => {
+        if (ai.oil >= 300 && ai.tech.rifleTurret && Math.random() > 0.5) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('rifleTurret', 1, pos.x, pos.y);
+                ai.oil -= 300;
+            }
+        } else if (ai.oil >= 450 && ai.tech.missileTurret) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('missileTurret', 1, pos.x, pos.y);
+                ai.oil -= 450;
+            }
+        }
+    };
 
     if (mode === 'rusher') {
         // Build barracks quickly, mass produce infantry + rockets
@@ -1416,8 +1454,10 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
     } else if (mode === 'defender') {
-        // Build turrets for defense
-        if (ai.oil >= 350 && aiTurrets.length < 4) {
+        // Build defensive turrets - prefer specialized ones
+        if (aiTurrets.length < 6) {
+            buildDefense();
+        } else if (ai.oil >= 350 && aiTurrets.length < 8) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
                 createBuilding('turret', 1, pos.x, pos.y);
@@ -1504,6 +1544,11 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
+        // Build missile turrets for late-game defense
+        if (aiTurrets.length < 3) {
+            buildDefense();
+        }
+
         // Powerful late-game attack
         if (aiUnits.length >= 8) {
             attackPlayerBase(playerBuildings, playerUnits, aiUnits);
@@ -1558,6 +1603,11 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
                     ai.oil -= 240;
                 }
             }
+        }
+
+        // Build some defensive towers for balance
+        if (aiTurrets.length < 2) {
+            buildDefense();
         }
 
         // Attack when ready
@@ -1667,8 +1717,45 @@ function updateBuildMenu() {
         const type = BUILDING_TYPES[selectedBuilding.type];
         menu.innerHTML = '';
 
+        // Show research options for Research Lab
+        if (selectedBuilding.type === 'researchLab' && type.researches) {
+            const researchInfo = document.createElement('div');
+            researchInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
+            researchInfo.innerHTML = `<strong>Research Technologies</strong>`;
+            menu.appendChild(researchInfo);
+
+            // Research buttons
+            for (const techType of type.researches) {
+                const techDef = BUILDING_TYPES[techType];
+                if (!techDef) continue;
+
+                const btn = document.createElement('button');
+                btn.className = 'build-btn';
+
+                // Check if already researched
+                const isResearched = player.tech[techType];
+                if (isResearched) {
+                    btn.innerHTML = `${techDef.icon} <span>✓</span>`;
+                    btn.title = `${techDef.name} - Already researched`;
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                } else {
+                    btn.innerHTML = `${techDef.icon}<span>${techDef.cost}</span>`;
+                    btn.title = `${techDef.name} - ${techDef.cost} oil to research`;
+                    btn.disabled = player.oil < techDef.cost;
+                    btn.onclick = () => {
+                        if (player.oil >= techDef.cost && !player.tech[techType]) {
+                            player.oil -= techDef.cost;
+                            researchTechnology(techType, 0);
+                            updateBuildMenu();
+                        }
+                    };
+                }
+                menu.appendChild(btn);
+            }
+        }
         // Show production queue if building can produce
-        if (type.produces.length > 0) {
+        else if (type.produces.length > 0) {
             // Queue info
             const queueInfo = document.createElement('div');
             queueInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
@@ -1706,7 +1793,7 @@ function updateBuildMenu() {
     } else {
         // Show building options (only available techs)
         menu.innerHTML = '';
-        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'powerplant', 'academy', 'techLab'];
+        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'researchLab', 'powerplant', 'academy', 'techLab'];
 
         for (const bType of buildable) {
             const type = BUILDING_TYPES[bType];
@@ -1773,6 +1860,21 @@ function unlockTech(buildingType, playerId) {
     // Unlock dependent techs
     for (const [tech, deps] of Object.entries(TECH_TREE)) {
         if (deps.requires.includes(buildingType)) {
+            player.tech[tech] = true;
+        }
+    }
+}
+
+function researchTechnology(techType, playerId) {
+    const player = game.players[playerId];
+    if (!player || !player.tech) return;
+
+    // Mark technology as researched
+    player.tech[techType] = true;
+
+    // Unlock dependent techs
+    for (const [tech, deps] of Object.entries(TECH_TREE)) {
+        if (deps.requires.includes(techType)) {
             player.tech[tech] = true;
         }
     }

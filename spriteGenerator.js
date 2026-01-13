@@ -973,6 +973,189 @@ class SpriteGenerator {
         return this.canvasToImage(canvas);
     }
 
+    generateRifleTurret(color = '#4488ff') {
+        const size = 56;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.ellipse(cx, cy + 7, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Base structure - smaller
+        ctx.fillStyle = this.shadeColor(color, -30);
+        ctx.beginPath();
+        ctx.arc(cx, cy + 1, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, cy + 1, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gun turret - rifle (lighter)
+        ctx.fillStyle = this.shadeColor(color, -35);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.shadeColor(color, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rifle barrel - multiple barrels
+        ctx.strokeStyle = this.shadeColor(color, -50);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 2, cy - 3);
+        ctx.lineTo(cx - 14, cy - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - 2, cy - 1);
+        ctx.lineTo(cx - 14, cy + 1);
+        ctx.stroke();
+
+        return this.canvasToImage(canvas);
+    }
+
+    generateMissileTurret(color = '#4488ff') {
+        const size = 60;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.ellipse(cx, cy + 8, 15, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Base structure - larger and more armored
+        ctx.fillStyle = this.shadeColor(color, -35);
+        ctx.beginPath();
+        ctx.arc(cx, cy + 2, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.shadeColor(color, -20);
+        ctx.beginPath();
+        ctx.arc(cx, cy + 2, 13, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, cy + 2, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Missile turret - larger and raised
+        ctx.fillStyle = this.shadeColor(color, -40);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 5, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.shadeColor(color, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 5, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Missile tubes - large and prominent
+        ctx.strokeStyle = this.shadeColor(color, -50);
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, cy - 5);
+        ctx.lineTo(cx - 16, cy - 12);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 3, cy - 5);
+        ctx.lineTo(cx + 16, cy - 12);
+        ctx.stroke();
+
+        // Missile tips
+        ctx.fillStyle = '#ff6600';
+        ctx.beginPath();
+        ctx.arc(cx - 16, cy - 12, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 16, cy - 12, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        return this.canvasToImage(canvas);
+    }
+
+    generateResearchLab(color = '#4488ff') {
+        const size = 68;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.ellipse(cx, cy + 10, 18, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main building structure
+        ctx.fillStyle = this.shadeColor(color, -25);
+        ctx.fillRect(cx - 16, cy - 8, 32, 24);
+
+        // Building shading
+        ctx.fillStyle = this.shadeColor(color, -35);
+        ctx.fillRect(cx - 16, cy - 8, 32, 10);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(cx - 14, cy - 6, 28, 20);
+
+        // Antenna/lab equipment on top
+        ctx.strokeStyle = this.shadeColor(color, -50);
+        ctx.lineWidth = 2;
+
+        // Lab flask 1
+        ctx.beginPath();
+        ctx.arc(cx - 8, cy - 8, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.arc(cx - 8, cy - 8, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lab flask 2
+        ctx.strokeStyle = this.shadeColor(color, -50);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 8, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ff00ff';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 8, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lab flask 3
+        ctx.strokeStyle = this.shadeColor(color, -50);
+        ctx.beginPath();
+        ctx.arc(cx + 8, cy - 8, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(cx + 8, cy - 8, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Research beams (diagonal lines)
+        ctx.strokeStyle = this.shadeColor(color, -40);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 10, cy);
+        ctx.lineTo(cx - 14, cy + 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 10, cy);
+        ctx.lineTo(cx + 14, cy + 8);
+        ctx.stroke();
+
+        return this.canvasToImage(canvas);
+    }
+
     /**
      * Generate Power Plant Building Sprite
      */
@@ -1052,6 +1235,9 @@ class SpriteGenerator {
         assetLoader.assets.buildings.factory = this.generateFactory(color);
         assetLoader.assets.buildings.derrick = this.generateDerrick(color);
         assetLoader.assets.buildings.turret = this.generateTurret(color);
+        assetLoader.assets.buildings.rifleTurret = this.generateRifleTurret(color);
+        assetLoader.assets.buildings.missileTurret = this.generateMissileTurret(color);
+        assetLoader.assets.buildings.researchLab = this.generateResearchLab(color);
         assetLoader.assets.buildings.powerPlant = this.generatePowerPlant(color);
 
         console.log('[SpriteGenerator] ✓ All sprites generated successfully');

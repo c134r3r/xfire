@@ -171,6 +171,42 @@ const BUILDING_TYPES = {
         attackSpeed: 800,
         sight: 200
     },
+    rifleTurret: {
+        name: 'Rifle Turret',
+        icon: '🎯',
+        cost: 300,
+        hp: 250,
+        size: 1,
+        produces: [],
+        range: 280,
+        damage: 35,
+        attackSpeed: 600,
+        sight: 220,
+        versus: 'infantry'
+    },
+    missileTurret: {
+        name: 'Missile Turret',
+        icon: '🚀',
+        cost: 450,
+        hp: 200,
+        size: 1,
+        produces: [],
+        range: 320,
+        damage: 50,
+        attackSpeed: 1200,
+        sight: 250,
+        versus: 'armor'
+    },
+    researchLab: {
+        name: 'Research Lab',
+        icon: '🔬',
+        cost: 500,
+        hp: 350,
+        size: 2,
+        produces: [],
+        sight: 150,
+        researches: ['rifleTurret', 'missileTurret']
+    },
     powerplant: {
         name: 'Power Plant',
         icon: '&#9889;',
@@ -188,7 +224,10 @@ const TECH_TREE = {
     barracks: { requires: [], unlocks: ['academy'] },
     factory: { requires: [], unlocks: ['techLab'] },
     academy: { requires: ['barracks'], unlocks: [] },
-    techLab: { requires: ['factory'], unlocks: [] }
+    techLab: { requires: ['factory'], unlocks: [] },
+    researchLab: { requires: [], unlocks: ['rifleTurret', 'missileTurret'] },
+    rifleTurret: { requires: ['researchLab'], unlocks: [] },
+    missileTurret: { requires: ['researchLab'], unlocks: [] }
 };
 
 // Initialize Game State
@@ -208,7 +247,7 @@ function initializeGameState() {
                 oil: 1200,
                 power: 100,
                 team: 'player',
-                tech: { barracks: true, factory: false, academy: false }
+                tech: { barracks: true, factory: false, academy: false, researchLab: false, rifleTurret: false, missileTurret: false }
             },
             {
                 id: 1,
@@ -216,7 +255,7 @@ function initializeGameState() {
                 oil: 1200,
                 power: 100,
                 team: 'enemy',
-                tech: { barracks: true, factory: false, academy: false }
+                tech: { barracks: true, factory: false, academy: false, researchLab: false, rifleTurret: false, missileTurret: false }
             }
         ],
         units: [],
