@@ -1007,10 +1007,12 @@ function drawParticle(particle) {
 }
 
 function renderMinimap() {
-    minimapCtx.fillStyle = '#111';
-    minimapCtx.fillRect(0, 0, 180, 180);
+    // Calculate minimap size: 24 tiles wide = 480px (24 * 20px per tile)
+    const minimapSize = Math.min(480, 24 * 20);
+    const scale = minimapSize / MAP_SIZE;
 
-    const scale = 180 / MAP_SIZE;
+    minimapCtx.fillStyle = '#111';
+    minimapCtx.fillRect(0, 0, minimapSize, minimapSize);
 
     // Draw terrain
     for (let y = 0; y < MAP_SIZE; y++) {
@@ -2476,7 +2478,8 @@ canvas.addEventListener('wheel', (e) => {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            const scale = MAP_SIZE / 180;
+            const minimapSize = minimapCanvas.width;
+            const scale = MAP_SIZE / minimapSize;
             game.camera.x = x * scale * TILE_WIDTH / 2;
             game.camera.y = y * scale * TILE_HEIGHT;
         });
@@ -2611,11 +2614,19 @@ function goToMainMenu() {
     game.selection = [];
     showScreen('mainMenu');
 
-    // Stop background music
+    // Stop background music and play intro music
     const bgMusic = document.getElementById('backgroundMusic');
+    const introMusic = document.getElementById('introMusic');
+
     if (bgMusic) {
         bgMusic.pause();
         bgMusic.currentTime = 0;
+    }
+
+    if (introMusic) {
+        introMusic.volume = 0.3;
+        introMusic.currentTime = 0;
+        introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
     }
 }
 
@@ -2646,10 +2657,18 @@ function startGame() {
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('timerDisplay').style.display = 'block';
 
-    // Play background music
+    // Stop intro music and play background music
+    const introMusic = document.getElementById('introMusic');
     const bgMusic = document.getElementById('backgroundMusic');
+
+    if (introMusic) {
+        introMusic.pause();
+        introMusic.currentTime = 0;
+    }
+
     if (bgMusic) {
         bgMusic.volume = 0.3; // 30% Lautstärke
+        bgMusic.currentTime = 0;
         bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
     }
 }
