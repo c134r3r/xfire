@@ -125,6 +125,262 @@ class SpriteGenerator {
         return this.canvasToImage(canvas);
     }
 
+    generateLightTank(color = '#4488ff') {
+        const size = 56;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.ellipse(cx, cy + 6, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lighter tank body
+        const bodyColor = color;
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(cx - 10, cy - 3, 20, 10);
+
+        // Tank body shading
+        ctx.fillStyle = this.shadeColor(bodyColor, -20);
+        ctx.fillRect(cx - 10, cy - 3, 20, 4);
+        ctx.fillStyle = this.shadeColor(bodyColor, 15);
+        ctx.fillRect(cx - 10, cy + 4, 20, 3);
+
+        // Tank tracks
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 10, cy - 1);
+        ctx.lineTo(cx - 10, cy + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 10, cy - 1);
+        ctx.lineTo(cx + 10, cy + 6);
+        ctx.stroke();
+
+        // Smaller turret
+        ctx.fillStyle = this.shadeColor(bodyColor, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Short gun barrel
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + 4, cy - 2);
+        ctx.lineTo(cx + 11, cy - 3);
+        ctx.stroke();
+
+        return this.canvasToImage(canvas);
+    }
+
+    generateMediumTank(color = '#4488ff') {
+        const size = 64;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.ellipse(cx, cy + 8, 16, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Standard tank body
+        const bodyColor = color;
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(cx - 14, cy - 4, 28, 14);
+
+        // Tank body shading
+        ctx.fillStyle = this.shadeColor(bodyColor, -20);
+        ctx.fillRect(cx - 14, cy - 4, 28, 5);
+        ctx.fillStyle = this.shadeColor(bodyColor, 15);
+        ctx.fillRect(cx - 14, cy + 5, 28, 4);
+
+        // Tank tracks
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 14, cy - 2);
+        ctx.lineTo(cx - 14, cy + 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 14, cy - 2);
+        ctx.lineTo(cx + 14, cy + 8);
+        ctx.stroke();
+
+        // Turret
+        ctx.fillStyle = this.shadeColor(bodyColor, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Turret shading
+        ctx.fillStyle = this.shadeColor(bodyColor, 20);
+        ctx.beginPath();
+        ctx.arc(cx - 2, cy - 5, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gun barrel
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx + 6, cy - 3);
+        ctx.lineTo(cx + 16, cy - 5);
+        ctx.stroke();
+
+        // Gun barrel tip
+        ctx.fillStyle = this.shadeColor(bodyColor, -50);
+        ctx.beginPath();
+        ctx.arc(cx + 16, cy - 5, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        return this.canvasToImage(canvas);
+    }
+
+    generateHeavyTank(color = '#4488ff') {
+        const size = 72;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.ellipse(cx, cy + 10, 20, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Heavy tank body - wider and taller
+        const bodyColor = color;
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(cx - 18, cy - 5, 36, 16);
+
+        // Tank body shading
+        ctx.fillStyle = this.shadeColor(bodyColor, -20);
+        ctx.fillRect(cx - 18, cy - 5, 36, 6);
+        ctx.fillStyle = this.shadeColor(bodyColor, 15);
+        ctx.fillRect(cx - 18, cy + 6, 36, 5);
+
+        // Heavy tracks
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx - 18, cy - 2);
+        ctx.lineTo(cx - 18, cy + 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 18, cy - 2);
+        ctx.lineTo(cx + 18, cy + 10);
+        ctx.stroke();
+
+        // Large turret
+        ctx.fillStyle = this.shadeColor(bodyColor, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 4, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 4, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Turret shading
+        ctx.fillStyle = this.shadeColor(bodyColor, 20);
+        ctx.beginPath();
+        ctx.arc(cx - 3, cy - 7, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Long gun barrel
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx + 7, cy - 4);
+        ctx.lineTo(cx + 20, cy - 6);
+        ctx.stroke();
+
+        // Gun barrel tip
+        ctx.fillStyle = this.shadeColor(bodyColor, -50);
+        ctx.beginPath();
+        ctx.arc(cx + 20, cy - 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        return this.canvasToImage(canvas);
+    }
+
+    generateFlak(color = '#4488ff') {
+        const size = 56;
+        const canvas = this.createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.ellipse(cx, cy + 7, 14, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flak body
+        const bodyColor = color;
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(cx - 11, cy - 3, 22, 11);
+
+        // Body shading
+        ctx.fillStyle = this.shadeColor(bodyColor, -20);
+        ctx.fillRect(cx - 11, cy - 3, 22, 4);
+        ctx.fillStyle = this.shadeColor(bodyColor, 15);
+        ctx.fillRect(cx - 11, cy + 4, 22, 3);
+
+        // Tracks
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 11, cy - 1);
+        ctx.lineTo(cx - 11, cy + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 11, cy - 1);
+        ctx.lineTo(cx + 11, cy + 6);
+        ctx.stroke();
+
+        // AA Turret (rotating)
+        ctx.fillStyle = this.shadeColor(bodyColor, -15);
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dual guns (simulated)
+        ctx.strokeStyle = this.shadeColor(bodyColor, -40);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx + 3, cy - 5);
+        ctx.lineTo(cx + 10, cy - 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 3, cy + 1);
+        ctx.lineTo(cx + 10, cy + 4);
+        ctx.stroke();
+
+        return this.canvasToImage(canvas);
+    }
+
     /**
      * Generate Infantry Sprite
      */
@@ -780,9 +1036,13 @@ class SpriteGenerator {
 
         // Generate all units
         assetLoader.assets.units.infantry = this.generateInfantry(color);
-        assetLoader.assets.units.tank = this.generateTank(color);
+        assetLoader.assets.units.lightTank = this.generateLightTank(color);
+        assetLoader.assets.units.mediumTank = this.generateMediumTank(color);
+        assetLoader.assets.units.heavyTank = this.generateHeavyTank(color);
+        assetLoader.assets.units.tank = this.generateMediumTank(color); // Fallback for old 'tank' references
         assetLoader.assets.units.harvester = this.generateHarvester(color);
         assetLoader.assets.units.artillery = this.generateArtillery(color);
+        assetLoader.assets.units.flak = this.generateFlak(color);
         assetLoader.assets.units.scout = this.generateScout(color);
         assetLoader.assets.units.rocketSoldier = this.generateRocketSoldier(color);
 

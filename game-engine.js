@@ -1380,6 +1380,15 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
+        // Build factory for light tanks
+        if (ai.oil >= 600 && aiFactory.length < 1) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('factory', 1, pos.x, pos.y);
+                ai.oil -= 600;
+            }
+        }
+
         // Produce infantry and rockets constantly
         for (const barracks of aiBarracks) {
             if (barracks.productionQueue.length < 10) {
@@ -1390,6 +1399,14 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
                     addToProductionQueue(barracks, 'rocket');
                     ai.oil -= 200;
                 }
+            }
+        }
+
+        // Produce light tanks for fast raids
+        for (const factory of aiFactory) {
+            if (factory.productionQueue.length < 10 && ai.oil >= 250) {
+                addToProductionQueue(factory, 'lightTank');
+                ai.oil -= 250;
             }
         }
 
@@ -1417,11 +1434,16 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce tanks mainly
+        // Produce medium and heavy tanks for defense
         for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10 && ai.oil >= 350) {
-                addToProductionQueue(factory, 'tank');
-                ai.oil -= 350;
+            if (factory.productionQueue.length < 10) {
+                if (ai.oil >= 500 && Math.random() > 0.6) {
+                    addToProductionQueue(factory, 'heavyTank');
+                    ai.oil -= 500;
+                } else if (ai.oil >= 350) {
+                    addToProductionQueue(factory, 'mediumTank');
+                    ai.oil -= 350;
+                }
             }
         }
 
@@ -1456,15 +1478,19 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce artillery and tanks
+        // Produce heavy tanks, artillery and flak for late-game power
         for (const factory of aiFactory) {
             if (factory.productionQueue.length < 10) {
-                if (ai.oil >= 500 && Math.random() > 0.5) {
+                const rand = Math.random();
+                if (ai.oil >= 500 && rand > 0.4) {
+                    addToProductionQueue(factory, 'heavyTank');
+                    ai.oil -= 500;
+                } else if (ai.oil >= 500 && rand > 0.2) {
                     addToProductionQueue(factory, 'artillery');
                     ai.oil -= 500;
-                } else if (ai.oil >= 350) {
-                    addToProductionQueue(factory, 'tank');
-                    ai.oil -= 350;
+                } else if (ai.oil >= 300) {
+                    addToProductionQueue(factory, 'flak');
+                    ai.oil -= 300;
                 }
             }
         }
@@ -1518,10 +1544,19 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
+        // Balanced mix of light and medium tanks
         for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10 && ai.oil >= 350) {
-                addToProductionQueue(factory, 'tank');
-                ai.oil -= 350;
+            if (factory.productionQueue.length < 10) {
+                if (ai.oil >= 350 && Math.random() > 0.5) {
+                    addToProductionQueue(factory, 'mediumTank');
+                    ai.oil -= 350;
+                } else if (ai.oil >= 250) {
+                    addToProductionQueue(factory, 'lightTank');
+                    ai.oil -= 250;
+                } else if (ai.oil >= 240) {
+                    addToProductionQueue(factory, 'harvester');
+                    ai.oil -= 240;
+                }
             }
         }
 
@@ -1749,7 +1784,17 @@ function addToProductionQueue(building, unitType) {
         return false;
     }
 
-    const times = { infantry: 90, scout: 60, rocket: 90, tank: 180, harvester: 240, artillery: 200 };
+    const times = {
+        infantry: 90,
+        scout: 60,
+        rocket: 90,
+        lightTank: 120,
+        mediumTank: 180,
+        heavyTank: 240,
+        harvester: 240,
+        artillery: 200,
+        flak: 140
+    };
     building.productionQueue.push({
         type: unitType,
         time: times[unitType] || 120

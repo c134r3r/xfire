@@ -21,17 +21,41 @@ const UNIT_TYPES = {
         sight: 140,
         size: 8
     },
-    tank: {
-        name: 'Tank',
-        icon: '&#9820;',
+    lightTank: {
+        name: 'Light Tank',
+        icon: '🏎️',
+        cost: 250,
+        hp: 150,
+        speed: 2.0,
+        range: 120,
+        damage: 20,
+        attackSpeed: 800,
+        sight: 200,
+        size: 14
+    },
+    mediumTank: {
+        name: 'Battle Tank',
+        icon: '🛻',
         cost: 350,
-        hp: 250,
-        speed: 1,
-        range: 130,
-        damage: 30,
+        hp: 280,
+        speed: 1.2,
+        range: 140,
+        damage: 35,
         attackSpeed: 1200,
         sight: 180,
         size: 16
+    },
+    heavyTank: {
+        name: 'Heavy Tank',
+        icon: '⛽',
+        cost: 500,
+        hp: 450,
+        speed: 0.7,
+        range: 130,
+        damage: 55,
+        attackSpeed: 1500,
+        sight: 160,
+        size: 18
     },
     harvester: {
         name: 'Harvester',
@@ -57,6 +81,18 @@ const UNIT_TYPES = {
         attackSpeed: 2000,
         sight: 200,
         size: 14
+    },
+    flak: {
+        name: 'Flak Cannon',
+        icon: '⚔️',
+        cost: 300,
+        hp: 100,
+        speed: 1.3,
+        range: 200,
+        damage: 25,
+        attackSpeed: 600,
+        sight: 220,
+        size: 12
     },
     scout: {
         name: 'Scout',
@@ -110,7 +146,7 @@ const BUILDING_TYPES = {
         cost: 600,
         hp: 600,
         size: 3,
-        produces: ['tank', 'harvester', 'artillery'],
+        produces: ['lightTank', 'mediumTank', 'heavyTank', 'harvester', 'artillery', 'flak'],
         sight: 150
     },
     derrick: {
