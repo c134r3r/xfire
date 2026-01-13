@@ -464,17 +464,6 @@ function drawTile(tx, ty) {
         ctx.fill();
     }
 
-    // Fog of war overlay - terrain always visible
-    if (fog === 0) {
-        // Unseen areas: very dark
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fill();
-    } else if (fog === 1) {
-        // Seen but not visible: very subtle
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-        ctx.fill();
-    }
-    // fog === 2: fully visible, no overlay
 }
 
 function drawBuilding(building) {
@@ -495,10 +484,6 @@ function drawBuilding(building) {
     const type = BUILDING_TYPES[building.type];
     const screen = worldToScreen(building.x, building.y);
     const player = game.players[building.playerId];
-
-    // Check visibility
-    const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
-    if (fog < 2 && building.playerId !== 0) return; // Hide enemy buildings in fog
 
     // If under construction, reduce alpha
     const baseAlpha = building.isUnderConstruction ? 0.4 : 0.8;
@@ -689,10 +674,6 @@ function drawUnitSprite(unit) {
         return false; // Fall back to procedural drawing
     }
 
-    // Check visibility
-    const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
-    if (fog < 2 && unit.playerId !== 0) return true; // Hide enemy units in fog
-
     // Shadow with blur effect
     ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
     ctx.shadowBlur = 4;
@@ -768,10 +749,6 @@ function drawBuildingSprite(building) {
     if (!sprite) {
         return false; // Fall back to procedural drawing
     }
-
-    // Check visibility
-    const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
-    if (fog < 2 && building.playerId !== 0) return true; // Hide enemy buildings in fog
 
     // Shadow with blur effect
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
@@ -853,10 +830,6 @@ function drawUnit(unit) {
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
     const player = game.players[unit.playerId];
-
-    // Check visibility
-    const fog = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)] ?? 0;
-    if (fog < 2 && unit.playerId !== 0) return; // Hide enemy units in fog
 
     // Draw unit circle background
     ctx.fillStyle = player.color;
