@@ -353,6 +353,15 @@ function drawTile(tx, ty) {
 function drawBuilding(building) {
     // Try sprite-based rendering first, fall back to procedural if not available
     if (useSprites && assetLoader && drawBuildingSprite(building)) {
+        // If under construction, draw progress bar on top
+        if (building.isUnderConstruction) {
+            const screen = worldToScreen(building.x, building.y);
+            const progress = building.buildProgress / building.buildTime;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(screen.x - 25, screen.y - 45, 50, 4);
+            ctx.fillStyle = '#4488ff';
+            ctx.fillRect(screen.x - 25, screen.y - 45, 50 * progress, 4);
+        }
         return;
     }
 
@@ -364,14 +373,27 @@ function drawBuilding(building) {
     const fog = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)] ?? 0;
     if (fog < 2 && building.playerId !== 0) return; // Hide enemy buildings in fog
 
+    // If under construction, reduce alpha
+    const baseAlpha = building.isUnderConstruction ? 0.4 : 0.8;
+
     // Draw base structure
     ctx.fillStyle = player.color;
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = baseAlpha;
     ctx.fillRect(screen.x - 20, screen.y - 20, 40, 40);
     ctx.globalAlpha = 1;
 
+    // Draw construction progress bar (if under construction)
+    if (building.isUnderConstruction) {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(screen.x - 20, screen.y - 30, 40, 5);
+        ctx.fillStyle = '#4488ff';
+        const progress = building.buildProgress / building.buildTime;
+        ctx.fillRect(screen.x - 20, screen.y - 30, 40 * progress, 5);
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
+    }
     // Draw health bar
-    if (building.hp < type.hp) {
+    else if (building.hp < type.hp) {
         ctx.fillStyle = '#f00';
         ctx.fillRect(screen.x - 20, screen.y - 30, 40 * (building.hp / type.hp), 5);
         ctx.strokeStyle = '#fff';
@@ -1192,25 +1214,43 @@ function updateBuildings(dt) {
         const building = game.buildings[i];
         const type = BUILDING_TYPES[building.type];
 
+        // Building construction progress
+        if (building.isUnderConstruction) {
+            building.buildProgress++;
+            if (building.buildProgress >= building.buildTime) {
+                building.isUnderConstruction = false;
+                building.hp = type.hp;
+                building.buildProgress = 0;
+                // Now unlock tech when construction is complete
+                unlockTech(building.type, building.playerId);
+            } else {
+                // Construction in progress - keep hp at 1
+                building.hp = 1;
+            }
+        }
+
         // Death check
-        if (building.hp <= 0) {
+        if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
             game.buildings.splice(i, 1);
             game.selection = game.selection.filter(s => s !== building);
             continue;
         }
 
-        // Turret attack
-        if (type.damage) {
+        // Turret attack (only if visible to the building's owner)
+        if (type.damage && !building.isUnderConstruction) {
             let nearestEnemy = null;
             let nearestDist = Infinity;
 
             for (const unit of game.units) {
                 if (unit.playerId === building.playerId) continue;
+
+                // Check if enemy is in sight range
                 const dx = unit.x - building.x;
                 const dy = unit.y - building.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < type.range && dist < nearestDist) {
+
+                if (dist < type.range && dist < nearestDist && dist < (type.sight || 250)) {
                     nearestDist = dist;
                     nearestEnemy = unit;
                 }
@@ -1223,7 +1263,7 @@ function updateBuildings(dt) {
         }
 
         // Production queue
-        if (building.productionQueue.length > 0) {
+        if (building.productionQueue.length > 0 && !building.isUnderConstruction) {
             const current = building.productionQueue[0];
             building.produceProgress++;
             building.produceTime = current.time;
@@ -1364,7 +1404,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     if (ai.oil >= 200 && aiDerricks.length < 5) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
-            createBuilding('derrick', 1, pos.x, pos.y);
+            createBuilding('derrick', 1, pos.x, pos.y, true);
             ai.oil -= 200;
         }
     }
@@ -1374,7 +1414,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     if (ai.oil >= 500 && aiResearchLabs.length < 1) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
-            createBuilding('researchLab', 1, pos.x, pos.y);
+            createBuilding('researchLab', 1, pos.x, pos.y, true);
             ai.oil -= 500;
         }
     }
@@ -1396,13 +1436,13 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 300 && ai.tech.rifleTurret && Math.random() > 0.5) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('rifleTurret', 1, pos.x, pos.y);
+                createBuilding('rifleTurret', 1, pos.x, pos.y, true);
                 ai.oil -= 300;
             }
         } else if (ai.oil >= 450 && ai.tech.missileTurret) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('missileTurret', 1, pos.x, pos.y);
+                createBuilding('missileTurret', 1, pos.x, pos.y, true);
                 ai.oil -= 450;
             }
         }
@@ -1413,7 +1453,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 400 && aiBarracks.length < 3) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y);
+                createBuilding('barracks', 1, pos.x, pos.y, true);
                 ai.oil -= 400;
             }
         }
@@ -1422,7 +1462,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 600 && aiFactory.length < 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y);
+                createBuilding('factory', 1, pos.x, pos.y, true);
                 ai.oil -= 600;
             }
         }
@@ -1460,7 +1500,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         } else if (ai.oil >= 350 && aiTurrets.length < 8) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('turret', 1, pos.x, pos.y);
+                createBuilding('turret', 1, pos.x, pos.y, true);
                 ai.oil -= 350;
             }
         }
@@ -1469,7 +1509,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 600 && aiFactory.length < 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y);
+                createBuilding('factory', 1, pos.x, pos.y, true);
                 ai.oil -= 600;
             }
         }
@@ -1505,7 +1545,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 600 && aiFactory.length < 2) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y);
+                createBuilding('factory', 1, pos.x, pos.y, true);
                 ai.oil -= 600;
             }
         }
@@ -1513,7 +1553,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 400 && aiBarracks.length < 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y);
+                createBuilding('barracks', 1, pos.x, pos.y, true);
                 ai.oil -= 400;
             }
         }
@@ -1559,7 +1599,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 400 && aiBarracks.length < 2) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y);
+                createBuilding('barracks', 1, pos.x, pos.y, true);
                 ai.oil -= 400;
             }
         }
@@ -1567,7 +1607,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         if (ai.oil >= 600 && aiFactory.length < 1 && aiBarracks.length > 0) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y);
+                createBuilding('factory', 1, pos.x, pos.y, true);
                 ai.oil -= 600;
             }
         }
@@ -1635,7 +1675,7 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
 function updateResources() {
     // Derricks generate oil
     for (const building of game.buildings) {
-        if (building.type === 'derrick') {
+        if (building.type === 'derrick' && !building.isUnderConstruction) {
             const type = BUILDING_TYPES.derrick;
             game.players[building.playerId].oil += type.generates / 60;
         }
@@ -1643,6 +1683,11 @@ function updateResources() {
             const type = BUILDING_TYPES.powerplant;
             // Power is just tracked, not consumed for now
         }
+    }
+
+    // Cap oil at 10,000
+    for (const player of game.players) {
+        player.oil = Math.min(10000, player.oil);
     }
 }
 
@@ -1810,6 +1855,11 @@ function updateBuildMenu() {
             btn.onclick = () => {
                 if (player.oil >= type.cost && isTechAvailable) {
                     game.placingBuilding = bType;
+                    // If a building is selected, set it as source
+                    const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
+                    if (selectedBuilding && selectedBuilding.playerId === 0) {
+                        game.placingBuildingFrom = selectedBuilding;
+                    }
                 }
             };
             menu.appendChild(btn);
@@ -1834,20 +1884,46 @@ function spawnUnit(type, playerId, x, y) {
     });
 }
 
-function createBuilding(type, playerId, x, y) {
+function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     const bType = BUILDING_TYPES[type];
-    game.buildings.push({
+    const buildTimes = {
+        // Small buildings: 20 seconds = 1200 ticks (60 ticks/sec)
+        derrick: 1200,
+        turret: 1200,
+        rifleTurret: 1200,
+        missileTurret: 1200,
+        // Medium buildings: 35 seconds
+        barracks: 2100,
+        researchLab: 2100,
+        powerplant: 2100,
+        factory: 2100,
+        // Large buildings: 35 seconds
+        academy: 2100,
+        techLab: 2100,
+        hq: 2100
+    };
+
+    const building = {
         type,
         playerId,
         x, y,
-        hp: bType.hp,
+        hp: isUnderConstruction ? 1 : bType.hp,
         productionQueue: [],
         produceProgress: 0,
-        produceTime: 0
-    });
+        produceTime: 0,
+        buildProgress: isUnderConstruction ? 0 : bType.hp,
+        buildTime: buildTimes[type] || 1500,
+        isUnderConstruction: isUnderConstruction
+    };
 
-    // Unlock new techs when building is complete
-    unlockTech(type, playerId);
+    game.buildings.push(building);
+
+    // Only unlock tech when building is COMPLETE
+    if (!isUnderConstruction) {
+        unlockTech(type, playerId);
+    }
+
+    return building;
 }
 
 function unlockTech(buildingType, playerId) {
@@ -2064,23 +2140,34 @@ function initializeEventHandlers() {
             const type = BUILDING_TYPES[game.placingBuilding];
 
             if (game.players[0].oil >= type.cost) {
-                // Find player's HQ
-                const hq = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
+                // Determine max distance based on source
+                let maxDist = 6; // Default from HQ
+                let sourceBuilding = null;
 
-                // Check distance from HQ (max 6 tiles)
-                let isWithinRange = false;
-                if (hq) {
-                    const dx = tx - hq.x;
-                    const dy = ty - hq.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    isWithinRange = dist <= 6;
+                if (game.placingBuildingFrom) {
+                    sourceBuilding = game.placingBuildingFrom;
+                    maxDist = 3; // From building: max 3 tiles
                 } else {
-                    isWithinRange = true; // Allow building if HQ doesn't exist yet
+                    // Find player's HQ as fallback
+                    sourceBuilding = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
+                    maxDist = 6; // From HQ: max 6 tiles
+                }
+
+                // Check distance from source building
+                let isWithinRange = false;
+                if (sourceBuilding) {
+                    const dx = tx - sourceBuilding.x;
+                    const dy = ty - sourceBuilding.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    isWithinRange = dist <= maxDist;
+                } else {
+                    isWithinRange = true; // Allow building if no source
                 }
 
                 if (!isWithinRange) {
-                    console.log('Building must be within 6 tiles of HQ');
+                    console.log(`Building must be within ${maxDist} tiles of source`);
                     game.placingBuilding = null;
+                    game.placingBuildingFrom = null;
                     return;
                 }
 
@@ -2088,17 +2175,38 @@ function initializeEventHandlers() {
                 if (game.placingBuilding === 'derrick') {
                     if (!game.map[ty]?.[tx]?.oil) {
                         game.placingBuilding = null;
+                        game.placingBuildingFrom = null;
                         return;
                     }
                 }
 
-                createBuilding(game.placingBuilding, 0, tx, ty);
+                // Create building with construction status
+                createBuilding(game.placingBuilding, 0, tx, ty, true);
                 game.players[0].oil -= type.cost;
             }
             game.placingBuilding = null;
+            game.placingBuildingFrom = null;
         } else {
-            // Start selection box
-            game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
+            // Check if clicking on own building to build from it
+            const rect = canvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+
+            const clickedBuilding = game.buildings.find(b => {
+                if (b.playerId !== 0) return false;
+                const screen = worldToScreen(b.x, b.y);
+                const dx = screen.x - screenX;
+                const dy = screen.y - screenY;
+                return Math.sqrt(dx * dx + dy * dy) < 25;
+            });
+
+            if (clickedBuilding) {
+                // Select this building for building from
+                game.selection = [clickedBuilding];
+            } else {
+                // Start selection box
+                game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
+            }
         }
     } else if (isRightClick) {
         const world = screenToWorld(x, y);
