@@ -110,7 +110,7 @@ const game = {
         },
         {
             id: 1,
-            color: '#ff4444',
+            color: '#ff0000',
             oil: 1200,
             power: 100,
             team: 'enemy',
@@ -1007,10 +1007,12 @@ function drawParticle(particle) {
 }
 
 function renderMinimap() {
-    minimapCtx.fillStyle = '#111';
-    minimapCtx.fillRect(0, 0, 180, 180);
+    // Calculate minimap size: 24 tiles wide = 480px (24 * 20px per tile)
+    const minimapSize = Math.min(480, 24 * 20);
+    const scale = minimapSize / MAP_SIZE;
 
-    const scale = 180 / MAP_SIZE;
+    minimapCtx.fillStyle = '#111';
+    minimapCtx.fillRect(0, 0, minimapSize, minimapSize);
 
     // Draw terrain
     for (let y = 0; y < MAP_SIZE; y++) {
@@ -1132,36 +1134,46 @@ function updateUnits(dt) {
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist > 0.5) {
+            // Only stop when very close to target
+            if (dist < 0.2) {
+                unit.targetX = undefined;
+                unit.targetY = undefined;
+            } else {
                 unit.angle = Math.atan2(dy, dx);
                 const speed = type.speed * dt * 60;
 
-                // Better pathfinding: try to move while avoiding collisions
+                // Simple movement towards target
                 let moveX = (dx / dist) * speed;
                 let moveY = (dy / dist) * speed;
 
-                // Check for collisions and adjust path
-                let avoidanceForce = { x: 0, y: 0 };
-                for (const other of game.units) {
-                    if (other === unit || other.playerId !== unit.playerId) continue; // Avoid friendly units only
-                    const odx = unit.x - other.x;
-                    const ody = unit.y - other.y;
-                    const odist = Math.sqrt(odx * odx + ody * ody);
+                // Check if we can move forward
+                const nextX = unit.x + moveX;
+                const nextY = unit.y + moveY;
+                const nextTile = game.map[Math.floor(nextY)]?.[Math.floor(nextX)];
 
-                    // Stronger avoidance if very close
-                    if (odist < 1.5 && odist > 0.1) {
-                        const force = 1 - (odist / 1.5);
-                        avoidanceForce.x += (odx / odist) * force * 0.5;
-                        avoidanceForce.y += (ody / odist) * force * 0.5;
+                // If next tile is impassable (hill/water), try to navigate around it
+                if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
+                    // Try moving sideways to avoid obstacle
+                    const perpX = -dy / dist * speed;
+                    const perpY = dx / dist * speed;
+
+                    const tile1 = game.map[Math.floor(unit.y + perpY)]?.[Math.floor(unit.x + perpX)];
+                    const tile2 = game.map[Math.floor(unit.y - perpY)]?.[Math.floor(unit.x - perpX)];
+
+                    if (tile1 && tile1.type !== 'hill' && tile1.type !== 'water') {
+                        moveX += perpX * 0.5;
+                        moveY += perpY * 0.5;
+                    } else if (tile2 && tile2.type !== 'hill' && tile2.type !== 'water') {
+                        moveX -= perpX * 0.5;
+                        moveY -= perpY * 0.5;
                     }
                 }
 
-                // Apply movement + avoidance
-                unit.x += moveX + avoidanceForce.x;
-                unit.y += moveY + avoidanceForce.y;
+                unit.x += moveX;
+                unit.y += moveY;
 
                 // Create dust trail effect
-                if (Math.random() < 0.3) { // 30% chance each frame
+                if (Math.random() < 0.3) {
                     const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
                     game.particles.push({
                         x: unit.x + (Math.random() - 0.5) * type.size,
@@ -1175,10 +1187,6 @@ function updateUnits(dt) {
                         life: 0.5
                     });
                 }
-
-            } else {
-                unit.targetX = undefined;
-                unit.targetY = undefined;
             }
         }
 
@@ -1201,7 +1209,7 @@ function updateUnits(dt) {
         unit.y = Math.max(0, Math.min(MAP_SIZE - 1, unit.y));
 
         const tileType = game.map[Math.floor(unit.y)]?.[Math.floor(unit.x)]?.type;
-        if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') {
+        if (tileType === 'water' || tileType === 'hill') {
             // Push unit back slightly if stuck on impassable terrain
             const backDist = Math.sqrt((unit.x) ** 2 + (unit.y) ** 2) || 1;
             unit.x = Math.max(0, Math.min(MAP_SIZE - 1, unit.x - 0.5 * (unit.x / backDist)));
@@ -2476,7 +2484,8 @@ canvas.addEventListener('wheel', (e) => {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            const scale = MAP_SIZE / 180;
+            const minimapSize = minimapCanvas.width;
+            const scale = MAP_SIZE / minimapSize;
             game.camera.x = x * scale * TILE_WIDTH / 2;
             game.camera.y = y * scale * TILE_HEIGHT;
         });
@@ -2611,11 +2620,19 @@ function goToMainMenu() {
     game.selection = [];
     showScreen('mainMenu');
 
-    // Stop background music
+    // Stop background music and play intro music
     const bgMusic = document.getElementById('backgroundMusic');
+    const introMusic = document.getElementById('introMusic');
+
     if (bgMusic) {
         bgMusic.pause();
         bgMusic.currentTime = 0;
+    }
+
+    if (introMusic) {
+        introMusic.volume = 0.3;
+        introMusic.currentTime = 0;
+        introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
     }
 }
 
@@ -2646,10 +2663,18 @@ function startGame() {
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('timerDisplay').style.display = 'block';
 
-    // Play background music
+    // Stop intro music and play background music
+    const introMusic = document.getElementById('introMusic');
     const bgMusic = document.getElementById('backgroundMusic');
+
+    if (introMusic) {
+        introMusic.pause();
+        introMusic.currentTime = 0;
+    }
+
     if (bgMusic) {
         bgMusic.volume = 0.3; // 30% Lautstärke
+        bgMusic.currentTime = 0;
         bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
     }
 }
