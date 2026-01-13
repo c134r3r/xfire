@@ -378,17 +378,8 @@ function drawBuilding(building) {
         ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
     }
 
-    // Draw emoji/icon
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#eee';
-    const iconMatch = type.icon.match(/&#(\d+);/);
-    if (iconMatch) {
-        ctx.fillText(String.fromCharCode(parseInt(iconMatch[1])), screen.x, screen.y);
-    } else {
-        ctx.fillText(type.icon, screen.x, screen.y);
-    }
+    // Draw emoji/icon (simple colored box, no emoji needed)
+    // Just draw the colored rectangle below
 
     const size = type.size * 20;
 
@@ -734,17 +725,7 @@ function drawUnit(unit) {
         ctx.strokeRect(screen.x - 12, screen.y - 18, 24, 3);
     }
 
-    // Draw emoji/icon
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#eee';
-    const unitIconMatch = type.icon.match(/&#(\d+);/);
-    if (unitIconMatch) {
-        ctx.fillText(String.fromCharCode(parseInt(unitIconMatch[1])), screen.x, screen.y);
-    } else {
-        ctx.fillText(type.icon, screen.x, screen.y);
-    }
+    // Draw unit (colored circle, specific type drawn below)
 
     const angle = unit.angle || 0;
     const cosA = Math.cos(angle);
@@ -2131,9 +2112,18 @@ function updateCamera() {
 // ============================================
 
 function showScreen(screenId) {
-    document.querySelectorAll('.fullscreen-overlay').forEach(el => el.classList.add('hidden'));
+    console.log('📺 showScreen called with:', screenId);
+    document.querySelectorAll('.fullscreen-overlay').forEach(el => {
+        console.log('  ➖ Hiding:', el.id);
+        el.classList.add('hidden');
+    });
     const screen = document.getElementById(screenId);
-    if (screen) screen.classList.remove('hidden');
+    if (screen) {
+        console.log('  ✅ Showing:', screenId);
+        screen.classList.remove('hidden');
+    } else {
+        console.error('  ❌ Screen not found:', screenId);
+    }
 }
 
 function goToMainMenu() {
@@ -2298,6 +2288,7 @@ All your units and buildings have been destroyed.`;
 
 function setupMenuHandlers() {
     // Main menu buttons
+    console.log('⚙️ Setting up menu handlers...');
     const newGameBtn = document.getElementById('newGameBtn');
     const settingsBtn = document.getElementById('settingsBtn');
     const startGameBtn = document.getElementById('startGameBtn');
@@ -2307,6 +2298,16 @@ function setupMenuHandlers() {
     const playAgainBtn = document.getElementById('playAgainBtn');
     const retryBtn = document.getElementById('retryBtn');
     const menuReturnBtns = document.querySelectorAll('.menu-return');
+
+    console.log('  newGameBtn:', newGameBtn ? '✅' : '❌');
+    console.log('  settingsBtn:', settingsBtn ? '✅' : '❌');
+    console.log('  startGameBtn:', startGameBtn ? '✅' : '❌');
+    console.log('  backBtn:', backBtn ? '✅' : '❌');
+    console.log('  resumeBtn:', resumeBtn ? '✅' : '❌');
+    console.log('  quitBtn:', quitBtn ? '✅' : '❌');
+    console.log('  playAgainBtn:', playAgainBtn ? '✅' : '❌');
+    console.log('  retryBtn:', retryBtn ? '✅' : '❌');
+    console.log('  menuReturnBtns count:', menuReturnBtns.length);
 
     if (newGameBtn) newGameBtn.addEventListener('click', goToSettings);
     if (settingsBtn) settingsBtn.addEventListener('click', goToSettings);
@@ -2320,6 +2321,8 @@ function setupMenuHandlers() {
     menuReturnBtns.forEach(btn => {
         btn.addEventListener('click', goToMainMenu);
     });
+
+    console.log('  ✅ Menu handlers setup complete');
 }
 
 // ============================================
