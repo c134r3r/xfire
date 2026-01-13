@@ -268,8 +268,69 @@ function render() {
         ctx.setLineDash([]);
     }
 
+    // Draw building placement preview
+    if (game.placingBuilding) {
+        const world = screenToWorld(game.mouse.x, game.mouse.y);
+        const tx = Math.floor(world.x);
+        const ty = Math.floor(world.y);
+
+        const isValid = canBuildAt(game.placingBuilding, tx, ty) &&
+                        game.players[0].oil >= BUILDING_TYPES[game.placingBuilding].cost;
+
+        drawBuildingPreview(game.placingBuilding, tx, ty, isValid);
+    }
+
     // Draw minimap
     renderMinimap();
+}
+
+function drawBuildingPreview(buildingType, tx, ty, isValid) {
+    const type = BUILDING_TYPES[buildingType];
+    if (!type) return;
+
+    const screen = worldToScreen(tx, ty);
+    const size = type.size * 20;
+
+    // Choose color based on validity
+    let color = isValid ? '#00ff00' : '#ff0000';
+    let alpha = isValid ? 0.5 : 0.3;
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+
+    // Draw building preview box
+    ctx.fillRect(screen.x - size/2, screen.y - size - 5, size, size);
+
+    ctx.globalAlpha = 1;
+
+    // Draw border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(screen.x - size/2, screen.y - size - 5, size, size);
+
+    // Draw range indicator for towers
+    if (type.range) {
+        ctx.strokeStyle = isValid ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const rangeRadius = type.range / 64 * 20; // Convert to screen coords
+        ctx.arc(screen.x, screen.y - size/2, rangeRadius, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Draw building icon/name in center
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(type.icon, screen.x, screen.y - size/2);
+
+    // Draw validity text
+    if (!isValid) {
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 10px Arial';
+        ctx.fillText('CANNOT BUILD HERE', screen.x, screen.y + 20);
+    }
 }
 
 function drawTile(tx, ty) {
@@ -1926,6 +1987,54 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     return building;
 }
 
+function canBuildAt(buildingType, x, y) {
+    const type = BUILDING_TYPES[buildingType];
+    if (!type) return false;
+
+    // Determine max distance based on source
+    let maxDist = 6;
+    let sourceBuilding = null;
+
+    if (game.placingBuildingFrom) {
+        sourceBuilding = game.placingBuildingFrom;
+        maxDist = 3;
+    } else {
+        sourceBuilding = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
+        maxDist = 6;
+    }
+
+    // Check distance from source building
+    if (sourceBuilding) {
+        const dx = x - sourceBuilding.x;
+        const dy = y - sourceBuilding.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > maxDist) return false;
+    }
+
+    // Check terrain
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    const tileType = game.map[Math.floor(y)]?.[Math.floor(x)]?.type;
+    if (tileType === 'water' || tileType === 'rock' || tileType === 'hill') return false;
+
+    // Check if on oil for derrick
+    if (buildingType === 'derrick') {
+        if (!game.map[Math.floor(y)]?.[Math.floor(x)]?.oil) return false;
+    }
+
+    // Check for building collision
+    const bSize = type.size;
+    for (const building of game.buildings) {
+        const bType = BUILDING_TYPES[building.type];
+        const bdx = x - building.x;
+        const bdy = y - building.y;
+        if (Math.abs(bdx) < bSize + bType.size && Math.abs(bdy) < bSize + bType.size) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function unlockTech(buildingType, playerId) {
     const player = game.players[playerId];
     if (!player || !player.tech) return;
@@ -2703,6 +2812,13 @@ function gameLoop(timestamp) {
 
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
+
+    // Update canvas class based on placing building mode
+    if (game.placingBuilding) {
+        canvas.classList.add('placing-building');
+    } else {
+        canvas.classList.remove('placing-building');
+    }
 
     // Only update and render game if playing (not paused/menu)
     if (game.status === 'PLAYING') {
