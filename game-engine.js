@@ -2605,10 +2605,34 @@ function resetGame() {
     game.camera.y = (MAP_SIZE / 2) * TILE_HEIGHT;
     game.players[0].oil = gameSettings.startingOil;
     game.players[0].power = 100;
-    game.players[0].tech = { barracks: true, factory: false, academy: false };
+    // Initialize all building techs - all available by default except specialized ones
+    game.players[0].tech = {
+        barracks: true,
+        factory: true,
+        derrick: true,
+        turret: true,
+        powerplant: true,
+        academy: true,
+        techLab: true,
+        researchLab: true,
+        rifleTurret: false,
+        missileTurret: false
+    };
     game.players[1].oil = gameSettings.startingOil;
     game.players[1].power = 100;
-    game.players[1].tech = { barracks: true, factory: false, academy: false };
+    // Initialize all building techs - all available by default except specialized ones
+    game.players[1].tech = {
+        barracks: true,
+        factory: true,
+        derrick: true,
+        turret: true,
+        powerplant: true,
+        academy: true,
+        techLab: true,
+        researchLab: true,
+        rifleTurret: false,
+        missileTurret: false
+    };
 }
 
 function updateGameTimer() {
