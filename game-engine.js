@@ -2248,47 +2248,8 @@ function initializeEventHandlers() {
             const ty = Math.floor(world.y);
             const type = BUILDING_TYPES[game.placingBuilding];
 
-            if (game.players[0].oil >= type.cost) {
-                // Determine max distance based on source
-                let maxDist = 6; // Default from HQ
-                let sourceBuilding = null;
-
-                if (game.placingBuildingFrom) {
-                    sourceBuilding = game.placingBuildingFrom;
-                    maxDist = 3; // From building: max 3 tiles
-                } else {
-                    // Find player's HQ as fallback
-                    sourceBuilding = game.buildings.find(b => b.type === 'hq' && b.playerId === 0);
-                    maxDist = 6; // From HQ: max 6 tiles
-                }
-
-                // Check distance from source building
-                let isWithinRange = false;
-                if (sourceBuilding) {
-                    const dx = tx - sourceBuilding.x;
-                    const dy = ty - sourceBuilding.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    isWithinRange = dist <= maxDist;
-                } else {
-                    isWithinRange = true; // Allow building if no source
-                }
-
-                if (!isWithinRange) {
-                    console.log(`Building must be within ${maxDist} tiles of source`);
-                    game.placingBuilding = null;
-                    game.placingBuildingFrom = null;
-                    return;
-                }
-
-                // Check if on oil for derrick
-                if (game.placingBuilding === 'derrick') {
-                    if (!game.map[ty]?.[tx]?.oil) {
-                        game.placingBuilding = null;
-                        game.placingBuildingFrom = null;
-                        return;
-                    }
-                }
-
+            // Validate placement using canBuildAt function
+            if (canBuildAt(game.placingBuilding, tx, ty) && game.players[0].oil >= type.cost) {
                 // Create building with construction status
                 createBuilding(game.placingBuilding, 0, tx, ty, true);
                 game.players[0].oil -= type.cost;
