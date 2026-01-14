@@ -419,8 +419,8 @@ function drawTile(tx, ty) {
         grass: '#3d5c3d',
         sand: '#a08050',
         rock: '#606060',
-        water: '#304060',
-        hill: '#5d7c4d'
+        water: '#66aaff',
+        hill: '#6b4423'
     };
 
     let color = colors[tile.type] || colors.grass;
@@ -1033,10 +1033,10 @@ function renderMinimap() {
             if (!tile) continue;
 
             let color = '#3d5c3d';
-            if (tile.type === 'water') color = '#304060';
+            if (tile.type === 'water') color = '#66aaff';
             else if (tile.type === 'rock') color = '#606060';
             else if (tile.type === 'sand') color = '#a08050';
-            else if (tile.type === 'hill') color = '#5d7c4d';
+            else if (tile.type === 'hill') color = '#6b4423';
 
             minimapCtx.fillStyle = color;
             minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
@@ -1088,6 +1088,109 @@ function update(dt) {
     updateAI();
     updateResources();
     updateUI();
+}
+
+// A* Pathfinding implementation
+function findPath(startX, startY, endX, endY) {
+    const mapSize = getMapSize();
+    const start = { x: Math.floor(startX), y: Math.floor(startY) };
+    const end = { x: Math.floor(endX), y: Math.floor(endY) };
+
+    // Bounds check
+    if (start.x < 0 || start.x >= mapSize || start.y < 0 || start.y >= mapSize ||
+        end.x < 0 || end.x >= mapSize || end.y < 0 || end.y >= mapSize) {
+        return null;
+    }
+
+    // Check if end is passable
+    const endTile = game.map[end.y]?.[end.x];
+    if (endTile && (endTile.type === 'water' || endTile.type === 'hill')) {
+        return null;
+    }
+
+    // Heuristic function (Manhattan distance)
+    const heuristic = (x, y) => Math.abs(x - end.x) + Math.abs(y - end.y);
+
+    const openSet = [start];
+    const cameFrom = new Map();
+    const gScore = new Map();
+    const fScore = new Map();
+    const key = (x, y) => `${x},${y}`;
+
+    gScore.set(key(start.x, start.y), 0);
+    fScore.set(key(start.x, start.y), heuristic(start.x, start.y));
+
+    const directions = [
+        { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+        { dx: 1, dy: -1 }, { dx: 1, dy: 1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+    ];
+
+    let iterations = 0;
+    const maxIterations = 500; // Prevent infinite loops
+
+    while (openSet.length > 0 && iterations < maxIterations) {
+        iterations++;
+
+        // Find node with lowest fScore
+        let current = openSet[0];
+        let currentIndex = 0;
+        for (let i = 1; i < openSet.length; i++) {
+            const currentF = fScore.get(key(openSet[i].x, openSet[i].y)) || Infinity;
+            const bestF = fScore.get(key(current.x, current.y)) || Infinity;
+            if (currentF < bestF) {
+                current = openSet[i];
+                currentIndex = i;
+            }
+        }
+
+        // Check if we reached the goal
+        if (current.x === end.x && current.y === end.y) {
+            // Reconstruct path
+            const path = [];
+            let curr = current;
+            while (cameFrom.has(key(curr.x, curr.y))) {
+                path.unshift({ x: curr.x + 0.5, y: curr.y + 0.5 });
+                const prev = cameFrom.get(key(curr.x, curr.y));
+                curr = prev;
+            }
+            return path;
+        }
+
+        // Remove current from openSet
+        openSet.splice(currentIndex, 1);
+
+        // Check neighbors
+        for (const dir of directions) {
+            const nx = current.x + dir.dx;
+            const ny = current.y + dir.dy;
+
+            // Bounds check
+            if (nx < 0 || nx >= mapSize || ny < 0 || ny >= mapSize) continue;
+
+            // Check if passable
+            const tile = game.map[ny]?.[nx];
+            if (!tile || tile.type === 'water' || tile.type === 'hill') continue;
+
+            const tentativeG = (gScore.get(key(current.x, current.y)) || Infinity) +
+                              (dir.dx !== 0 && dir.dy !== 0 ? 1.414 : 1); // Diagonal cost
+
+            const neighborKey = key(nx, ny);
+            const currentG = gScore.get(neighborKey) || Infinity;
+
+            if (tentativeG < currentG) {
+                cameFrom.set(neighborKey, current);
+                gScore.set(neighborKey, tentativeG);
+                fScore.set(neighborKey, tentativeG + heuristic(nx, ny));
+
+                // Add to openSet if not already there
+                if (!openSet.find(n => n.x === nx && n.y === ny)) {
+                    openSet.push({ x: nx, y: ny });
+                }
+            }
+        }
+    }
+
+    return null; // No path found
 }
 
 function updateUnits(dt) {
@@ -1143,64 +1246,106 @@ function updateUnits(dt) {
                 }
             }
         }
-        // Movement
+        // Movement with pathfinding
         else if (unit.targetX !== undefined) {
-            const dx = unit.targetX - unit.x;
-            const dy = unit.targetY - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            // Follow path if available
+            if (unit.path && unit.path.length > 0) {
+                // Get current waypoint
+                const waypoint = unit.path[unit.pathIndex || 0];
+                const dx = waypoint.x - unit.x;
+                const dy = waypoint.y - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Only stop when very close to target (also prevents division by zero)
-            if (dist < 0.2) {
-                unit.targetX = undefined;
-                unit.targetY = undefined;
-            } else {
-                unit.angle = Math.atan2(dy, dx);
-                const speed = type.speed * dt * 60;
+                // Check if reached current waypoint
+                if (dist < 0.3) {
+                    unit.pathIndex = (unit.pathIndex || 0) + 1;
+                    // Check if reached end of path
+                    if (unit.pathIndex >= unit.path.length) {
+                        unit.path = null;
+                        unit.pathIndex = 0;
+                        // Check if reached final target
+                        const finalDx = unit.targetX - unit.x;
+                        const finalDy = unit.targetY - unit.y;
+                        const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+                        if (finalDist < 0.2) {
+                            unit.targetX = undefined;
+                            unit.targetY = undefined;
+                        }
+                    }
+                } else {
+                    // Move towards current waypoint
+                    unit.angle = Math.atan2(dy, dx);
+                    const speed = type.speed * dt * 60;
+                    const moveX = (dx / dist) * speed;
+                    const moveY = (dy / dist) * speed;
 
-                // Simple movement towards target (dist is guaranteed > 0.2 here)
-                let moveX = (dx / dist) * speed;
-                let moveY = (dy / dist) * speed;
+                    unit.x += moveX;
+                    unit.y += moveY;
 
-                // Check if we can move forward
-                const nextX = unit.x + moveX;
-                const nextY = unit.y + moveY;
-                const nextTile = game.map[Math.floor(nextY)]?.[Math.floor(nextX)];
-
-                // If next tile is impassable (hill/water), try to navigate around it
-                if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
-                    // Try moving sideways to avoid obstacle
-                    const perpX = -dy / dist * speed;
-                    const perpY = dx / dist * speed;
-
-                    const tile1 = game.map[Math.floor(unit.y + perpY)]?.[Math.floor(unit.x + perpX)];
-                    const tile2 = game.map[Math.floor(unit.y - perpY)]?.[Math.floor(unit.x - perpX)];
-
-                    if (tile1 && tile1.type !== 'hill' && tile1.type !== 'water') {
-                        moveX += perpX * 0.5;
-                        moveY += perpY * 0.5;
-                    } else if (tile2 && tile2.type !== 'hill' && tile2.type !== 'water') {
-                        moveX -= perpX * 0.5;
-                        moveY -= perpY * 0.5;
+                    // Create dust trail effect
+                    if (Math.random() < 0.3) {
+                        const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
+                        game.particles.push({
+                            x: unit.x + (Math.random() - 0.5) * type.size,
+                            y: unit.y + (Math.random() - 0.5) * type.size,
+                            z: 0,
+                            vx: (Math.random() - 0.5) * 0.15,
+                            vy: (Math.random() - 0.5) * 0.15,
+                            vz: Math.random() * 0.1 + 0.05,
+                            color: dustColor,
+                            size: Math.random() * 2 + 1,
+                            life: 0.5
+                        });
                     }
                 }
+            } else {
+                // No path - direct movement (fallback)
+                const dx = unit.targetX - unit.x;
+                const dy = unit.targetY - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
 
-                unit.x += moveX;
-                unit.y += moveY;
+                if (dist < 0.2) {
+                    unit.targetX = undefined;
+                    unit.targetY = undefined;
+                } else {
+                    unit.angle = Math.atan2(dy, dx);
+                    const speed = type.speed * dt * 60;
+                    let moveX = (dx / dist) * speed;
+                    let moveY = (dy / dist) * speed;
 
-                // Create dust trail effect
-                if (Math.random() < 0.3) {
-                    const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
-                    game.particles.push({
-                        x: unit.x + (Math.random() - 0.5) * type.size,
-                        y: unit.y + (Math.random() - 0.5) * type.size,
-                        z: 0,
-                        vx: (Math.random() - 0.5) * 0.15,
-                        vy: (Math.random() - 0.5) * 0.15,
-                        vz: Math.random() * 0.1 + 0.05,
-                        color: dustColor,
-                        size: Math.random() * 2 + 1,
-                        life: 0.5
-                    });
+                    // Check if next tile is passable
+                    const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
+                    if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
+                        // Try to find path again
+                        const newPath = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                        if (newPath && newPath.length > 0) {
+                            unit.path = newPath;
+                            unit.pathIndex = 0;
+                        } else {
+                            // Can't find path, stop
+                            unit.targetX = undefined;
+                            unit.targetY = undefined;
+                        }
+                    } else {
+                        unit.x += moveX;
+                        unit.y += moveY;
+
+                        // Create dust trail effect
+                        if (Math.random() < 0.3) {
+                            const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
+                            game.particles.push({
+                                x: unit.x + (Math.random() - 0.5) * type.size,
+                                y: unit.y + (Math.random() - 0.5) * type.size,
+                                z: 0,
+                                vx: (Math.random() - 0.5) * 0.15,
+                                vy: (Math.random() - 0.5) * 0.15,
+                                vz: Math.random() * 0.1 + 0.05,
+                                color: dustColor,
+                                size: Math.random() * 2 + 1,
+                                life: 0.5
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -1342,6 +1487,10 @@ function updateBuildings(dt) {
                 building.isUnderConstruction = false;
                 building.hp = type.hp;
                 building.buildProgress = 0;
+                // Set activation time for turrets (3 second delay)
+                if (type.damage) {
+                    building.activationTime = game.tick + 180; // ~3 seconds at 60 FPS
+                }
                 // Now unlock tech when construction is complete
                 unlockTech(building.type, building.playerId);
             } else {
@@ -1358,28 +1507,33 @@ function updateBuildings(dt) {
             continue;
         }
 
-        // Turret attack (only if visible to the building's owner)
+        // Turret attack (only if visible to the building's owner and activated)
         if (type.damage && !building.isUnderConstruction) {
-            let nearestEnemy = null;
-            let nearestDist = Infinity;
+            // Check if turret is activated (only shoot after activation delay)
+            const isActivated = !building.activationTime || game.tick >= building.activationTime;
 
-            for (const unit of game.units) {
-                if (unit.playerId === building.playerId) continue;
+            if (isActivated) {
+                let nearestEnemy = null;
+                let nearestDist = Infinity;
 
-                // Check if enemy is in sight range
-                const dx = unit.x - building.x;
-                const dy = unit.y - building.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                for (const unit of game.units) {
+                    if (unit.playerId === building.playerId) continue;
 
-                if (dist < type.range && dist < nearestDist && dist < (type.sight || 250)) {
-                    nearestDist = dist;
-                    nearestEnemy = unit;
+                    // Check if enemy is in sight range
+                    const dx = unit.x - building.x;
+                    const dy = unit.y - building.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < type.range && dist < nearestDist && dist < (type.sight || 250)) {
+                        nearestDist = dist;
+                        nearestEnemy = unit;
+                    }
                 }
-            }
 
-            if (nearestEnemy && nearestEnemy.hp > 0 && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
-                fireProjectile(building, nearestEnemy, type.damage);
-                building.lastAttack = game.tick;
+                if (nearestEnemy && nearestEnemy.hp > 0 && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
+                    fireProjectile(building, nearestEnemy, type.damage);
+                    building.lastAttack = game.tick;
+                }
             }
         }
 
@@ -2524,6 +2678,7 @@ function initializeEventHandlers() {
                     sel.targetY = undefined;
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
+                    sel.path = null;
                 } else if (sel.type === 'harvester' && hasOil) {
                     // Assign harvester to oil
                     sel.targetOilX = tileX;
@@ -2531,9 +2686,21 @@ function initializeEventHandlers() {
                     sel.targetX = undefined;
                     sel.targetY = undefined;
                     sel.attackTarget = null;
+                    sel.path = null;
                 } else {
-                    sel.targetX = world.x;
-                    sel.targetY = world.y;
+                    // Calculate path for movement
+                    const path = findPath(sel.x, sel.y, world.x, world.y);
+                    if (path && path.length > 0) {
+                        sel.path = path;
+                        sel.pathIndex = 0;
+                        sel.targetX = world.x;
+                        sel.targetY = world.y;
+                    } else {
+                        // Fallback to direct movement if no path found
+                        sel.targetX = world.x;
+                        sel.targetY = world.y;
+                        sel.path = null;
+                    }
                     sel.attackTarget = null;
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
@@ -3199,6 +3366,8 @@ function gameLoop(timestamp) {
 function showLoadingScreen() {
     return new Promise((resolve) => {
         const loadingBar = document.getElementById('loadingBar');
+        const loadingText = document.getElementById('loadingText');
+        const goButton = document.getElementById('goButton');
         const introMusic = document.getElementById('introMusic');
         let progress = 0;
         const duration = 2000; // 2 seconds
@@ -3221,13 +3390,22 @@ function showLoadingScreen() {
             if (progress < 100) {
                 requestAnimationFrame(updateLoadingBar);
             } else {
-                // Loading complete - start playing intro music and show menu
-                if (introMusic) {
-                    introMusic.volume = 0.3;
-                    introMusic.currentTime = 0;
-                    introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
+                // Loading complete - show GO button
+                if (loadingText) {
+                    loadingText.textContent = 'Ready!';
                 }
-                resolve();
+                if (goButton) {
+                    goButton.style.display = 'block';
+                    goButton.onclick = () => {
+                        // Start intro music and show menu
+                        if (introMusic) {
+                            introMusic.volume = 0.3;
+                            introMusic.currentTime = 0;
+                            introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
+                        }
+                        resolve();
+                    };
+                }
             }
         }
 
