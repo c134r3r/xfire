@@ -1307,12 +1307,45 @@ function updateUnits(dt) {
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
+            // If closeTarget is set, look for nearby enemies to attack
+            if (unit.closeTarget && unit.closeTarget.hp > 0) {
+                const cdx = unit.closeTarget.x - unit.x;
+                const cdy = unit.closeTarget.y - unit.y;
+                const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+
+                // If close enough to original target, search for nearest enemy in range
+                if (cdist < type.range * 1.5) {
+                    let nearestEnemy = null;
+                    let nearestDist = Infinity;
+
+                    for (const u of game.units) {
+                        if (u.playerId === unit.playerId) continue;
+                        const udx = u.x - unit.x;
+                        const udy = u.y - unit.y;
+                        const udist = Math.sqrt(udx * udx + udy * udy);
+
+                        if (udist <= type.range && udist < nearestDist) {
+                            nearestEnemy = u;
+                            nearestDist = udist;
+                        }
+                    }
+
+                    if (nearestEnemy && nearestEnemy.hp > 0) {
+                        unit.attackTarget = nearestEnemy;
+                        unit.closeTarget = null;
+                        unit.targetX = undefined;
+                        unit.targetY = undefined;
+                    }
+                }
+            }
+
             if (dist < 0.5) {
                 // Reached target
                 unit.targetX = undefined;
                 unit.targetY = undefined;
                 unit.path = undefined;
                 unit.stuckCounter = 0;
+                unit.closeTarget = null;
             } else {
                 // Use pathfinding if blocked or no direct path
                 const speed = type.speed * dt * 60;
@@ -2732,20 +2765,49 @@ function initializeEventHandlers() {
         const tileX = Math.floor(world.x);
         const tileY = Math.floor(world.y);
 
-        // Check if clicking on enemy
-        const enemy = game.units.find(u => {
+        // Check if clicking on enemy - with different distance thresholds
+        let enemyDirectClick = null;
+        let enemyNearbyClick = null;
+
+        // First check units
+        const clickedUnit = game.units.find(u => {
             if (u.playerId === 0) return false;
             const screen = worldToScreen(u.x, u.y);
             const dx = screen.x - x;
             const dy = screen.y - y;
-            return Math.sqrt(dx * dx + dy * dy) < 20;
-        }) || game.buildings.find(b => {
-            if (b.playerId === 0) return false;
-            const screen = worldToScreen(b.x, b.y);
-            const dx = screen.x - x;
-            const dy = screen.y - y;
-            return Math.sqrt(dx * dx + dy * dy) < 30;
+            return Math.sqrt(dx * dx + dy * dy) < 40;
         });
+
+        if (clickedUnit) {
+            const screen = worldToScreen(clickedUnit.x, clickedUnit.y);
+            const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
+            if (dist < 15) {
+                enemyDirectClick = clickedUnit;
+            } else {
+                enemyNearbyClick = clickedUnit;
+            }
+        }
+
+        // If no unit clicked, check buildings
+        if (!clickedUnit) {
+            const clickedBuilding = game.buildings.find(b => {
+                if (b.playerId === 0) return false;
+                const screen = worldToScreen(b.x, b.y);
+                const dx = screen.x - x;
+                const dy = screen.y - y;
+                return Math.sqrt(dx * dx + dy * dy) < 40;
+            });
+
+            if (clickedBuilding) {
+                const screen = worldToScreen(clickedBuilding.x, clickedBuilding.y);
+                const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
+                if (dist < 20) {
+                    enemyDirectClick = clickedBuilding;
+                } else {
+                    enemyNearbyClick = clickedBuilding;
+                }
+            }
+        }
 
         // Check if clicking on oil
         const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
@@ -2753,10 +2815,36 @@ function initializeEventHandlers() {
 
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
-                if (enemy) {
-                    sel.attackTarget = enemy;
-                    sel.targetX = undefined;
-                    sel.targetY = undefined;
+                if (enemyDirectClick) {
+                    // Direct click on enemy - move back slightly while keeping in range
+                    const type = UNIT_TYPES[sel.type];
+                    const range = type.range || 100;
+                    const backupRange = range * 0.6; // Stay at 60% of max range
+
+                    const dx = enemyDirectClick.x - sel.x;
+                    const dy = enemyDirectClick.y - sel.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    // Position behind the unit, keeping range
+                    if (dist < backupRange) {
+                        const angle = Math.atan2(dy, dx);
+                        sel.targetX = enemyDirectClick.x - Math.cos(angle) * backupRange;
+                        sel.targetY = enemyDirectClick.y - Math.sin(angle) * backupRange;
+                    } else {
+                        sel.targetX = sel.x;
+                        sel.targetY = sel.y;
+                    }
+
+                    sel.attackTarget = enemyDirectClick;
+                    sel.targetOilX = undefined;
+                    sel.targetOilY = undefined;
+                    sel.path = null;
+                } else if (enemyNearbyClick) {
+                    // Click near enemy - approach and auto-target nearby enemies
+                    sel.closeTarget = enemyNearbyClick;
+                    sel.targetX = enemyNearbyClick.x;
+                    sel.targetY = enemyNearbyClick.y;
+                    sel.attackTarget = null;
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
                     sel.path = null;
