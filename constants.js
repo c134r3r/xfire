@@ -137,7 +137,7 @@ const BUILDING_TYPES = {
         cost: 0,
         hp: 1000,
         size: 3,
-        produces: ['infantry', 'rocket'],
+        produces: [],
         sight: 130
     },
     barracks: {

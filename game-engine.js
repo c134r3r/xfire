@@ -1427,32 +1427,48 @@ function updateProjectiles(dt) {
             }
         }
 
+        // Check distance traveled (for missed shots)
+        const distFromStart = Math.sqrt(
+            (proj.x - proj.startX) ** 2 + (proj.y - proj.startY) ** 2
+        );
+
         // Check hit
         const dx = proj.targetX - proj.x;
         const dy = proj.targetY - proj.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < 1 || proj.life <= 0) {
-            // Deal damage - check if target still exists in game
-            const targetStillExists = proj.target && (
-                game.units.includes(proj.target) ||
-                game.buildings.includes(proj.target)
-            );
+        // Remove projectile if: reached target, max range exceeded, or life expired
+        if (dist < 1 || proj.life <= 0 || distFromStart > proj.maxRange) {
+            // Only deal damage if this was a hit
+            if (proj.willHit && dist < 1) {
+                const targetStillExists = proj.target && (
+                    game.units.includes(proj.target) ||
+                    game.buildings.includes(proj.target)
+                );
 
-            if (targetStillExists && proj.target.hp > 0) {
-                let finalDamage = proj.damage;
+                if (targetStillExists && proj.target.hp > 0) {
+                    let finalDamage = proj.damage;
 
-                // Apply versus bonus (50% extra damage against matching category)
-                if (proj.versus && proj.target.type) {
-                    const targetType = UNIT_TYPES[proj.target.type];
-                    if (targetType && targetType.category === proj.versus) {
-                        finalDamage = Math.floor(proj.damage * 1.5);
+                    // Apply versus bonus (50% extra damage against matching category)
+                    if (proj.versus && proj.target.type) {
+                        const targetType = UNIT_TYPES[proj.target.type];
+                        if (targetType && targetType.category === proj.versus) {
+                            finalDamage = Math.floor(proj.damage * 1.5);
+                        }
                     }
-                }
 
-                proj.target.hp -= finalDamage;
+                    proj.target.hp -= finalDamage;
+                    // Create impact effect on hit
+                    createImpact(proj.x, proj.y);
+                }
+            } else if (!proj.willHit && distFromStart >= proj.maxRange) {
+                // Miss: projectile stopped at max range, just particle animation stops
+                // No impact effect for misses
+            } else if (dist < 1) {
+                // Hit but willHit is false (shouldn't happen, but safety)
+                createImpact(proj.x, proj.y);
             }
-            createImpact(proj.x, proj.y);
+
             game.projectiles.splice(i, 1);
         }
     }
@@ -2270,18 +2286,43 @@ function fireProjectile(source, target, customDamage) {
     // Check if path is blocked by hills
     const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
 
+    // Add accuracy/inaccuracy - 20% chance to miss
+    const hitChance = 0.8;
+    const willHit = Math.random() < hitChance;
+
+    let finalTargetX = target.x;
+    let finalTargetY = target.y;
+
+    // If miss: calculate where projectile will go (off-target)
+    if (!willHit) {
+        // Random offset away from target (angular deviation)
+        const angle = Math.random() * Math.PI * 2;
+        const missOffset = 30 + Math.random() * 40; // 30-70 units away
+        finalTargetX = target.x + Math.cos(angle) * missOffset;
+        finalTargetY = target.y + Math.sin(angle) * missOffset;
+    }
+
+    // Calculate actual velocity based on final target
+    const finalDx = finalTargetX - source.x;
+    const finalDy = finalTargetY - source.y;
+    const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+
     game.projectiles.push({
         x: source.x,
         y: source.y,
-        vx: (dx / dist) * speed,
-        vy: (dy / dist) * speed,
-        targetX: target.x,
-        targetY: target.y,
+        vx: (finalDx / finalDist) * speed,
+        vy: (finalDy / finalDist) * speed,
+        targetX: finalTargetX,
+        targetY: finalTargetY,
         target,
         damage,
         versus: type.versus || null,
         life: 100,
-        blockadeIndex: blockadeIndex
+        blockadeIndex: blockadeIndex,
+        willHit: willHit,
+        maxRange: type.range || 200,
+        startX: source.x,
+        startY: source.y
     });
 }
 
