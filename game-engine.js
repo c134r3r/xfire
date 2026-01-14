@@ -1250,44 +1250,31 @@ function updateUnits(dt) {
                 }
             }
         }
-        // Movement with pathfinding
-        else if (unit.targetX !== undefined) {
-            // Follow path if available
-            if (unit.path && unit.path.length > 0) {
-                // Get current waypoint
-                const waypoint = unit.path[unit.pathIndex || 0];
-                const dx = waypoint.x - unit.x;
-                const dy = waypoint.y - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+        // Direct movement to target (continuous like harvester)
+        else if (unit.targetX !== undefined && unit.targetY !== undefined) {
+            const dx = unit.targetX - unit.x;
+            const dy = unit.targetY - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
+            if (dist < 0.5) {
+                // Reached target
+                unit.targetX = undefined;
+                unit.targetY = undefined;
+            } else {
+                // Move directly toward target
+                unit.angle = Math.atan2(dy, dx);
                 const speed = type.speed * dt * 60;
+                const moveX = (dx / dist) * speed;
+                const moveY = (dy / dist) * speed;
 
-                // Check if we'll reach or pass waypoint this frame
-                if (dist <= speed || dist < 1.5) {
-                    // Jump to waypoint and move to next
-                    unit.x = waypoint.x;
-                    unit.y = waypoint.y;
-                    unit.pathIndex = (unit.pathIndex || 0) + 1;
-
-                    // Check if reached end of path
-                    if (unit.pathIndex >= unit.path.length) {
-                        unit.path = null;
-                        unit.pathIndex = 0;
-                        // Check if reached final target
-                        const finalDx = unit.targetX - unit.x;
-                        const finalDy = unit.targetY - unit.y;
-                        const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
-                        if (finalDist < 0.5) {
-                            unit.targetX = undefined;
-                            unit.targetY = undefined;
-                        }
-                    }
+                // Check if next tile is passable
+                const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
+                if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
+                    // Blocked by terrain - stop movement
+                    unit.targetX = undefined;
+                    unit.targetY = undefined;
                 } else {
-                    // Move towards current waypoint
-                    unit.angle = Math.atan2(dy, dx);
-                    const moveX = (dx / dist) * speed;
-                    const moveY = (dy / dist) * speed;
-
+                    // Move to next position
                     unit.x += moveX;
                     unit.y += moveY;
 
@@ -1306,69 +1293,6 @@ function updateUnits(dt) {
                             life: 0.5
                         });
                     }
-                }
-            } else {
-                // No path - direct movement (fallback)
-                const dx = unit.targetX - unit.x;
-                const dy = unit.targetY - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 0.2) {
-                    unit.targetX = undefined;
-                    unit.targetY = undefined;
-                } else {
-                    unit.angle = Math.atan2(dy, dx);
-                    const speed = type.speed * dt * 60;
-                    let moveX = (dx / dist) * speed;
-                    let moveY = (dy / dist) * speed;
-
-                    // Check if next tile is passable
-                    const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
-                    if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
-                        // Try to find path again
-                        const newPath = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
-                        if (newPath && newPath.length > 0) {
-                            unit.path = newPath;
-                            unit.pathIndex = 0;
-                        } else {
-                            // Can't find path, stop
-                            unit.targetX = undefined;
-                            unit.targetY = undefined;
-                        }
-                    } else {
-                        unit.x += moveX;
-                        unit.y += moveY;
-
-                        // Create dust trail effect
-                        if (Math.random() < 0.3) {
-                            const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
-                            game.particles.push({
-                                x: unit.x + (Math.random() - 0.5) * type.size,
-                                y: unit.y + (Math.random() - 0.5) * type.size,
-                                z: 0,
-                                vx: (Math.random() - 0.5) * 0.15,
-                                vy: (Math.random() - 0.5) * 0.15,
-                                vz: Math.random() * 0.1 + 0.05,
-                                color: dustColor,
-                                size: Math.random() * 2 + 1,
-                                life: 0.5
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // Auto-attack nearby enemies
-        if (!unit.attackTarget && type.damage > 0) {
-            for (const other of game.units) {
-                if (other.playerId === unit.playerId) continue;
-                const dx = other.x - unit.x;
-                const dy = other.y - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < type.sight) {
-                    unit.attackTarget = other;
-                    break;
                 }
             }
         }
