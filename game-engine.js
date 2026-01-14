@@ -2721,7 +2721,7 @@ function updateCursorEmoji() {
             });
 
             if (isEnemy) {
-                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfkrI8L3RleHQ+PC9zdmc+") 16 16, auto';
+                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfk7g8L3RleHQ+PC9zdmc+") 16 16, auto';
             }
         }
     }
