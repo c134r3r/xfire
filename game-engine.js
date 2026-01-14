@@ -968,8 +968,22 @@ function drawUnit(unit) {
 function drawProjectile(proj) {
     const screen = worldToScreen(proj.x, proj.y);
 
+    // Determine colors based on player
+    let projectileColor = '#ffff00';    // Default yellow
+    let trailColor = '#ff8800';         // Default orange
+
+    if (proj.playerId === 0) {
+        // Player projectiles - Blue
+        projectileColor = '#4488ff';
+        trailColor = '#2255ff';
+    } else if (proj.playerId === 1) {
+        // Enemy projectiles - Red
+        projectileColor = '#ff4444';
+        trailColor = '#ff2222';
+    }
+
     // Trail
-    ctx.strokeStyle = '#ff8800';
+    ctx.strokeStyle = trailColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(screen.x, screen.y);
@@ -977,7 +991,7 @@ function drawProjectile(proj) {
     ctx.stroke();
 
     // Projectile
-    ctx.fillStyle = '#ffff00';
+    ctx.fillStyle = projectileColor;
     ctx.beginPath();
     ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
     ctx.fill();
@@ -2445,7 +2459,8 @@ function fireProjectile(source, target, customDamage) {
         willHit: willHit,
         maxRange: type.range || 200,
         startX: source.x,
-        startY: source.y
+        startY: source.y,
+        playerId: source.playerId
     });
 }
 
