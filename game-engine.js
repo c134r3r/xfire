@@ -57,9 +57,7 @@ function initializeCanvases() {
     if (typeof AssetLoader !== 'undefined') {
         assetLoader = new AssetLoader();
         assetLoader.createPlaceholders();
-        console.log('Asset loader initialized with placeholder sprites');
     } else {
-        console.warn('AssetLoader not available - using procedural graphics only');
         useSprites = false;
     }
 
@@ -273,14 +271,22 @@ function render() {
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
-    // Determine visible tiles
+    // Determine visible tiles - larger buffer for isometric edges
     const startTile = screenToWorld(0, 0);
     const endTile = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
 
-    const minX = Math.max(0, Math.floor(startTile.x) - 2);
-    const maxX = Math.min(getMapSize(), Math.ceil(endTile.x) + 4);
-    const minY = Math.max(0, Math.floor(startTile.y) - 2);
-    const maxY = Math.min(getMapSize(), Math.ceil(endTile.y) + 4);
+    // Also check corner points for better isometric coverage
+    const topRight = screenToWorld(canvas.offsetWidth, 0);
+    const bottomLeft = screenToWorld(0, canvas.offsetHeight);
+
+    // Calculate bounds from all corner points for full isometric coverage
+    const allX = [startTile.x, endTile.x, topRight.x, bottomLeft.x];
+    const allY = [startTile.y, endTile.y, topRight.y, bottomLeft.y];
+
+    const minX = Math.max(0, Math.floor(Math.min(...allX)) - 4);
+    const maxX = Math.min(getMapSize(), Math.ceil(Math.max(...allX)) + 4);
+    const minY = Math.max(0, Math.floor(Math.min(...allY)) - 4);
+    const maxY = Math.min(getMapSize(), Math.ceil(Math.max(...allY)) + 4);
 
     // Draw tiles
     for (let y = minY; y < maxY; y++) {
@@ -398,7 +404,6 @@ function drawTile(tx, ty) {
     const tile = game.map[ty]?.[tx];
     if (!tile) return;
 
-    const fog = game.fogOfWar[ty]?.[tx] ?? 0;
     const screen = worldToScreen(tx, ty);
     const zoom = getZoom();
 
@@ -452,8 +457,8 @@ function drawTile(tx, ty) {
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Draw oil deposit
-    if (tile.oil && fog >= 1) {
+    // Draw oil deposit (always visible)
+    if (tile.oil) {
         ctx.fillStyle = '#222';
         ctx.beginPath();
         ctx.arc(screen.x, screen.y, 8 * zoom, 0, Math.PI * 2);
@@ -1016,14 +1021,13 @@ function renderMinimap() {
     minimapCtx.fillStyle = '#111';
     minimapCtx.fillRect(0, 0, minimapSize, minimapSize);
 
-    // Draw terrain
+    // Draw terrain (without fog of war - full visibility on minimap)
     const mapSize = getMapSize();
     for (let y = 0; y < mapSize; y++) {
         if (!game.map[y]) continue;
         for (let x = 0; x < mapSize; x++) {
             const tile = game.map[y][x];
             if (!tile) continue;
-            const fog = game.fogOfWar[y]?.[x] ?? 0;
 
             let color = '#3d5c3d';
             if (tile.type === 'water') color = '#304060';
@@ -1031,14 +1035,11 @@ function renderMinimap() {
             else if (tile.type === 'sand') color = '#a08050';
             else if (tile.type === 'hill') color = '#5d7c4d';
 
-            // Apply fog darkness based on visibility level
-            if (fog === 0) color = shadeColor(color, -60); // Unexplored: very dark
-            else if (fog === 1) color = shadeColor(color, -30); // Explored but not visible
-
             minimapCtx.fillStyle = color;
             minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
 
-            if (tile.oil && fog >= 1) {
+            // Show all oil deposits on minimap
+            if (tile.oil) {
                 minimapCtx.fillStyle = '#000';
                 minimapCtx.fillRect(x * scale, y * scale, scale, scale);
             }
@@ -1081,7 +1082,6 @@ function update(dt) {
     updateBuildings(dt);
     updateProjectiles(dt);
     updateParticles(dt);
-    updateFogOfWar();
     updateAI();
     updateResources();
     updateUI();
@@ -2732,32 +2732,12 @@ function updateCamera() {
 // ============================================
 
 function showScreen(screenId) {
-    console.log('📺 showScreen called with:', screenId);
     document.querySelectorAll('.fullscreen-overlay').forEach(el => {
-        console.log('  ➖ Hiding:', el.id);
         el.classList.add('hidden');
     });
     const screen = document.getElementById(screenId);
     if (screen) {
-        console.log('  ✅ Showing:', screenId);
         screen.classList.remove('hidden');
-    } else {
-        console.error('  ❌ Screen not found:', screenId);
-    }
-
-    // Play intro music when showing main menu
-    if (screenId === 'mainMenu') {
-        const bgMusic = document.getElementById('backgroundMusic');
-        const introMusic = document.getElementById('introMusic');
-        if (bgMusic) {
-            bgMusic.pause();
-            bgMusic.currentTime = 0;
-        }
-        if (introMusic) {
-            introMusic.volume = 0.3;
-            introMusic.currentTime = 0;
-            introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
-        }
     }
 }
 
@@ -3012,7 +2992,6 @@ All your units and buildings have been destroyed.`;
 
 function setupMenuHandlers() {
     // Main menu buttons
-    console.log('⚙️ Setting up menu handlers...');
     const newGameBtn = document.getElementById('newGameBtn');
     const settingsBtn = document.getElementById('settingsBtn');
     const startGameBtn = document.getElementById('startGameBtn');
@@ -3022,16 +3001,6 @@ function setupMenuHandlers() {
     const playAgainBtn = document.getElementById('playAgainBtn');
     const retryBtn = document.getElementById('retryBtn');
     const menuReturnBtns = document.querySelectorAll('.menu-return');
-
-    console.log('  newGameBtn:', newGameBtn ? '✅' : '❌');
-    console.log('  settingsBtn:', settingsBtn ? '✅' : '❌');
-    console.log('  startGameBtn:', startGameBtn ? '✅' : '❌');
-    console.log('  backBtn:', backBtn ? '✅' : '❌');
-    console.log('  resumeBtn:', resumeBtn ? '✅' : '❌');
-    console.log('  quitBtn:', quitBtn ? '✅' : '❌');
-    console.log('  playAgainBtn:', playAgainBtn ? '✅' : '❌');
-    console.log('  retryBtn:', retryBtn ? '✅' : '❌');
-    console.log('  menuReturnBtns count:', menuReturnBtns.length);
 
     if (newGameBtn) newGameBtn.addEventListener('click', goToSettings);
     if (settingsBtn) settingsBtn.addEventListener('click', goToSettings);
@@ -3071,8 +3040,6 @@ function setupMenuHandlers() {
     menuReturnBtns.forEach(btn => {
         btn.addEventListener('click', goToMainMenu);
     });
-
-    console.log('  ✅ Menu handlers setup complete');
 }
 
 // ============================================
@@ -3138,31 +3105,64 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
+// Loading screen animation and intro music preload
+function showLoadingScreen() {
+    return new Promise((resolve) => {
+        const loadingBar = document.getElementById('loadingBar');
+        const introMusic = document.getElementById('introMusic');
+        let progress = 0;
+        const duration = 2000; // 2 seconds
+        const startTime = Date.now();
+
+        // Start preloading intro music
+        if (introMusic) {
+            introMusic.load();
+        }
+
+        // Animate loading bar
+        function updateLoadingBar() {
+            const elapsed = Date.now() - startTime;
+            progress = Math.min((elapsed / duration) * 100, 100);
+
+            if (loadingBar) {
+                loadingBar.style.width = progress + '%';
+            }
+
+            if (progress < 100) {
+                requestAnimationFrame(updateLoadingBar);
+            } else {
+                // Loading complete - start playing intro music and show menu
+                if (introMusic) {
+                    introMusic.volume = 0.3;
+                    introMusic.currentTime = 0;
+                    introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
+                }
+                resolve();
+            }
+        }
+
+        updateLoadingBar();
+    });
+}
+
 // Initialize canvases and start game loop
 // defer attribute ensures this runs after DOM is ready
 try {
     if (!initializeCanvases()) {
-        console.error('Failed to initialize canvases');
         alert('Error: Could not initialize game canvases');
     } else {
-        console.log('Canvases initialized successfully');
         initializeEventHandlers();
         setupMenuHandlers();
-        try {
-            // Show main menu
-            console.log('Showing main menu');
+
+        // Show loading screen, then main menu
+        showLoadingScreen().then(() => {
             showScreen('mainMenu');
-            console.log('Starting render loop');
             requestAnimationFrame(gameLoop);
-        } catch (gameError) {
-            console.error('Error during initialization:', gameError);
-            alert('Error: ' + gameError.message);
-        }
+        }).catch(() => {
+            showScreen('mainMenu');
+            requestAnimationFrame(gameLoop);
+        });
     }
 } catch (e) {
-    console.error('Fatal error:', e);
     alert('Fatal error: ' + e.message);
 }
-
-console.log('XFire RTS Engine loaded!');
-console.log('Controls: WASD to move, Q to build structure, E to select unit');
