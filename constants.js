@@ -14,7 +14,7 @@ const UNIT_TYPES = {
         icon: '&#9823;',
         cost: 80,
         hp: 40,
-        speed: 1.5,
+        speed: 0.15,
         range: 80,
         damage: 10,
         attackSpeed: 600,
@@ -27,7 +27,7 @@ const UNIT_TYPES = {
         icon: '🏎️',
         cost: 250,
         hp: 150,
-        speed: 0.8,
+        speed: 0.15,
         range: 100,
         damage: 20,
         attackSpeed: 800,
@@ -40,7 +40,7 @@ const UNIT_TYPES = {
         icon: '🛻',
         cost: 350,
         hp: 280,
-        speed: 1.2,
+        speed: 0.15,
         range: 120,
         damage: 35,
         attackSpeed: 1200,
@@ -53,7 +53,7 @@ const UNIT_TYPES = {
         icon: '⛽',
         cost: 500,
         hp: 450,
-        speed: 0.7,
+        speed: 0.15,
         range: 130,
         damage: 55,
         attackSpeed: 1500,
@@ -80,7 +80,7 @@ const UNIT_TYPES = {
         icon: '&#9814;',
         cost: 500,
         hp: 120,
-        speed: 0.6,
+        speed: 0.15,
         range: 280,
         damage: 60,
         attackSpeed: 2000,
@@ -93,7 +93,7 @@ const UNIT_TYPES = {
         icon: '⚔️',
         cost: 300,
         hp: 100,
-        speed: 1.3,
+        speed: 0.15,
         range: 150,
         damage: 25,
         attackSpeed: 600,
@@ -106,7 +106,7 @@ const UNIT_TYPES = {
         icon: '&#9816;',
         cost: 120,
         hp: 25,
-        speed: 2.5,
+        speed: 0.15,
         range: 100,
         damage: 8,
         attackSpeed: 400,
@@ -119,7 +119,7 @@ const UNIT_TYPES = {
         icon: '&#9917;',
         cost: 200,
         hp: 70,
-        speed: 1.2,
+        speed: 0.15,
         range: 120,
         damage: 35,
         attackSpeed: 1000,
@@ -254,6 +254,29 @@ const BUILDING_TYPES = {
         bonuses: { vehicleDamage: 1.15, vehicleHP: 1.1 }
     }
 };
+
+// Enemy Building Icons - Red-toned alternatives for visual distinction
+const ENEMY_BUILDING_ICONS = {
+    hq: '🏰',
+    barracks: '🔴',
+    factory: '🏗️',
+    derrick: '🛢️',
+    turret: '🔴',
+    rifleTurret: '🔴',
+    missileTurret: '🎯',
+    researchLab: '💣',
+    powerplant: '🔥',
+    academy: '📚',
+    techLab: '⚙️'
+};
+
+// Function to get building icon based on player
+function getBuildingIcon(buildingType, isEnemy = false) {
+    if (isEnemy && ENEMY_BUILDING_ICONS[buildingType]) {
+        return ENEMY_BUILDING_ICONS[buildingType];
+    }
+    return BUILDING_TYPES[buildingType]?.icon || '□';
+}
 
 // Tech Tree Dependencies
 const TECH_TREE = {

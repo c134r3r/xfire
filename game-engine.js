@@ -459,7 +459,8 @@ function drawTile(tx, ty) {
 
 function drawBuilding(building) {
     // Try sprite-based rendering first, fall back to procedural if not available
-    if (useSprites && assetLoader && drawBuildingSprite(building)) {
+    // Always use procedural rendering for enemy buildings to show them in red
+    if (building.playerId === 0 && useSprites && assetLoader && drawBuildingSprite(building)) {
         // If under construction, draw progress bar on top
         if (building.isUnderConstruction) {
             const screen = worldToScreen(building.x, building.y);
@@ -2721,7 +2722,7 @@ function updateCursorEmoji() {
             });
 
             if (isEnemy) {
-                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfkrI8L3RleHQ+PC9zdmc+") 16 16, auto';
+                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfk7g8L3RleHQ+PC9zdmc+") 16 16, auto';
             }
         }
     }
