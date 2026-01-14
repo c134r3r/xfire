@@ -443,23 +443,6 @@ function drawTile(tx, ty) {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Tile highlight (top edge)
-    ctx.strokeStyle = shadeColor(color, 30);
-    ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y - tileH / 2);
-    ctx.lineTo(screen.x + tileW / 2, screen.y);
-    ctx.stroke();
-
-    // Tile shadow (bottom edge)
-    ctx.strokeStyle = shadeColor(color, -30);
-    ctx.beginPath();
-    ctx.moveTo(screen.x + tileW / 2, screen.y);
-    ctx.lineTo(screen.x, screen.y + tileH / 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
     // Draw oil deposit (always visible)
     if (tile.oil) {
         ctx.fillStyle = '#222';
@@ -493,11 +476,14 @@ function drawBuilding(building) {
     const screen = worldToScreen(building.x, building.y);
     const player = game.players[building.playerId];
 
+    // Use red for enemy buildings, team color for own
+    const buildingColor = building.playerId === 0 ? player.color : '#ff4444';
+
     // If under construction, reduce alpha
     const baseAlpha = building.isUnderConstruction ? 0.4 : 0.8;
 
     // Draw base structure
-    ctx.fillStyle = player.color;
+    ctx.fillStyle = buildingColor;
     ctx.globalAlpha = baseAlpha;
     ctx.fillRect(screen.x - 20, screen.y - 20, 40, 40);
     ctx.globalAlpha = 1;
@@ -528,15 +514,15 @@ function drawBuilding(building) {
     // Building-specific designs
     if (building.type === 'hq') {
         // HQ: prominent command center
-        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillStyle = shadeColor(buildingColor, -30);
         ctx.fillRect(screen.x - size/2, screen.y - size - 5, size, size);
 
         // Main structure
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 3, size - 4, size - 4);
 
         // Command antenna
-        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.strokeStyle = shadeColor(buildingColor, -50);
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(screen.x + 2, screen.y - size);
@@ -551,18 +537,18 @@ function drawBuilding(building) {
 
     } else if (building.type === 'turret') {
         // Turret: aggressive gun emplacement
-        ctx.fillStyle = shadeColor(player.color, -40);
+        ctx.fillStyle = shadeColor(buildingColor, -40);
         ctx.beginPath();
         ctx.arc(screen.x, screen.y - size/2, size/2, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.beginPath();
         ctx.arc(screen.x, screen.y - size/2, size/2 - 3, 0, Math.PI * 2);
         ctx.fill();
 
         // Gun barrel
-        ctx.strokeStyle = shadeColor(player.color, -60);
+        ctx.strokeStyle = shadeColor(buildingColor, -60);
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(screen.x - 2, screen.y - size/2);
@@ -571,14 +557,14 @@ function drawBuilding(building) {
 
     } else if (building.type === 'factory') {
         // Factory: industrial complex
-        ctx.fillStyle = shadeColor(player.color, -35);
+        ctx.fillStyle = shadeColor(buildingColor, -35);
         ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
 
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
 
         // Production lines
-        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.strokeStyle = shadeColor(buildingColor, -50);
         ctx.lineWidth = 1;
         for (let i = 0; i < 3; i++) {
             ctx.beginPath();
@@ -589,14 +575,14 @@ function drawBuilding(building) {
 
     } else if (building.type === 'barracks') {
         // Barracks: training facility
-        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillStyle = shadeColor(buildingColor, -30);
         ctx.fillRect(screen.x - size/2, screen.y - size + 3, size, size - 6);
 
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.fillRect(screen.x - size/2 + 2, screen.y - size + 5, size - 4, size - 10);
 
         // Training yard lines
-        ctx.strokeStyle = shadeColor(player.color, -50);
+        ctx.strokeStyle = shadeColor(buildingColor, -50);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(screen.x - size/4, screen.y - size/2 + 3);
@@ -605,7 +591,7 @@ function drawBuilding(building) {
 
     } else if (building.type === 'derrick') {
         // Oil derrick: tall pump structure
-        ctx.strokeStyle = shadeColor(player.color, -40);
+        ctx.strokeStyle = shadeColor(buildingColor, -40);
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(screen.x, screen.y - size);
@@ -617,31 +603,31 @@ function drawBuilding(building) {
         ctx.stroke();
 
         // Pump head
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.fillRect(screen.x - 6, screen.y - size + 4, 12, 8);
 
         // Oil base
-        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillStyle = shadeColor(buildingColor, -30);
         ctx.beginPath();
         ctx.ellipse(screen.x, screen.y + 2, 10, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
     } else {
         // PowerPlant and default: rectangular structure
-        ctx.fillStyle = shadeColor(player.color, -30);
+        ctx.fillStyle = shadeColor(buildingColor, -30);
         ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
 
-        ctx.fillStyle = player.color;
+        ctx.fillStyle = buildingColor;
         ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
 
         // Details
-        ctx.fillStyle = shadeColor(player.color, -50);
+        ctx.fillStyle = shadeColor(buildingColor, -50);
         ctx.fillRect(screen.x - size/2 + 5, screen.y - size + 3, size/3 - 7, 4);
         ctx.fillRect(screen.x + size/6, screen.y - size + 3, size/3 - 7, 4);
     }
 
     // Roof highlight (shared)
-    ctx.fillStyle = shadeColor(player.color, 40);
+    ctx.fillStyle = shadeColor(buildingColor, 40);
     ctx.globalAlpha = 0.5;
     ctx.fillRect(screen.x - size/2 + 3, screen.y - size - 7, size - 6, 3);
     ctx.globalAlpha = 1;
@@ -1017,12 +1003,12 @@ function drawParticle(particle) {
 }
 
 function renderMinimap() {
-    // Calculate minimap size: 24 tiles wide = 480px (24 * 20px per tile)
-    const minimapSize = Math.min(480, 24 * 20);
+    // Use full minimap canvas size to show entire map
+    const minimapSize = Math.min(minimapCanvas.width, minimapCanvas.height);
     const scale = minimapSize / getMapSize();
 
     minimapCtx.fillStyle = '#111';
-    minimapCtx.fillRect(0, 0, minimapSize, minimapSize);
+    minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
 
     // Draw terrain (without fog of war - full visibility on minimap)
     const mapSize = getMapSize();
@@ -1051,13 +1037,13 @@ function renderMinimap() {
 
     // Draw buildings
     for (const b of game.buildings) {
-        minimapCtx.fillStyle = game.players[b.playerId].color;
+        minimapCtx.fillStyle = b.playerId === 0 ? game.players[b.playerId].color : '#ff4444';
         minimapCtx.fillRect(b.x * scale - 2, b.y * scale - 2, 4, 4);
     }
 
     // Draw units
     for (const u of game.units) {
-        minimapCtx.fillStyle = game.players[u.playerId].color;
+        minimapCtx.fillStyle = u.playerId === 0 ? game.players[u.playerId].color : '#ff4444';
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
 
@@ -1232,16 +1218,34 @@ function updateUnits(dt) {
                 } else {
                     unit.angle = Math.atan2(dy, dx);
 
-                    if (dist > type.range) {
-                        // Move towards target
-                        unit.x += (dx / dist) * type.speed * dt * 60;
-                        unit.y += (dy / dist) * type.speed * dt * 60;
-                    } else {
-                        // Attack
-                        if (game.tick - unit.lastAttack > type.attackSpeed / 16) {
-                            fireProjectile(unit, target);
-                            unit.lastAttack = game.tick;
+                    // Stay at optimal range (90% of max range to have some buffer)
+                    const optimalRange = type.range * 0.9;
+
+                    if (dist > optimalRange) {
+                        // Move towards target to get in range
+                        const speed = type.speed * dt * 60;
+                        const moveX = (dx / dist) * speed;
+                        const moveY = (dy / dist) * speed;
+
+                        // Check if next position is passable
+                        const nextX = unit.x + moveX;
+                        const nextY = unit.y + moveY;
+                        const nextTile = game.map[Math.floor(nextY)]?.[Math.floor(nextX)];
+
+                        if (!nextTile || (nextTile.type !== 'hill' && nextTile.type !== 'water')) {
+                            unit.x += moveX;
+                            unit.y += moveY;
                         }
+                    } else if (dist < type.range * 0.5) {
+                        // Too close, back up a bit
+                        const speed = type.speed * dt * 60 * 0.5;
+                        unit.x -= (dx / dist) * speed;
+                        unit.y -= (dy / dist) * speed;
+                    }
+                    // If in range, attack
+                    if (dist <= type.range && game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                        fireProjectile(unit, target);
+                        unit.lastAttack = game.tick;
                     }
                 }
             }
@@ -1256,9 +1260,15 @@ function updateUnits(dt) {
                 const dy = waypoint.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Check if reached current waypoint
-                if (dist < 0.3) {
+                const speed = type.speed * dt * 60;
+
+                // Check if we'll reach or pass waypoint this frame
+                if (dist <= speed || dist < 1.5) {
+                    // Jump to waypoint and move to next
+                    unit.x = waypoint.x;
+                    unit.y = waypoint.y;
                     unit.pathIndex = (unit.pathIndex || 0) + 1;
+
                     // Check if reached end of path
                     if (unit.pathIndex >= unit.path.length) {
                         unit.path = null;
@@ -1267,7 +1277,7 @@ function updateUnits(dt) {
                         const finalDx = unit.targetX - unit.x;
                         const finalDy = unit.targetY - unit.y;
                         const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
-                        if (finalDist < 0.2) {
+                        if (finalDist < 0.5) {
                             unit.targetX = undefined;
                             unit.targetY = undefined;
                         }
@@ -1275,7 +1285,6 @@ function updateUnits(dt) {
                 } else {
                     // Move towards current waypoint
                     unit.angle = Math.atan2(dy, dx);
-                    const speed = type.speed * dt * 60;
                     const moveX = (dx / dist) * speed;
                     const moveY = (dy / dist) * speed;
 
@@ -2339,6 +2348,11 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
         buildTime: buildTimes[type] || 1500,
         isUnderConstruction: isUnderConstruction
     };
+
+    // Set activation time for turrets even if not under construction
+    if (bType.damage && !isUnderConstruction) {
+        building.activationTime = game.tick + 180; // 3 second delay
+    }
 
     game.buildings.push(building);
 
