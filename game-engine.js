@@ -1121,6 +1121,13 @@ function update(dt) {
     updateProjectiles(dt);
     updateParticles(dt);
     updateAI();
+
+    // Assign AI harvesters to oil locations
+    const aiHarvesters = game.units.filter(u => u.type === 'harvester' && u.playerId === 1);
+    if (aiHarvesters.length > 0) {
+        assignHarvestersToOil(aiHarvesters);
+    }
+
     updateResources();
     updateUI();
 }
@@ -1243,7 +1250,7 @@ function updateUnits(dt) {
 
         // Harvester logic
         if (unit.type === 'harvester') {
-            updateHarvester(unit, type);
+            updateHarvester(unit, type, dt);
             continue;
         }
 
@@ -1426,7 +1433,7 @@ function updateUnits(dt) {
     }
 }
 
-function updateHarvester(unit, type) {
+function updateHarvester(unit, type, dt) {
     const player = game.players[unit.playerId];
 
     // Find nearest HQ for dropoff
@@ -1452,8 +1459,9 @@ function updateHarvester(unit, type) {
                     // Reached waypoint, move to next
                     unit.harvestPath.shift();
                 } else {
-                    unit.x += (dx / dist) * type.speed * 0.016 * 60;
-                    unit.y += (dy / dist) * type.speed * 0.016 * 60;
+                    const speed = type.speed * dt * 60;
+                    unit.x += (dx / dist) * speed;
+                    unit.y += (dy / dist) * speed;
                     unit.angle = Math.atan2(dy, dx);
 
                     // Create dust trail effect
@@ -1522,8 +1530,9 @@ function updateHarvester(unit, type) {
                 // Reached waypoint, move to next
                 unit.harvestPath.shift();
             } else {
-                unit.x += (dx / dist) * type.speed * 0.016 * 60;
-                unit.y += (dy / dist) * type.speed * 0.016 * 60;
+                const speed = type.speed * dt * 60;
+                unit.x += (dx / dist) * speed;
+                unit.y += (dy / dist) * speed;
                 unit.angle = Math.atan2(dy, dx);
 
                 // Create dust trail effect
@@ -1775,15 +1784,31 @@ function updateAI() {
     const gameTime = game.tick / 60; // seconds
     let aiMode = 'balanced';
 
-    if (gameTime < 60) {
-        // Early game: be aggressive
-        aiMode = aiUnits.length > playerUnits.length ? 'rusher' : 'balanced';
-    } else if (gameTime < 180) {
-        // Mid game: mixed strategy
-        aiMode = ai.oil > 2000 ? 'tech' : (playerUnits.length > aiUnits.length * 1.5 ? 'defender' : 'balanced');
+    if (gameTime < 120) {
+        // Early game: focus on building, not attacking
+        aiMode = 'balanced';
+    } else if (gameTime < 300) {
+        // Mid game: mixed strategy based on economy and units
+        if (ai.oil > 1500) {
+            aiMode = 'tech';
+        } else if (aiUnits.length > playerUnits.length * 1.3) {
+            aiMode = 'rusher'; // Only rush if clearly ahead
+        } else if (playerUnits.length > aiUnits.length * 1.5) {
+            aiMode = 'defender';
+        } else {
+            aiMode = 'balanced';
+        }
     } else {
         // Late game: have all strategies
-        aiMode = ai.oil > 3000 ? 'tech' : (playerBuildings.length > 4 ? 'aggressive' : 'balanced');
+        if (ai.oil > 3000) {
+            aiMode = 'tech';
+        } else if (playerBuildings.length > 6) {
+            aiMode = 'aggressive';
+        } else if (playerUnits.length > aiUnits.length * 2) {
+            aiMode = 'defender';
+        } else {
+            aiMode = 'balanced';
+        }
     }
 
     executeAIStrategy(ai, aiMode, aiUnits, aiBuildings, playerUnits, playerBuildings);
@@ -1806,10 +1831,11 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
     if (!aiHQ) return;
 
     // Difficulty-based attack thresholds (lower = more aggressive)
+    // These determine how many units the AI needs before attacking
     const attackThresholds = {
-        easy: { rusher: 5, tech: 12, balanced: 8 },
-        normal: { rusher: 3, tech: 8, balanced: 5 },
-        hard: { rusher: 2, tech: 6, balanced: 4 }
+        easy: { rusher: 8, tech: 15, balanced: 10, defender: 12, aggressive: 14 },
+        normal: { rusher: 6, tech: 12, balanced: 8, defender: 10, aggressive: 12 },
+        hard: { rusher: 4, tech: 10, balanced: 6, defender: 8, aggressive: 10 }
     };
     const thresholds = attackThresholds[gameSettings.difficulty] || attackThresholds.normal;
 
@@ -2102,6 +2128,37 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
 
         if (target) {
             unit.attackTarget = target;
+        }
+    }
+}
+
+function assignHarvestersToOil(aiHarvesters) {
+    // Assign each AI harvester to nearest available oil location
+    for (const harvester of aiHarvesters) {
+        // Skip if already has a target
+        if (harvester.targetOilX !== undefined || harvester.cargo > 0) continue;
+
+        let nearestOil = null;
+        let nearestDist = Infinity;
+
+        // Find nearest oil location
+        for (let y = 0; y < getMapSize(); y++) {
+            for (let x = 0; x < getMapSize(); x++) {
+                if (game.map[y]?.[x]?.oil) {
+                    const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestOil = { x, y };
+                    }
+                }
+            }
+        }
+
+        // Assign harvester to nearest oil
+        if (nearestOil) {
+            harvester.targetOilX = nearestOil.x;
+            harvester.targetOilY = nearestOil.y;
+            harvester.harvestPath = null; // Reset path to recalculate
         }
     }
 }
