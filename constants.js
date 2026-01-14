@@ -255,6 +255,29 @@ const BUILDING_TYPES = {
     }
 };
 
+// Enemy Building Icons - Red-toned alternatives for visual distinction
+const ENEMY_BUILDING_ICONS = {
+    hq: '🏰',
+    barracks: '🔴',
+    factory: '🏗️',
+    derrick: '🛢️',
+    turret: '🔴',
+    rifleTurret: '🔴',
+    missileTurret: '🎯',
+    researchLab: '💣',
+    powerplant: '🔥',
+    academy: '📚',
+    techLab: '⚙️'
+};
+
+// Function to get building icon based on player
+function getBuildingIcon(buildingType, isEnemy = false) {
+    if (isEnemy && ENEMY_BUILDING_ICONS[buildingType]) {
+        return ENEMY_BUILDING_ICONS[buildingType];
+    }
+    return BUILDING_TYPES[buildingType]?.icon || '□';
+}
+
 // Tech Tree Dependencies
 const TECH_TREE = {
     barracks: { requires: [], unlocks: ['academy'] },

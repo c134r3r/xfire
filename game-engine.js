@@ -459,7 +459,8 @@ function drawTile(tx, ty) {
 
 function drawBuilding(building) {
     // Try sprite-based rendering first, fall back to procedural if not available
-    if (useSprites && assetLoader && drawBuildingSprite(building)) {
+    // Always use procedural rendering for enemy buildings to show them in red
+    if (building.playerId === 0 && useSprites && assetLoader && drawBuildingSprite(building)) {
         // If under construction, draw progress bar on top
         if (building.isUnderConstruction) {
             const screen = worldToScreen(building.x, building.y);
