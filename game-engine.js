@@ -848,7 +848,7 @@ function drawUnit(unit) {
     const sinA = Math.sin(angle);
 
     // Unit-specific rendering
-    if (unit.type === 'tank') {
+    if (unit.type === 'tank' || unit.type === 'lightTank' || unit.type === 'mediumTank' || unit.type === 'heavyTank') {
         // Tank: larger rect with turret
         ctx.fillStyle = player.color;
         ctx.fillRect(screen.x - type.size * 0.7, screen.y - type.size * 0.5, type.size * 1.4, type.size);
@@ -1218,8 +1218,9 @@ function updateUnits(dt) {
                 } else {
                     unit.angle = Math.atan2(dy, dx);
 
-                    // Stay at optimal range (90% of max range to have some buffer)
-                    const optimalRange = type.range * 0.9;
+                    // Stay at optimal range (75% of max range to have some buffer)
+                    const optimalRange = type.range * 0.75;
+                    const backupDistance = type.range * 0.3; // Only back up if much too close
 
                     if (dist > optimalRange) {
                         // Move towards target to get in range
@@ -1236,12 +1237,13 @@ function updateUnits(dt) {
                             unit.x += moveX;
                             unit.y += moveY;
                         }
-                    } else if (dist < type.range * 0.5) {
+                    } else if (dist < backupDistance) {
                         // Too close, back up a bit
-                        const speed = type.speed * dt * 60 * 0.5;
+                        const speed = type.speed * dt * 60 * 0.3;
                         unit.x -= (dx / dist) * speed;
                         unit.y -= (dy / dist) * speed;
                     }
+                    // Otherwise, stay in place if in optimal range
                     // If in range, attack
                     if (dist <= type.range && game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
@@ -1918,16 +1920,37 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
 }
 
 function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
-    // Find primary target (HQ > other buildings > units)
-    let target = playerBuildings.find(b => b.type === 'hq');
-    if (!target) target = playerBuildings[0];
-    if (!target) target = playerUnits[0];
+    // Only attack if there are visible enemies nearby
+    // Each unit should find its own target based on sight range
+    for (const unit of aiUnits) {
+        if (unit.attackTarget) {
+            // Already has a target, skip
+            continue;
+        }
 
-    if (target) {
-        for (const unit of aiUnits) {
-            if (!unit.attackTarget) {
-                unit.attackTarget = target;
-            }
+        const unitType = UNIT_TYPES[unit.type];
+        const sightRange = unitType?.sight || 100;
+
+        // Look for nearby enemy units first
+        let target = playerUnits.find(u => {
+            const dx = u.x - unit.x;
+            const dy = u.y - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist <= sightRange;
+        });
+
+        // If no units found, look for nearby buildings
+        if (!target) {
+            target = playerBuildings.find(b => {
+                const dx = b.x - unit.x;
+                const dy = b.y - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                return dist <= sightRange;
+            });
+        }
+
+        if (target) {
+            unit.attackTarget = target;
         }
     }
 }
@@ -2661,7 +2684,54 @@ canvas.addEventListener('mousemove', (e) => {
         game.selectionBox.x2 = game.mouse.x;
         game.selectionBox.y2 = game.mouse.y;
     }
+
+    // Update cursor based on selection and what's under the mouse
+    updateCursorEmoji();
 });
+
+function updateCursorEmoji() {
+    const tileX = Math.floor(game.mouse.worldX);
+    const tileY = Math.floor(game.mouse.worldY);
+    let newCursor = 'default';
+
+    if (game.selection.length > 0) {
+        const sel = game.selection[0];
+
+        // Check if Harvester is selected and mouse is over oil
+        if (sel.type === 'harvester') {
+            const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
+                          game.map[tileY]?.[tileX]?.oil;
+            if (hasOil) {
+                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCXpYA8L3RleHQ+PC9zdmc+") 16 16, auto';
+            }
+        } else if (sel.type && UNIT_TYPES[sel.type]) {
+            // Check if any combat unit is selected and mouse is over enemy
+            const isEnemy = game.units.find(u => {
+                if (u.playerId === 0) return false;
+                const screen = worldToScreen(u.x, u.y);
+                const dx = screen.x - game.mouse.x;
+                const dy = screen.y - game.mouse.y;
+                return Math.sqrt(dx * dx + dy * dy) < 20;
+            }) || game.buildings.find(b => {
+                if (b.playerId === 0) return false;
+                const screen = worldToScreen(b.x, b.y);
+                const dx = screen.x - game.mouse.x;
+                const dy = screen.y - game.mouse.y;
+                return Math.sqrt(dx * dx + dy * dy) < 30;
+            });
+
+            if (isEnemy) {
+                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfkrI8L3RleHQ+PC9zdmc+") 16 16, auto';
+            }
+        }
+    }
+
+    if (newCursor !== 'default') {
+        canvas.style.cursor = newCursor;
+    } else {
+        canvas.style.cursor = game.placingBuilding ? 'none' : 'crosshair';
+    }
+}
 
 // Double-click to select all units of same type
 let lastClickTarget = null;
