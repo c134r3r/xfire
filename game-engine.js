@@ -982,19 +982,53 @@ function drawProjectile(proj) {
         trailColor = '#ff2222';
     }
 
-    // Trail
-    ctx.strokeStyle = trailColor;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y);
-    ctx.lineTo(screen.x - proj.vx * 3, screen.y - proj.vy * 3);
-    ctx.stroke();
+    // Check if this is an infantry projectile (small point) or artillery (arc)
+    const isInfantry = proj.sourceType === 'infantry' || proj.sourceType === 'scout' ||
+                       proj.sourceType === 'rocket' || proj.sourceType === 'flak';
+    const isArtillery = proj.sourceType === 'artillery';
 
-    // Projectile
-    ctx.fillStyle = projectileColor;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
-    ctx.fill();
+    if (isInfantry) {
+        // Infantry projectiles are small points
+        ctx.fillStyle = projectileColor;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 1, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (isArtillery) {
+        // Artillery projectiles show arc trajectory
+        const progress = 1 - (proj.life / 100);
+        const arcHeight = 20; // Peak height of arc
+        const arcY = -Math.sin(progress * Math.PI) * arcHeight;
+
+        // Draw arc trail
+        ctx.strokeStyle = trailColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y + arcY);
+        ctx.lineTo(screen.x - proj.vx * 2, screen.y - proj.vy * 2 + arcY * 0.8);
+        ctx.stroke();
+
+        // Draw projectile with glow for artillery
+        ctx.fillStyle = projectileColor;
+        ctx.shadowColor = projectileColor;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y + arcY, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    } else {
+        // Regular tank/building projectiles
+        ctx.strokeStyle = trailColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y);
+        ctx.lineTo(screen.x - proj.vx * 3, screen.y - proj.vy * 3);
+        ctx.stroke();
+
+        ctx.fillStyle = projectileColor;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 function drawParticle(particle) {
@@ -1267,7 +1301,7 @@ function updateUnits(dt) {
                 }
             }
         }
-        // Direct movement to target (continuous like harvester)
+        // Direct movement to target with pathfinding for obstacles
         else if (unit.targetX !== undefined && unit.targetY !== undefined) {
             const dx = unit.targetX - unit.x;
             const dy = unit.targetY - unit.y;
@@ -1277,39 +1311,70 @@ function updateUnits(dt) {
                 // Reached target
                 unit.targetX = undefined;
                 unit.targetY = undefined;
+                unit.path = undefined;
+                unit.stuckCounter = 0;
             } else {
-                // Move directly toward target
-                unit.angle = Math.atan2(dy, dx);
+                // Use pathfinding if blocked or no direct path
                 const speed = type.speed * dt * 60;
                 const moveX = (dx / dist) * speed;
                 const moveY = (dy / dist) * speed;
-
-                // Check if next tile is passable
                 const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
+
+                // Check if blocked
                 if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
-                    // Blocked by terrain - stop movement
-                    unit.targetX = undefined;
-                    unit.targetY = undefined;
+                    // Blocked - try pathfinding
+                    if (!unit.path || unit.path.length === 0) {
+                        unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                        unit.stuckCounter = 0;
+                    }
+
+                    if (unit.path && unit.path.length > 0) {
+                        const target = unit.path[0];
+                        const pdx = target.x - unit.x;
+                        const pdy = target.y - unit.y;
+                        const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+
+                        if (pdist < 0.5) {
+                            unit.path.shift();
+                        } else {
+                            unit.x += (pdx / pdist) * speed;
+                            unit.y += (pdy / pdist) * speed;
+                            unit.angle = Math.atan2(pdy, pdx);
+                        }
+                    } else {
+                        // No path found - increase stuck counter and try backing up
+                        unit.stuckCounter = (unit.stuckCounter || 0) + 1;
+                        if (unit.stuckCounter > 30) {
+                            // Back up and try different route
+                            unit.x -= (dx / dist) * speed * 0.5;
+                            unit.y -= (dy / dist) * speed * 0.5;
+                            unit.path = undefined;
+                            unit.stuckCounter = 0;
+                        }
+                    }
                 } else {
-                    // Move to next position
+                    // Direct movement is possible
                     unit.x += moveX;
                     unit.y += moveY;
+                    unit.angle = Math.atan2(dy, dx);
+                    unit.path = undefined;
+                    unit.stuckCounter = 0;
+                }
 
-                    // Create dust trail effect
-                    if (Math.random() < 0.3) {
-                        const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
-                        game.particles.push({
-                            x: unit.x + (Math.random() - 0.5) * type.size,
-                            y: unit.y + (Math.random() - 0.5) * type.size,
-                            z: 0,
-                            vx: (Math.random() - 0.5) * 0.15,
-                            vy: (Math.random() - 0.5) * 0.15,
-                            vz: Math.random() * 0.1 + 0.05,
-                            color: dustColor,
-                            size: Math.random() * 2 + 1,
-                            life: 0.5
-                        });
-                    }
+                // Create dust trail effect
+                if (Math.random() < 0.3) {
+                    const dustColor = Math.random() > 0.5 ? '#888888' : '#999999';
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.15,
+                        vy: (Math.random() - 0.5) * 0.15,
+                        vz: Math.random() * 0.1 + 0.05,
+                        color: dustColor,
+                        size: Math.random() * 2 + 1,
+                        life: 0.5
+                    });
                 }
             }
         }
@@ -1338,35 +1403,54 @@ function updateHarvester(unit, type) {
         // Return to HQ - only if HQ exists
         if (hq) {
             unit.returning = true;
-            const dx = hq.x - unit.x;
-            const dy = hq.y - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist > 2) {
-                // Avoid division by zero (dist is guaranteed > 2 here)
-                unit.x += (dx / dist) * type.speed * 0.016 * 60;
-                unit.y += (dy / dist) * type.speed * 0.016 * 60;
-                unit.angle = Math.atan2(dy, dx);
+            // Use pathfinding to reach HQ
+            if (!unit.harvestPath || unit.harvestPath.length === 0) {
+                unit.harvestPath = findPath(unit.x, unit.y, hq.x, hq.y);
+            }
 
-                // Create dust trail effect
-                if (Math.random() < 0.2) {
-                    game.particles.push({
-                        x: unit.x + (Math.random() - 0.5) * type.size,
-                        y: unit.y + (Math.random() - 0.5) * type.size,
-                        z: 0,
-                        vx: (Math.random() - 0.5) * 0.1,
-                        vy: (Math.random() - 0.5) * 0.1,
-                        vz: Math.random() * 0.08,
-                        color: '#777777',
-                        size: Math.random() * 2 + 1.5,
-                        life: 0.4
-                    });
+            if (unit.harvestPath && unit.harvestPath.length > 0) {
+                const target = unit.harvestPath[0];
+                const dx = target.x - unit.x;
+                const dy = target.y - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 0.5) {
+                    // Reached waypoint, move to next
+                    unit.harvestPath.shift();
+                } else {
+                    unit.x += (dx / dist) * type.speed * 0.016 * 60;
+                    unit.y += (dy / dist) * type.speed * 0.016 * 60;
+                    unit.angle = Math.atan2(dy, dx);
+
+                    // Create dust trail effect
+                    if (Math.random() < 0.2) {
+                        game.particles.push({
+                            x: unit.x + (Math.random() - 0.5) * type.size,
+                            y: unit.y + (Math.random() - 0.5) * type.size,
+                            z: 0,
+                            vx: (Math.random() - 0.5) * 0.1,
+                            vy: (Math.random() - 0.5) * 0.1,
+                            vz: Math.random() * 0.08,
+                            color: '#777777',
+                            size: Math.random() * 2 + 1.5,
+                            life: 0.4
+                        });
+                    }
                 }
             } else {
+                // No path found, clear returning state
+                unit.returning = false;
+            }
+
+            // Check if reached HQ
+            const hqDist = Math.sqrt((hq.x - unit.x) ** 2 + (hq.y - unit.y) ** 2);
+            if (hqDist < 2) {
                 // Deposit cargo
                 player.oil += unit.cargo;
                 unit.cargo = 0;
                 unit.returning = false;
+                unit.harvestPath = [];
             }
         } else {
             // HQ doesn't exist - reset returning state
@@ -1390,31 +1474,50 @@ function updateHarvester(unit, type) {
             return;
         }
 
-        const dx = targetOil - unit.x;
-        const dy = targetOilY - unit.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        // Use pathfinding to reach oil
+        if (!unit.harvestPath || unit.harvestPath.length === 0) {
+            unit.harvestPath = findPath(unit.x, unit.y, targetOil, targetOilY);
+        }
 
-        if (dist > 1) {
-            // Move to oil
-            unit.x += (dx / dist) * type.speed * 0.016 * 60;
-            unit.y += (dy / dist) * type.speed * 0.016 * 60;
-            unit.angle = Math.atan2(dy, dx);
+        if (unit.harvestPath && unit.harvestPath.length > 0) {
+            const target = unit.harvestPath[0];
+            const dx = target.x - unit.x;
+            const dy = target.y - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Create dust trail effect
-            if (Math.random() < 0.2) {
-                game.particles.push({
-                    x: unit.x + (Math.random() - 0.5) * type.size,
-                    y: unit.y + (Math.random() - 0.5) * type.size,
-                    z: 0,
-                    vx: (Math.random() - 0.5) * 0.1,
-                    vy: (Math.random() - 0.5) * 0.1,
-                    vz: Math.random() * 0.08,
-                    color: '#777777',
-                    size: Math.random() * 2 + 1.5,
-                    life: 0.4
-                });
+            if (dist < 0.5) {
+                // Reached waypoint, move to next
+                unit.harvestPath.shift();
+            } else {
+                unit.x += (dx / dist) * type.speed * 0.016 * 60;
+                unit.y += (dy / dist) * type.speed * 0.016 * 60;
+                unit.angle = Math.atan2(dy, dx);
+
+                // Create dust trail effect
+                if (Math.random() < 0.2) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * type.size,
+                        y: unit.y + (Math.random() - 0.5) * type.size,
+                        z: 0,
+                        vx: (Math.random() - 0.5) * 0.1,
+                        vy: (Math.random() - 0.5) * 0.1,
+                        vz: Math.random() * 0.08,
+                        color: '#777777',
+                        size: Math.random() * 2 + 1.5,
+                        life: 0.4
+                    });
+                }
             }
         } else {
+            // No path found, clear target and return
+            unit.targetOilX = undefined;
+            unit.targetOilY = undefined;
+            if (unit.cargo > 0) unit.returning = true;
+        }
+
+        // Check if reached oil location
+        const oilDist = Math.sqrt((targetOil - unit.x) ** 2 + (targetOilY - unit.y) ** 2);
+        if (oilDist < 1) {
             // Harvest at target location
             unit.cargo = Math.min(type.capacity, unit.cargo + 1);
         }
@@ -2460,7 +2563,8 @@ function fireProjectile(source, target, customDamage) {
         maxRange: type.range || 200,
         startX: source.x,
         startY: source.y,
-        playerId: source.playerId
+        playerId: source.playerId,
+        sourceType: source.type
     });
 }
 
