@@ -86,6 +86,9 @@ function getZoom() {
     return gameSettings.zoom || 1.0;
 }
 
+// Audio initialization flag (required by modern browsers)
+let audioUnlocked = false;
+
 // Game State (Constants imported from constants.js)
 const game = {
     running: true,
@@ -1271,65 +1274,60 @@ function updateHarvester(unit, type) {
                 unit.returning = false;
             }
         } else {
-            // HQ doesn't exist - reset returning state and continue harvesting
+            // HQ doesn't exist - reset returning state
             unit.returning = false;
         }
-    } else {
-        // Find oil
-        let nearestOil = null;
-        let nearestDist = Infinity;
-        const oilMapSize = getMapSize();
+    } else if (unit.targetOilX !== undefined && unit.targetOilY !== undefined) {
+        // Go to assigned oil location
+        const targetOil = unit.targetOilX;
+        const targetOilY = unit.targetOilY;
 
-        for (let y = 0; y < oilMapSize; y++) {
-            for (let x = 0; x < oilMapSize; x++) {
-                if (game.map[y][x].oil) {
-                    // Check if not already occupied by derrick
-                    const hasDerrick = game.buildings.some(b =>
-                        b.type === 'derrick' && Math.abs(b.x - x) < 1 && Math.abs(b.y - y) < 1
-                    );
-                    if (hasDerrick) continue;
+        // Check if oil still exists at target location
+        const oilStillThere = targetOil >= 0 && targetOil < getMapSize() &&
+                              targetOilY >= 0 && targetOilY < getMapSize() &&
+                              game.map[targetOilY]?.[targetOil]?.oil;
 
-                    const dx = x - unit.x;
-                    const dy = y - unit.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < nearestDist) {
-                        nearestDist = dist;
-                        nearestOil = { x, y };
-                    }
-                }
-            }
+        if (!oilStillThere) {
+            // Oil depleted or invalid - clear target
+            unit.targetOilX = undefined;
+            unit.targetOilY = undefined;
+            if (unit.cargo > 0) unit.returning = true;
+            return;
         }
 
-        if (nearestOil) {
-            if (nearestDist > 1) {
-                const dx = nearestOil.x - unit.x;
-                const dy = nearestOil.y - unit.y;
-                unit.x += (dx / nearestDist) * type.speed * 0.016 * 60;
-                unit.y += (dy / nearestDist) * type.speed * 0.016 * 60;
-                unit.angle = Math.atan2(dy, dx);
+        const dx = targetOil - unit.x;
+        const dy = targetOilY - unit.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Create dust trail effect
-                if (Math.random() < 0.2) {
-                    game.particles.push({
-                        x: unit.x + (Math.random() - 0.5) * type.size,
-                        y: unit.y + (Math.random() - 0.5) * type.size,
-                        z: 0,
-                        vx: (Math.random() - 0.5) * 0.1,
-                        vy: (Math.random() - 0.5) * 0.1,
-                        vz: Math.random() * 0.08,
-                        color: '#777777',
-                        size: Math.random() * 2 + 1.5,
-                        life: 0.4
-                    });
-                }
-            } else {
-                // Harvest
-                unit.cargo = Math.min(type.capacity, unit.cargo + 2);
+        if (dist > 1) {
+            // Move to oil
+            unit.x += (dx / dist) * type.speed * 0.016 * 60;
+            unit.y += (dy / dist) * type.speed * 0.016 * 60;
+            unit.angle = Math.atan2(dy, dx);
+
+            // Create dust trail effect
+            if (Math.random() < 0.2) {
+                game.particles.push({
+                    x: unit.x + (Math.random() - 0.5) * type.size,
+                    y: unit.y + (Math.random() - 0.5) * type.size,
+                    z: 0,
+                    vx: (Math.random() - 0.5) * 0.1,
+                    vy: (Math.random() - 0.5) * 0.1,
+                    vz: Math.random() * 0.08,
+                    color: '#777777',
+                    size: Math.random() * 2 + 1.5,
+                    life: 0.4
+                });
             }
-        } else if (unit.cargo > 0) {
-            unit.returning = true;
+        } else {
+            // Harvest at target location
+            unit.cargo = Math.min(type.capacity, unit.cargo + 1);
         }
+    } else if (unit.cargo > 0) {
+        // Have cargo but no target - return to HQ
+        unit.returning = true;
     }
+    // Else: idle (no target, no cargo)
 }
 
 function updateBuildings(dt) {
@@ -2039,10 +2037,19 @@ function updateBuildMenu() {
                 const btn = document.createElement('button');
                 btn.className = 'build-btn';
                 btn.innerHTML = `<div>${uType.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${uType.cost}</span>`;
-                btn.title = `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
-                btn.disabled = player.oil < uType.cost || selectedBuilding.productionQueue.length >= 10;
+
+                // Check harvester requirement: factory must exist
+                const canBuild = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
+                const requirementMet = unitType !== 'harvester' ||
+                                      game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
+
+                btn.title = unitType === 'harvester' && !requirementMet
+                    ? `${uType.name} - Requires Factory`
+                    : `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
+                btn.disabled = !canBuild || !requirementMet;
+
                 btn.onclick = () => {
-                    if (player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10) {
+                    if (canBuild && requirementMet) {
                         player.oil -= uType.cost;
                         addToProductionQueue(selectedBuilding, unitType);
                         updateBuildMenu();
@@ -2487,6 +2494,8 @@ function initializeEventHandlers() {
         }
     } else if (isRightClick) {
         const world = screenToWorld(x, y);
+        const tileX = Math.floor(world.x);
+        const tileY = Math.floor(world.y);
 
         // Check if clicking on enemy
         const enemy = game.units.find(u => {
@@ -2503,16 +2512,31 @@ function initializeEventHandlers() {
             return Math.sqrt(dx * dx + dy * dy) < 30;
         });
 
+        // Check if clicking on oil
+        const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
+                       game.map[tileY]?.[tileX]?.oil;
+
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
                 if (enemy) {
                     sel.attackTarget = enemy;
                     sel.targetX = undefined;
                     sel.targetY = undefined;
+                    sel.targetOilX = undefined;
+                    sel.targetOilY = undefined;
+                } else if (sel.type === 'harvester' && hasOil) {
+                    // Assign harvester to oil
+                    sel.targetOilX = tileX;
+                    sel.targetOilY = tileY;
+                    sel.targetX = undefined;
+                    sel.targetY = undefined;
+                    sel.attackTarget = null;
                 } else {
                     sel.targetX = world.x;
                     sel.targetY = world.y;
                     sel.attackTarget = null;
+                    sel.targetOilX = undefined;
+                    sel.targetOilY = undefined;
                 }
             }
         }
@@ -2757,6 +2781,31 @@ canvas.addEventListener('wheel', (e) => {
     document.addEventListener('keyup', (e) => {
         keys[e.key] = false;
     });
+
+    // Unlock audio on first user interaction (required by modern browsers)
+    function unlockAudio() {
+        if (!audioUnlocked) {
+            audioUnlocked = true;
+            const introMusic = document.getElementById('introMusic');
+            const bgMusic = document.getElementById('backgroundMusic');
+
+            // Play appropriate music based on current game state
+            if (game.status === 'MENU' && introMusic) {
+                introMusic.volume = 0.3;
+                introMusic.play().catch(e => console.log('Intro music error:', e));
+            } else if (game.status === 'PLAYING' && bgMusic) {
+                bgMusic.volume = 0.3;
+                bgMusic.play().catch(e => console.log('Background music error:', e));
+            }
+
+            // Remove listeners after first unlock
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('keydown', unlockAudio);
+        }
+    }
+
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
 }
 
 // Camera scrolling
@@ -2799,10 +2848,10 @@ function goToMainMenu() {
         bgMusic.currentTime = 0;
     }
 
-    if (introMusic) {
+    if (introMusic && audioUnlocked) {
         introMusic.volume = 0.3;
         introMusic.currentTime = 0;
-        introMusic.play().catch(e => console.log('Intro music autoplay prevented:', e));
+        introMusic.play().catch(e => console.log('Intro music error:', e));
     }
 }
 
@@ -2850,10 +2899,10 @@ function startGame() {
         introMusic.currentTime = 0;
     }
 
-    if (bgMusic) {
+    if (bgMusic && audioUnlocked) {
         bgMusic.volume = 0.3; // 30% Lautstärke
         bgMusic.currentTime = 0;
-        bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        bgMusic.play().catch(e => console.log('Music error:', e));
     }
 }
 

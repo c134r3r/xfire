@@ -72,7 +72,7 @@ const UNIT_TYPES = {
         attackSpeed: 0,
         sight: 80,
         size: 18,
-        capacity: 500,
+        capacity: 1000,
         category: 'armor'
     },
     artillery: {
