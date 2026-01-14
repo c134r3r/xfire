@@ -27,7 +27,7 @@ const UNIT_TYPES = {
         icon: '🏎️',
         cost: 250,
         hp: 150,
-        speed: 2.0,
+        speed: 0.8,
         range: 100,
         damage: 20,
         attackSpeed: 800,
