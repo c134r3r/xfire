@@ -239,6 +239,73 @@ function generateMap() {
 }
 
 // ============================================
+// TERRAIN VALIDATION HELPERS
+// ============================================
+
+/**
+ * Check if a tile is passable (not water or hill)
+ */
+function isTilePassable(x, y) {
+    const mapSize = getMapSize();
+    if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) return false;
+    const tile = game.map[Math.floor(y)]?.[Math.floor(x)];
+    if (!tile) return false;
+    return tile.type === 'grass';
+}
+
+/**
+ * Find a valid spawn position near the given coordinates
+ * Searches in expanding circles until a passable tile is found
+ */
+function findValidSpawnPosition(targetX, targetY, maxRadius = 10) {
+    // First check if target is already valid
+    if (isTilePassable(targetX, targetY)) {
+        return { x: targetX, y: targetY };
+    }
+
+    // Search in expanding circles
+    for (let radius = 1; radius <= maxRadius; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+                // Only check the outer ring of the current radius
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+
+                const newX = targetX + dx;
+                const newY = targetY + dy;
+
+                if (isTilePassable(newX, newY)) {
+                    return { x: newX, y: newY };
+                }
+            }
+        }
+    }
+
+    // Fallback: return original position (shouldn't happen with proper map generation)
+    return { x: targetX, y: targetY };
+}
+
+/**
+ * Ensure a spawn area is clear of impassable terrain
+ * Used for base placement to guarantee buildable area
+ */
+function ensurePassableArea(centerX, centerY, radius = 5) {
+    const mapSize = getMapSize();
+    for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            const x = centerX + dx;
+            const y = centerY + dy;
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize) {
+                const tile = game.map[y][x];
+                if (tile.type === 'water' || tile.type === 'hill') {
+                    tile.type = 'grass';
+                    tile.height = 0;
+                }
+            }
+        }
+    }
+}
+
+// ============================================
 // COORDINATE CONVERSION (Isometric)
 // ============================================
 
@@ -1289,7 +1356,7 @@ function updateUnits(dt) {
                         const nextY = unit.y + moveY;
                         const nextTile = game.map[Math.floor(nextY)]?.[Math.floor(nextX)];
 
-                        if (!nextTile || (nextTile.type !== 'hill' && nextTile.type !== 'water')) {
+                        if (nextTile && nextTile.type !== 'hill' && nextTile.type !== 'water') {
                             unit.x += moveX;
                             unit.y += moveY;
                         }
@@ -1420,15 +1487,55 @@ function updateUnits(dt) {
         }
 
         // Keep in bounds and avoid hills/water/rocks
-        unit.x = Math.max(0, Math.min(getMapSize() - 1, unit.x));
-        unit.y = Math.max(0, Math.min(getMapSize() - 1, unit.y));
+        const mapSize = getMapSize();
+        unit.x = Math.max(0, Math.min(mapSize - 1, unit.x));
+        unit.y = Math.max(0, Math.min(mapSize - 1, unit.y));
 
         const tileType = game.map[Math.floor(unit.y)]?.[Math.floor(unit.x)]?.type;
         if (tileType === 'water' || tileType === 'hill') {
-            // Push unit back slightly if stuck on impassable terrain
-            const backDist = Math.sqrt((unit.x) ** 2 + (unit.y) ** 2) || 1;
-            unit.x = Math.max(0, Math.min(getMapSize() - 1, unit.x - 0.5 * (unit.x / backDist)));
-            unit.y = Math.max(0, Math.min(getMapSize() - 1, unit.y - 0.5 * (unit.y / backDist)));
+            // Push unit to nearest valid position
+            const validPos = findValidSpawnPosition(Math.floor(unit.x), Math.floor(unit.y), 3);
+            unit.x = validPos.x + 0.5;
+            unit.y = validPos.y + 0.5;
+        }
+
+        // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
+        if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0) {
+            const sightRange = type.sight || type.range * 1.5;
+            let nearestEnemy = null;
+            let nearestDist = Infinity;
+
+            // Check for enemy units in sight range
+            for (const enemy of game.units) {
+                if (enemy.playerId === unit.playerId) continue;
+                const dx = enemy.x - unit.x;
+                const dy = enemy.y - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist <= sightRange && dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestEnemy = enemy;
+                }
+            }
+
+            // Also check enemy buildings
+            if (!nearestEnemy) {
+                for (const building of game.buildings) {
+                    if (building.playerId === unit.playerId) continue;
+                    const dx = building.x - unit.x;
+                    const dy = building.y - unit.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist <= sightRange && dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = building;
+                    }
+                }
+            }
+
+            if (nearestEnemy && nearestEnemy.hp > 0) {
+                unit.attackTarget = nearestEnemy;
+            }
         }
     }
 }
@@ -1643,10 +1750,29 @@ function updateBuildings(dt) {
 
             if (building.produceProgress >= building.produceTime) {
                 // Spawn unit with offset to avoid clustering
-                const angle = Math.random() * Math.PI * 2;
-                const offset = 1.5 + Math.random() * 1.5;
-                const spawnX = building.x + Math.cos(angle) * offset;
-                const spawnY = building.y + Math.sin(angle) * offset;
+                // Try multiple angles to find passable terrain
+                let spawnX, spawnY;
+                let foundValidSpot = false;
+
+                for (let attempt = 0; attempt < 8; attempt++) {
+                    const angle = (Math.PI * 2 * attempt) / 8;
+                    const offset = 1.5 + Math.random() * 1.5;
+                    spawnX = building.x + Math.cos(angle) * offset;
+                    spawnY = building.y + Math.sin(angle) * offset;
+
+                    if (isTilePassable(Math.floor(spawnX), Math.floor(spawnY))) {
+                        foundValidSpot = true;
+                        break;
+                    }
+                }
+
+                // If no valid spot found around building, use findValidSpawnPosition
+                if (!foundValidSpot) {
+                    const validPos = findValidSpawnPosition(Math.floor(building.x), Math.floor(building.y), 5);
+                    spawnX = validPos.x + 0.5;
+                    spawnY = validPos.y + 0.5;
+                }
+
                 spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 building.productionQueue.shift();
                 building.produceProgress = 0;
@@ -2523,11 +2649,26 @@ function canBuildAt(buildingType, x, y) {
     const type = BUILDING_TYPES[buildingType];
     if (!type) return false;
 
+    const mapSize = getMapSize();
     // Check map bounds
-    if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) return false;
+    if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) return false;
+
+    // Check terrain - cannot build on water or hills
+    const bSize = type.size || 1;
+    for (let dy = -bSize; dy <= bSize; dy++) {
+        for (let dx = -bSize; dx <= bSize; dx++) {
+            const checkX = Math.floor(x + dx);
+            const checkY = Math.floor(y + dy);
+            if (checkX >= 0 && checkX < mapSize && checkY >= 0 && checkY < mapSize) {
+                const tile = game.map[checkY]?.[checkX];
+                if (!tile || tile.type === 'water' || tile.type === 'hill') {
+                    return false;
+                }
+            }
+        }
+    }
 
     // Check for building collision (don't build on top of other buildings)
-    const bSize = type.size;
     let canPlaceHere = true;
 
     for (const building of game.buildings) {
@@ -2537,7 +2678,7 @@ function canBuildAt(buildingType, x, y) {
         const dist = Math.max(bdx, bdy);
 
         // If too close to another building, can't place
-        if (dist < bSize + bType.size) {
+        if (dist < bSize + (bType.size || 1)) {
             canPlaceHere = false;
             break;
         }
@@ -2896,6 +3037,10 @@ function initializeEventHandlers() {
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
                     sel.path = null;
+                    if (sel.type === 'harvester') {
+                        sel.harvestPath = null;
+                        sel.returning = false;
+                    }
                 } else if (enemyNearbyClick) {
                     // Click near enemy - approach and auto-target nearby enemies
                     sel.closeTarget = enemyNearbyClick;
@@ -2905,6 +3050,10 @@ function initializeEventHandlers() {
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
                     sel.path = null;
+                    if (sel.type === 'harvester') {
+                        sel.harvestPath = null;
+                        sel.returning = false;
+                    }
                 } else if (sel.type === 'harvester' && hasOil) {
                     // Assign harvester to oil
                     sel.targetOilX = tileX;
@@ -2913,6 +3062,8 @@ function initializeEventHandlers() {
                     sel.targetY = undefined;
                     sel.attackTarget = null;
                     sel.path = null;
+                    sel.harvestPath = null; // Reset harvest path so new path is calculated
+                    sel.returning = false; // Stop returning to HQ
                 } else {
                     // Calculate path for movement
                     const path = findPath(sel.x, sel.y, world.x, world.y);
@@ -2930,6 +3081,10 @@ function initializeEventHandlers() {
                     sel.attackTarget = null;
                     sel.targetOilX = undefined;
                     sel.targetOilY = undefined;
+                    if (sel.type === 'harvester') {
+                        sel.harvestPath = null;
+                        sel.returning = false;
+                    }
                 }
             }
         }
@@ -3579,13 +3734,24 @@ function setupMenuHandlers() {
 function initGame() {
     generateMap();
 
+    const mapSizeVal = getMapSize();
+
+    // Define base positions
+    const playerBaseX = 10;
+    const playerBaseY = 10;
+    const enemyBaseX = mapSizeVal - 12;
+    const enemyBaseY = mapSizeVal - 12;
+
+    // Ensure base areas are passable (clear water/hills)
+    ensurePassableArea(playerBaseX, playerBaseY, 5);
+    ensurePassableArea(enemyBaseX, enemyBaseY, 5);
+
     // Balanced game start: HQ + Harvester only for both players
     // Player base (bottom-left area)
-    createBuilding('hq', 0, 10, 10);
-    spawnUnit('harvester', 0, 11, 12);
+    createBuilding('hq', 0, playerBaseX, playerBaseY);
+    spawnUnit('harvester', 0, playerBaseX + 1, playerBaseY + 2);
 
     // Enemy base (top-right area)
-    const mapSizeVal = getMapSize();
     createBuilding('hq', 1, mapSizeVal - 12, mapSizeVal - 12);
     spawnUnit('harvester', 1, mapSizeVal - 13, mapSizeVal - 14);
 
