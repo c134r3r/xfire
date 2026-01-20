@@ -634,6 +634,12 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     }
 }
 
+// Pseudo-random based on coordinates (consistent per tile)
+function tileRandom(tx, ty, seed = 0) {
+    const n = Math.sin(tx * 12.9898 + ty * 78.233 + seed) * 43758.5453;
+    return n - Math.floor(n);
+}
+
 function drawTile(tx, ty) {
     const tile = game.map[ty]?.[tx];
     if (!tile) return;
@@ -645,47 +651,206 @@ function drawTile(tx, ty) {
     const tileW = TILE_WIDTH * zoom;
     const tileH = TILE_HEIGHT * zoom;
 
-    // Tile colors
-    const colors = {
-        grass: '#3d5c3d',
-        sand: '#a08050',
-        rock: '#606060',
-        water: '#66aaff',
-        hill: '#6b4423'
+    // Base colors with variation
+    const baseColors = {
+        grass: { r: 61, g: 92, b: 61 },
+        sand: { r: 160, g: 128, b: 80 },
+        rock: { r: 96, g: 96, b: 96 },
+        water: { r: 70, g: 140, b: 200 },
+        hill: { r: 107, g: 68, b: 35 }
     };
 
-    let color = colors[tile.type] || colors.grass;
+    const base = baseColors[tile.type] || baseColors.grass;
+
+    // Add per-tile color variation (±15%)
+    const variation = (tileRandom(tx, ty) - 0.5) * 30;
+    let r = Math.max(0, Math.min(255, base.r + variation));
+    let g = Math.max(0, Math.min(255, base.g + variation));
+    let b = Math.max(0, Math.min(255, base.b + variation));
 
     // Height shading
     if (tile.height > 0) {
-        color = shadeColor(color, 20);
+        r = Math.min(255, r * 1.15);
+        g = Math.min(255, g * 1.15);
+        b = Math.min(255, b * 1.15);
     } else if (tile.height < 0) {
-        color = shadeColor(color, -20);
+        r *= 0.85;
+        g *= 0.85;
+        b *= 0.85;
     }
 
-    // Draw isometric tile
+    const color = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
+
+    // Draw isometric tile base
     ctx.beginPath();
     ctx.moveTo(screen.x, screen.y - tileH / 2);
     ctx.lineTo(screen.x + tileW / 2, screen.y);
     ctx.lineTo(screen.x, screen.y + tileH / 2);
     ctx.lineTo(screen.x - tileW / 2, screen.y);
     ctx.closePath();
-
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Draw oil deposit (always visible)
-    if (tile.oil) {
-        ctx.fillStyle = '#222';
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 8 * zoom, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#111';
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - 2 * zoom, 5 * zoom, 0, Math.PI * 2);
-        ctx.fill();
+    // Draw tile edge shadows for 3D depth effect
+    ctx.beginPath();
+    ctx.moveTo(screen.x, screen.y + tileH / 2);
+    ctx.lineTo(screen.x - tileW / 2, screen.y);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(screen.x, screen.y + tileH / 2);
+    ctx.lineTo(screen.x + tileW / 2, screen.y);
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.stroke();
+
+    // Draw subtle details based on terrain type
+    if (zoom > 0.6) { // Only draw details when zoomed in enough
+        drawTileDetails(tx, ty, tile.type, screen, zoom);
     }
 
+    // Draw oil deposit (always visible)
+    if (tile.oil) {
+        // Oil pool
+        ctx.fillStyle = 'rgba(20,20,20,0.8)';
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y + 2 * zoom, 10 * zoom, 6 * zoom, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Oil shine
+        ctx.fillStyle = 'rgba(60,60,80,0.6)';
+        ctx.beginPath();
+        ctx.ellipse(screen.x - 2 * zoom, screen.y, 4 * zoom, 2.5 * zoom, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bubbles
+        const bubblePhase = (Date.now() / 1000 + tx + ty) % 3;
+        if (bubblePhase < 1) {
+            ctx.fillStyle = 'rgba(80,80,100,0.5)';
+            ctx.beginPath();
+            ctx.arc(screen.x + 2 * zoom, screen.y - bubblePhase * 3 * zoom, 1.5 * zoom, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+function drawTileDetails(tx, ty, tileType, screen, zoom) {
+    const detailCount = 3 + Math.floor(tileRandom(tx, ty, 1) * 3);
+
+    switch (tileType) {
+        case 'grass':
+            // Draw grass blades
+            ctx.strokeStyle = 'rgba(30,70,30,0.6)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < detailCount; i++) {
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 20 * zoom;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 10 * zoom;
+                const height = (3 + tileRandom(tx, ty, i * 3) * 4) * zoom;
+                const bend = (tileRandom(tx, ty, i * 4) - 0.5) * 3 * zoom;
+
+                ctx.beginPath();
+                ctx.moveTo(screen.x + ox, screen.y + oy);
+                ctx.quadraticCurveTo(
+                    screen.x + ox + bend, screen.y + oy - height / 2,
+                    screen.x + ox + bend * 1.5, screen.y + oy - height
+                );
+                ctx.stroke();
+            }
+            break;
+
+        case 'sand':
+            // Draw small pebbles/dots
+            ctx.fillStyle = 'rgba(140,110,70,0.5)';
+            for (let i = 0; i < detailCount; i++) {
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 24 * zoom;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 12 * zoom;
+                const size = (1 + tileRandom(tx, ty, i * 3)) * zoom;
+
+                ctx.beginPath();
+                ctx.arc(screen.x + ox, screen.y + oy, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            break;
+
+        case 'rock':
+            // Draw cracks and small stones
+            ctx.strokeStyle = 'rgba(40,40,40,0.4)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 2; i++) {
+                const ox = (tileRandom(tx, ty, i * 5) - 0.5) * 20 * zoom;
+                const oy = (tileRandom(tx, ty, i * 5 + 1) - 0.5) * 10 * zoom;
+                const len = (5 + tileRandom(tx, ty, i * 5 + 2) * 8) * zoom;
+                const angle = tileRandom(tx, ty, i * 5 + 3) * Math.PI;
+
+                ctx.beginPath();
+                ctx.moveTo(screen.x + ox, screen.y + oy);
+                ctx.lineTo(
+                    screen.x + ox + Math.cos(angle) * len,
+                    screen.y + oy + Math.sin(angle) * len * 0.5
+                );
+                ctx.stroke();
+            }
+
+            // Small highlight stones
+            ctx.fillStyle = 'rgba(120,120,120,0.5)';
+            for (let i = 0; i < 2; i++) {
+                const ox = (tileRandom(tx, ty, i * 7) - 0.5) * 18 * zoom;
+                const oy = (tileRandom(tx, ty, i * 7 + 1) - 0.5) * 9 * zoom;
+                ctx.beginPath();
+                ctx.arc(screen.x + ox, screen.y + oy, 1.5 * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            break;
+
+        case 'water':
+            // Animated wave lines
+            const wavePhase = (Date.now() / 800 + tx * 0.5 + ty * 0.3) % (Math.PI * 2);
+            ctx.strokeStyle = 'rgba(150,200,255,0.4)';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i < 2; i++) {
+                const oy = (i - 0.5) * 8 * zoom;
+                ctx.beginPath();
+                ctx.moveTo(screen.x - 12 * zoom, screen.y + oy);
+                ctx.quadraticCurveTo(
+                    screen.x, screen.y + oy + Math.sin(wavePhase + i) * 2 * zoom,
+                    screen.x + 12 * zoom, screen.y + oy
+                );
+                ctx.stroke();
+            }
+
+            // Water sparkle
+            if (tileRandom(tx, ty, 99) > 0.7) {
+                const sparklePhase = (Date.now() / 500 + tx + ty) % 1;
+                if (sparklePhase < 0.3) {
+                    ctx.fillStyle = `rgba(255,255,255,${0.5 - sparklePhase})`;
+                    ctx.beginPath();
+                    ctx.arc(
+                        screen.x + (tileRandom(tx, ty, 100) - 0.5) * 16 * zoom,
+                        screen.y + (tileRandom(tx, ty, 101) - 0.5) * 8 * zoom,
+                        1.5 * zoom, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+            break;
+
+        case 'hill':
+            // Draw rocky texture
+            ctx.fillStyle = 'rgba(80,50,25,0.4)';
+            for (let i = 0; i < detailCount; i++) {
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 22 * zoom;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 11 * zoom;
+                const w = (2 + tileRandom(tx, ty, i * 3) * 3) * zoom;
+                const h = (1 + tileRandom(tx, ty, i * 3 + 1) * 2) * zoom;
+
+                ctx.beginPath();
+                ctx.ellipse(screen.x + ox, screen.y + oy, w, h, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            break;
+    }
 }
 
 function drawBuilding(building) {
