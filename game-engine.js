@@ -1350,15 +1350,6 @@ function drawUnit(unit) {
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Health bar
-    const hpPercent = unit.hp / type.hp;
-    if (hpPercent < 1) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(screen.x - 12, screen.y - type.size - 10, 24, 3);
-        ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
-        ctx.fillRect(screen.x - 12, screen.y - type.size - 10, 24 * hpPercent, 3);
-    }
-
     // Selection indicator
     if (game.selection.includes(unit)) {
         ctx.strokeStyle = '#00ff00';
