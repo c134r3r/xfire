@@ -21,6 +21,7 @@ let useSprites = true; // Toggle between sprite-based and procedural graphics
 const SoundManager = {
     ctx: null,
     enabled: true,
+    combatEnabled: true,  // Toggle for combat sounds (shooting, explosions)
     volume: 0.3,
 
     init() {
@@ -45,6 +46,10 @@ const SoundManager = {
         this.resume();
 
         const vol = (options.volume || 1) * this.volume;
+
+        // Combat sounds check
+        const isCombatSound = type.startsWith('shoot_') || type.startsWith('explosion_');
+        if (isCombatSound && !this.combatEnabled) return;
 
         switch (type) {
             case 'shoot_light':
@@ -1674,10 +1679,10 @@ function update(dt) {
     updateDamageNumbers(dt);
     updateAI();
 
-    // Assign AI harvesters to oil locations
-    const aiHarvesters = game.units.filter(u => u.type === 'harvester' && u.playerId === 1);
-    if (aiHarvesters.length > 0) {
-        assignHarvestersToOil(aiHarvesters);
+    // Assign ALL harvesters (both player and AI) to oil locations
+    const allHarvesters = game.units.filter(u => u.type === 'harvester');
+    if (allHarvesters.length > 0) {
+        assignHarvestersToOil(allHarvesters);
     }
 
     updateResources();
@@ -2749,34 +2754,10 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
     }
 }
 
-function assignHarvestersToOil(aiHarvesters) {
-    // Assign each AI harvester to nearest available oil location
-    for (const harvester of aiHarvesters) {
-        // Skip if already has a target
-        if (harvester.targetOilX !== undefined || harvester.cargo > 0) continue;
-
-        let nearestOil = null;
-        let nearestDist = Infinity;
-
-        // Find nearest oil location
-        for (let y = 0; y < getMapSize(); y++) {
-            for (let x = 0; x < getMapSize(); x++) {
-                if (game.map[y]?.[x]?.oil) {
-                    const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
-                    if (dist < nearestDist) {
-                        nearestDist = dist;
-                        nearestOil = { x, y };
-                    }
-                }
-            }
-        }
-
-        // Assign harvester to nearest oil
-        if (nearestOil) {
-            harvester.targetOilX = nearestOil.x;
-            harvester.targetOilY = nearestOil.y;
-            harvester.harvestPath = null; // Reset path to recalculate
-        }
+function assignHarvestersToOil(harvesters) {
+    // Assign each harvester to nearest available oil location
+    for (const harvester of harvesters) {
+        assignHarvesterToNearestOil(harvester);
     }
 }
 
@@ -3081,7 +3062,7 @@ function updateBuildMenu() {
 
 function spawnUnit(type, playerId, x, y) {
     const unitType = UNIT_TYPES[type];
-    game.units.push({
+    const newUnit = {
         type,
         playerId,
         x, y,
@@ -3089,7 +3070,41 @@ function spawnUnit(type, playerId, x, y) {
         angle: 0,
         lastAttack: 0,
         cargo: 0
-    });
+    };
+    game.units.push(newUnit);
+
+    // Immediately assign harvesters to nearest oil field
+    if (type === 'harvester') {
+        assignHarvesterToNearestOil(newUnit);
+    }
+}
+
+function assignHarvesterToNearestOil(harvester) {
+    // Skip if already has a target or has cargo to deliver
+    if (harvester.targetOilX !== undefined || harvester.cargo > 0) return;
+
+    let nearestOil = null;
+    let nearestDist = Infinity;
+
+    // Find nearest oil location
+    for (let y = 0; y < getMapSize(); y++) {
+        for (let x = 0; x < getMapSize(); x++) {
+            if (game.map[y]?.[x]?.oil) {
+                const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestOil = { x, y };
+                }
+            }
+        }
+    }
+
+    // Assign harvester to nearest oil
+    if (nearestOil) {
+        harvester.targetOilX = nearestOil.x;
+        harvester.targetOilY = nearestOil.y;
+        harvester.harvestPath = null;
+    }
 }
 
 function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
@@ -4387,6 +4402,15 @@ function setupMenuHandlers() {
     if (backBtn) backBtn.addEventListener('click', goToMainMenu);
     if (resumeBtn) resumeBtn.addEventListener('click', togglePause);
     if (quitBtn) quitBtn.addEventListener('click', goToMainMenu);
+
+    // Combat sound toggle in pause menu
+    const combatSoundToggle = document.getElementById('combatSoundToggle');
+    if (combatSoundToggle) {
+        combatSoundToggle.addEventListener('change', (e) => {
+            SoundManager.combatEnabled = e.target.checked;
+        });
+    }
+
     if (playAgainBtn) playAgainBtn.addEventListener('click', () => {
         resetGame();
         initGame();
