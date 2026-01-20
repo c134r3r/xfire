@@ -2936,9 +2936,12 @@ function initializeEventHandlers() {
                 // Create building with construction status
                 createBuilding(game.placingBuilding, 0, tx, ty, true);
                 game.players[0].oil -= type.cost;
+                // Only reset after successful placement
+                game.placingBuilding = null;
+                game.placingBuildingFrom = null;
             }
-            game.placingBuilding = null;
-            game.placingBuildingFrom = null;
+            // If placement failed, keep placingBuilding set so player can try again
+            // Player can cancel with right-click or Escape
         } else {
             // Check if clicking on own unit or building
             // First check units (they should have priority since they're selectable for commands)
@@ -2971,6 +2974,13 @@ function initializeEventHandlers() {
             }
         }
     } else if (isRightClick) {
+        // Cancel building placement mode with right-click
+        if (game.placingBuilding) {
+            game.placingBuilding = null;
+            game.placingBuildingFrom = null;
+            return; // Don't process as unit command
+        }
+
         const world = screenToWorld(x, y);
         const tileX = Math.floor(world.x);
         const tileY = Math.floor(world.y);
