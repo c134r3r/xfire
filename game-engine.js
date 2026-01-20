@@ -14,6 +14,170 @@ if (isMac) {
 let canvas, ctx, minimapCanvas, minimapCtx;
 let assetLoader;
 let useSprites = true; // Toggle between sprite-based and procedural graphics
+
+// ============================================
+// SOUND SYSTEM - Web Audio API
+// ============================================
+const SoundManager = {
+    ctx: null,
+    enabled: true,
+    volume: 0.3,
+
+    init() {
+        try {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('[SoundManager] Initialized');
+        } catch (e) {
+            console.warn('[SoundManager] Web Audio not supported');
+            this.enabled = false;
+        }
+    },
+
+    resume() {
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    },
+
+    // Play a synthetic sound effect
+    play(type, options = {}) {
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+
+        const vol = (options.volume || 1) * this.volume;
+
+        switch (type) {
+            case 'shoot_light':
+                this._playShoot(800, 0.08, vol * 0.4);
+                break;
+            case 'shoot_heavy':
+                this._playShoot(200, 0.15, vol * 0.6);
+                break;
+            case 'shoot_artillery':
+                this._playShoot(100, 0.25, vol * 0.8);
+                break;
+            case 'explosion_small':
+                this._playExplosion(0.15, vol * 0.5);
+                break;
+            case 'explosion_large':
+                this._playExplosion(0.3, vol * 0.7);
+                break;
+            case 'ui_click':
+                this._playClick(vol * 0.3);
+                break;
+            case 'ui_build':
+                this._playBuild(vol * 0.4);
+                break;
+            case 'unit_select':
+                this._playSelect(vol * 0.25);
+                break;
+        }
+    },
+
+    _playShoot(freq, duration, vol) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, ctx.currentTime + duration);
+
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    },
+
+    _playExplosion(duration, vol) {
+        const ctx = this.ctx;
+        const bufferSize = ctx.sampleRate * duration;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        // White noise with decay
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + duration);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+    },
+
+    _playClick(vol) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05);
+
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+    },
+
+    _playBuild(vol) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
+
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+    },
+
+    _playSelect(vol) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.03);
+
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+    }
+};
+
+// Initialize sound system
+SoundManager.init();
 const dpr = window.devicePixelRatio || 1;
 
 // Initialize canvas when DOM is ready
@@ -771,14 +935,24 @@ function drawUnitSprite(unit) {
         ctx.restore();
     }
 
-    // Health bar
+    // Health bar - always visible for better combat overview
     const hpPercent = unit.hp / type.hp;
-    if (hpPercent < 1) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(screen.x - 12, screen.y - type.size - 18, 24, 3);
-        ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
-        ctx.fillRect(screen.x - 12, screen.y - type.size - 18, 24 * hpPercent, 3);
-    }
+    const barWidth = 24;
+    const barHeight = 3;
+    const barY = screen.y - type.size - 18;
+
+    // Background
+    ctx.fillStyle = '#333';
+    ctx.fillRect(screen.x - barWidth/2, barY, barWidth, barHeight);
+
+    // Health fill - color based on health percentage
+    ctx.fillStyle = hpPercent > 0.6 ? '#0f0' : hpPercent > 0.3 ? '#ff0' : '#f00';
+    ctx.fillRect(screen.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
+
+    // Border
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(screen.x - barWidth/2, barY, barWidth, barHeight);
 
     // Selection indicator
     if (game.selection.includes(unit)) {
@@ -901,13 +1075,19 @@ function drawUnit(unit) {
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Draw health bar on top
-    if (unit.hp < type.hp) {
-        ctx.fillStyle = '#f00';
-        ctx.fillRect(screen.x - 12, screen.y - 18, 24 * (unit.hp / type.hp), 3);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(screen.x - 12, screen.y - 18, 24, 3);
-    }
+    // Health bar - always visible for better combat overview
+    const hpPercent = unit.hp / type.hp;
+    const barWidth = 24;
+    const barHeight = 3;
+    const barY = screen.y - 20;
+
+    ctx.fillStyle = '#333';
+    ctx.fillRect(screen.x - barWidth/2, barY, barWidth, barHeight);
+    ctx.fillStyle = hpPercent > 0.6 ? '#0f0' : hpPercent > 0.3 ? '#ff0' : '#f00';
+    ctx.fillRect(screen.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(screen.x - barWidth/2, barY, barWidth, barHeight);
 
     // Draw unit (colored circle, specific type drawn below)
 
@@ -1310,6 +1490,7 @@ function updateUnits(dt) {
         // Death check
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
+            SoundManager.play('explosion_small');
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
@@ -1704,6 +1885,7 @@ function updateBuildings(dt) {
         // Death check
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
+            SoundManager.play('explosion_large');
             game.buildings.splice(i, 1);
             game.selection = game.selection.filter(s => s !== building);
             continue;
@@ -2446,6 +2628,7 @@ function updateBuildMenu() {
                     btn.disabled = player.oil < techDef.cost;
                     btn.onclick = () => {
                         if (player.oil >= techDef.cost && !player.tech[techType]) {
+                            SoundManager.play('ui_click');
                             player.oil -= techDef.cost;
                             researchTechnology(techType, 0);
                             updateBuildMenu();
@@ -2494,6 +2677,7 @@ function updateBuildMenu() {
 
                 btn.onclick = () => {
                     if (canBuild && requirementMet) {
+                        SoundManager.play('ui_click');
                         player.oil -= uType.cost;
                         addToProductionQueue(selectedBuilding, unitType);
                         updateBuildMenu();
@@ -2566,6 +2750,7 @@ function updateBuildMenu() {
             btn.disabled = player.oil < type.cost || !isTechAvailable;
             btn.onclick = () => {
                 if (player.oil >= type.cost && isTechAvailable) {
+                    SoundManager.play('ui_click');
                     game.placingBuilding = bType;
                     // If a building is selected, set it as source
                     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
@@ -2754,6 +2939,15 @@ function fireProjectile(source, target, customDamage) {
     // Prevent division by zero if source and target are at the same position
     if (dist === 0) return;
 
+    // Play shooting sound based on unit type
+    if (source.type === 'artillery') {
+        SoundManager.play('shoot_artillery');
+    } else if (source.type === 'heavyTank' || source.type === 'mediumTank' || source.type === 'missileTurret') {
+        SoundManager.play('shoot_heavy');
+    } else {
+        SoundManager.play('shoot_light');
+    }
+
     // Check if path is blocked by hills
     const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
 
@@ -2936,6 +3130,7 @@ function initializeEventHandlers() {
                 // Create building with construction status
                 createBuilding(game.placingBuilding, 0, tx, ty, true);
                 game.players[0].oil -= type.cost;
+                SoundManager.play('ui_build');
                 // Only reset after successful placement
                 game.placingBuilding = null;
                 game.placingBuildingFrom = null;
@@ -2965,9 +3160,11 @@ function initializeEventHandlers() {
             if (clickedUnit) {
                 // Directly select unit on mousedown for immediate feedback
                 game.selection = [clickedUnit];
+                SoundManager.play('unit_select');
             } else if (clickedBuilding) {
                 // Select this building for building from
                 game.selection = [clickedBuilding];
+                SoundManager.play('unit_select');
             } else {
                 // Start selection box
                 game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
@@ -3504,6 +3701,9 @@ function goToSettings() {
 }
 
 function startGame() {
+    // Resume audio context on user interaction (required by browsers)
+    SoundManager.resume();
+
     const timeLimitEl = document.getElementById('timeLimitSelect');
     const difficultyEl = document.getElementById('difficultySelect');
     const mapSizeEl = document.getElementById('mapSizeSelect');
