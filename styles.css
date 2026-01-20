@@ -172,6 +172,29 @@ body {
     color: #aaa;
 }
 
+/* SVG Icons in Build Buttons */
+.build-btn div {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.build-btn div svg {
+    width: 100%;
+    height: 100%;
+    fill: #4488ff;
+}
+
+.build-btn:hover div svg {
+    fill: #66aaff;
+}
+
+.build-btn:disabled div svg {
+    fill: #666;
+}
+
 #footer {
     padding: 6px 12px;
     font-size: 10px;
