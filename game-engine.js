@@ -310,6 +310,7 @@ const game = {
     buildings: [],
     projectiles: [],
     particles: [],
+    damageNumbers: [],
     map: [],
     fogOfWar: [],
     group1: [], group2: [], group3: [], group4: [], group5: []
@@ -554,6 +555,9 @@ function render() {
     for (const particle of game.particles) {
         drawParticle(particle);
     }
+
+    // Draw floating damage numbers
+    drawDamageNumbers();
 
     // Draw selection box
     if (game.selectionBox) {
@@ -1372,82 +1376,226 @@ function drawProjectile(proj) {
     const screen = worldToScreen(proj.x, proj.y);
 
     // Determine colors based on player
-    let projectileColor = '#ffff00';    // Default yellow
-    let trailColor = '#ff8800';         // Default orange
+    let projectileColor, trailColor, glowColor;
 
     if (proj.playerId === 0) {
-        // Player projectiles - Blue
-        projectileColor = '#4488ff';
-        trailColor = '#2255ff';
-    } else if (proj.playerId === 1) {
-        // Enemy projectiles - Red
-        projectileColor = '#ff4444';
-        trailColor = '#ff2222';
+        // Player projectiles - Blue theme
+        projectileColor = '#66ccff';
+        trailColor = '#4488ff';
+        glowColor = '#2266ff';
+    } else {
+        // Enemy projectiles - Red/Orange theme
+        projectileColor = '#ffaa44';
+        trailColor = '#ff6622';
+        glowColor = '#ff4400';
     }
 
-    // Check if this is an infantry projectile (small point) or artillery (arc)
+    // Check projectile type
     const isInfantry = proj.sourceType === 'infantry' || proj.sourceType === 'scout' ||
                        proj.sourceType === 'rocket' || proj.sourceType === 'flak';
     const isArtillery = proj.sourceType === 'artillery';
 
     if (isInfantry) {
-        // Infantry projectiles are small points
-        ctx.fillStyle = projectileColor;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 1, 0, Math.PI * 2);
-        ctx.fill();
-    } else if (isArtillery) {
-        // Artillery projectiles show arc trajectory
-        const progress = 1 - (proj.life / 100);
-        const arcHeight = 20; // Peak height of arc
-        const arcY = -Math.sin(progress * Math.PI) * arcHeight;
+        // Infantry projectiles - small tracer rounds with glow
+        const trailLength = 8;
 
-        // Draw arc trail
-        ctx.strokeStyle = trailColor;
+        // Draw glowing trail
+        const gradient = ctx.createLinearGradient(
+            screen.x, screen.y,
+            screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength
+        );
+        gradient.addColorStop(0, trailColor);
+        gradient.addColorStop(1, 'transparent');
+
+        ctx.strokeStyle = gradient;
         ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y + arcY);
-        ctx.lineTo(screen.x - proj.vx * 2, screen.y - proj.vy * 2 + arcY * 0.8);
+        ctx.moveTo(screen.x, screen.y);
+        ctx.lineTo(screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength);
         ctx.stroke();
 
-        // Draw projectile with glow for artillery
+        // Bright head
         ctx.fillStyle = projectileColor;
         ctx.shadowColor = projectileColor;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 4;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y + arcY, 2, 0, Math.PI * 2);
+        ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+
+    } else if (isArtillery) {
+        // Artillery projectiles - arcing shells with smoke trail
+        const progress = 1 - (proj.life / 100);
+        const arcHeight = 25;
+        const arcY = -Math.sin(progress * Math.PI) * arcHeight;
+
+        // Draw smoke trail segments
+        for (let i = 5; i >= 0; i--) {
+            const alpha = (5 - i) / 8;
+            const trailX = screen.x - proj.vx * i * 1.5;
+            const trailY = screen.y - proj.vy * i * 1.5 + arcY * (1 - i * 0.1);
+
+            ctx.globalAlpha = alpha * 0.6;
+            ctx.fillStyle = '#888888';
+            ctx.beginPath();
+            ctx.arc(trailX, trailY, 2 + i * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Draw projectile with intense glow
+        ctx.fillStyle = projectileColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y + arcY, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner bright core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y + arcY, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
     } else {
-        // Regular tank/building projectiles
-        ctx.strokeStyle = trailColor;
+        // Tank/Building projectiles - energy bolts with long glowing trails
+        const trailLength = 12;
+
+        // Outer glow trail
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 8;
+
+        const gradient = ctx.createLinearGradient(
+            screen.x, screen.y,
+            screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength
+        );
+        gradient.addColorStop(0, trailColor);
+        gradient.addColorStop(0.5, glowColor + '88');
+        gradient.addColorStop(1, 'transparent');
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y);
+        ctx.lineTo(screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength);
+        ctx.stroke();
+
+        // Inner bright trail
+        const innerGradient = ctx.createLinearGradient(
+            screen.x, screen.y,
+            screen.x - proj.vx * trailLength * 0.6, screen.y - proj.vy * trailLength * 0.6
+        );
+        innerGradient.addColorStop(0, projectileColor);
+        innerGradient.addColorStop(1, 'transparent');
+
+        ctx.strokeStyle = innerGradient;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(screen.x, screen.y);
-        ctx.lineTo(screen.x - proj.vx * 3, screen.y - proj.vy * 3);
+        ctx.lineTo(screen.x - proj.vx * trailLength * 0.6, screen.y - proj.vy * trailLength * 0.6);
         ctx.stroke();
 
+        // Projectile head with glow
         ctx.fillStyle = projectileColor;
+        ctx.shadowColor = projectileColor;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+        ctx.arc(screen.x, screen.y, 4, 0, Math.PI * 2);
         ctx.fill();
+
+        // White hot center
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
     }
 }
 
 function drawParticle(particle) {
     const screen = worldToScreen(particle.x, particle.y);
-    ctx.globalAlpha = Math.max(0, particle.life) * 0.8;
-    ctx.fillStyle = particle.color;
+    const screenY = screen.y - particle.z;
 
-    // Particle glow for explosion effects
-    if (particle.type === 'explosion') {
-        ctx.shadowColor = particle.color;
-        ctx.shadowBlur = 8;
+    switch (particle.type) {
+        case 'flash':
+            // White-hot flash with intense glow
+            ctx.globalAlpha = Math.min(1, particle.life * 2);
+            ctx.fillStyle = particle.color;
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(screen.x, screenY, particle.size * (1 + (1 - particle.life) * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+            break;
+
+        case 'explosion':
+            // Fire particles with glow
+            ctx.globalAlpha = Math.max(0, particle.life) * 0.9;
+            ctx.fillStyle = particle.color;
+            ctx.shadowColor = particle.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(screen.x, screenY, particle.size, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+
+        case 'spark':
+            // Bright, small sparks with trails
+            ctx.globalAlpha = Math.max(0, particle.life);
+            ctx.strokeStyle = particle.color;
+            ctx.shadowColor = particle.color;
+            ctx.shadowBlur = 6;
+            ctx.lineWidth = particle.size;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(screen.x, screenY);
+            ctx.lineTo(screen.x - particle.vx * 4, screenY - particle.vy * 4 + particle.vz * 2);
+            ctx.stroke();
+            break;
+
+        case 'smoke':
+            // Soft smoke puffs that expand
+            const smokeSize = particle.size * (1 + (1 - particle.life) * 0.8);
+            ctx.globalAlpha = Math.max(0, particle.life * 0.5);
+            ctx.fillStyle = particle.color;
+            ctx.beginPath();
+            ctx.arc(screen.x, screenY, smokeSize, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+
+        case 'debris':
+            // Small debris chunks
+            ctx.globalAlpha = Math.max(0, particle.life) * 0.8;
+            ctx.fillStyle = particle.color;
+            ctx.save();
+            ctx.translate(screen.x, screenY);
+            ctx.rotate(particle.life * 10); // Spin
+            ctx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size);
+            ctx.restore();
+            break;
+
+        case 'shockwave':
+            // Expanding ring
+            const ringSize = (1 - particle.life) * 30 + 5;
+            ctx.globalAlpha = particle.life * 0.6;
+            ctx.strokeStyle = '#ff8800';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(screen.x, screenY, ringSize, 0, Math.PI * 2);
+            ctx.stroke();
+            break;
+
+        default:
+            // Default particle rendering
+            ctx.globalAlpha = Math.max(0, particle.life) * 0.8;
+            ctx.fillStyle = particle.color;
+            ctx.beginPath();
+            ctx.arc(screen.x, screenY, particle.size, 0, Math.PI * 2);
+            ctx.fill();
     }
-
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y - particle.z, particle.size, 0, Math.PI * 2);
-    ctx.fill();
 
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
@@ -1523,6 +1671,7 @@ function update(dt) {
     updateBuildings(dt);
     updateProjectiles(dt);
     updateParticles(dt);
+    updateDamageNumbers(dt);
     updateAI();
 
     // Assign AI harvesters to oil locations
@@ -2171,6 +2320,10 @@ function updateProjectiles(dt) {
                     proj.target.hp -= finalDamage;
                     // Create impact effect on hit
                     createImpact(proj.x, proj.y);
+                    // Show damage number (critical if versus bonus was applied)
+                    const isCritical = proj.versus && proj.target.type &&
+                        UNIT_TYPES[proj.target.type]?.category === proj.versus;
+                    createDamageNumber(proj.x, proj.y, finalDamage, isCritical);
                 }
             } else if (!proj.willHit && distFromStart >= proj.maxRange) {
                 // Miss: projectile stopped at max range, just particle animation stops
@@ -3167,42 +3320,108 @@ function checkLineOfSight(x1, y1, x2, y2) {
 }
 
 function createExplosion(x, y, big = false) {
-    // Create multiple rings of particles for impressive effect
-    const count = big ? 35 : 20;
-    const colors = ['#ff4400', '#ff6600', '#ffaa00', '#ffdd00', '#ff2200', '#fff000'];
+    // Multi-layered explosion with fire, sparks, smoke, and debris
 
-    // Main explosion particles
-    for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
-        const speed = Math.random() * 0.5 + 0.3;
-
+    // Layer 1: Central flash (white-hot core)
+    const flashCount = big ? 8 : 5;
+    for (let i = 0; i < flashCount; i++) {
+        const angle = (Math.PI * 2 * i) / flashCount;
+        const speed = Math.random() * 0.2 + 0.1;
         game.particles.push({
             x, y, z: 0,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            vz: Math.random() * 0.7 + 0.3,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            size: Math.random() * 6 + 3,
+            vz: Math.random() * 0.4 + 0.2,
+            color: '#ffffff',
+            size: big ? 10 : 6,
+            life: 0.4,
+            type: 'flash'
+        });
+    }
+
+    // Layer 2: Fire ring (orange/yellow)
+    const fireColors = ['#ff4400', '#ff6600', '#ffaa00', '#ffcc00', '#ff8800'];
+    const fireCount = big ? 45 : 25;
+    for (let i = 0; i < fireCount; i++) {
+        const angle = (Math.PI * 2 * i) / fireCount + (Math.random() - 0.5) * 0.6;
+        const speed = Math.random() * 0.6 + 0.4;
+        game.particles.push({
+            x, y, z: 0,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            vz: Math.random() * 0.8 + 0.4,
+            color: fireColors[Math.floor(Math.random() * fireColors.length)],
+            size: Math.random() * 7 + 4,
             life: 1,
             type: 'explosion'
         });
     }
 
-    // Secondary smoke particles (slower, larger)
+    // Layer 3: Sparks (fast, small, bright)
+    const sparkColors = ['#ffff00', '#ffdd00', '#ffffff', '#ffaa00'];
+    const sparkCount = big ? 30 : 15;
+    for (let i = 0; i < sparkCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 1.2 + 0.8;
+        game.particles.push({
+            x, y, z: 0,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            vz: Math.random() * 1.2 + 0.5,
+            color: sparkColors[Math.floor(Math.random() * sparkColors.length)],
+            size: Math.random() * 2 + 1,
+            life: 0.8,
+            type: 'spark'
+        });
+    }
+
+    // Layer 4: Smoke (slow, large, gray-black)
+    const smokeColors = ['#444444', '#555555', '#666666', '#777777', '#333333'];
+    const smokeCount = big ? 25 : 12;
+    for (let i = 0; i < smokeCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 0.15 + 0.05;
+        game.particles.push({
+            x: x + (Math.random() - 0.5) * 2,
+            y: y + (Math.random() - 0.5) * 2,
+            z: 0,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            vz: Math.random() * 0.25 + 0.1,
+            color: smokeColors[Math.floor(Math.random() * smokeColors.length)],
+            size: Math.random() * 10 + 6,
+            life: big ? 1.5 : 1,
+            type: 'smoke'
+        });
+    }
+
+    // Layer 5: Debris (only for big explosions)
     if (big) {
-        for (let i = 0; i < 15; i++) {
+        const debrisColors = ['#553322', '#442211', '#332211', '#664433'];
+        for (let i = 0; i < 12; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 0.2 + 0.1;
+            const speed = Math.random() * 0.8 + 0.4;
             game.particles.push({
                 x, y, z: 0,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                vz: Math.random() * 0.3 + 0.15,
-                color: '#999999',
-                size: Math.random() * 8 + 4,
-                life: 0.6
+                vz: Math.random() * 1.0 + 0.6,
+                color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
+                size: Math.random() * 3 + 2,
+                life: 1.2,
+                type: 'debris'
             });
         }
+
+        // Shockwave ring (visual effect)
+        game.particles.push({
+            x, y, z: 0,
+            vx: 0, vy: 0, vz: 0,
+            color: '#ff880044',
+            size: 5,
+            life: 0.5,
+            type: 'shockwave'
+        });
     }
 }
 
@@ -3221,6 +3440,76 @@ function createImpact(x, y) {
             life: 0.7
         });
     }
+}
+
+function createDamageNumber(x, y, damage, isCritical = false) {
+    // Create floating damage number
+    game.damageNumbers.push({
+        x, y,
+        damage: Math.round(damage),
+        life: 1.0,
+        offsetY: 0,
+        isCritical,
+        // Random horizontal drift for visual variety
+        driftX: (Math.random() - 0.5) * 0.3
+    });
+}
+
+function updateDamageNumbers(dt) {
+    for (let i = game.damageNumbers.length - 1; i >= 0; i--) {
+        const dmg = game.damageNumbers[i];
+        // Float upward
+        dmg.offsetY += 0.8;
+        // Horizontal drift
+        dmg.x += dmg.driftX;
+        // Fade out
+        dmg.life -= 0.025;
+
+        if (dmg.life <= 0) {
+            game.damageNumbers.splice(i, 1);
+        }
+    }
+}
+
+function drawDamageNumbers() {
+    for (const dmg of game.damageNumbers) {
+        const screen = worldToScreen(dmg.x, dmg.y);
+        const y = screen.y - dmg.offsetY;
+
+        // Calculate alpha (fade out at end)
+        const alpha = Math.min(1, dmg.life * 2);
+        ctx.globalAlpha = alpha;
+
+        // Set up text style
+        const fontSize = dmg.isCritical ? 16 : 12;
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Color based on damage type
+        let color = '#ff4444';  // Normal damage - red
+        if (dmg.isCritical) {
+            color = '#ffff00';  // Critical - yellow
+        }
+
+        // Draw outline for visibility
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(`-${dmg.damage}`, screen.x, y);
+
+        // Draw text
+        ctx.fillStyle = color;
+        ctx.fillText(`-${dmg.damage}`, screen.x, y);
+
+        // Add glow for critical hits
+        if (dmg.isCritical) {
+            ctx.shadowColor = '#ffff00';
+            ctx.shadowBlur = 8;
+            ctx.fillText(`-${dmg.damage}`, screen.x, y);
+            ctx.shadowBlur = 0;
+        }
+    }
+    ctx.globalAlpha = 1;
 }
 
 function findBuildPosition(nearX, nearY, playerId) {
