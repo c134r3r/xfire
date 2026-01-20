@@ -455,12 +455,12 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
         ctx.stroke();
     }
 
-    // Draw building icon/name in center
+    // Draw building name in center (SVG icons can't be drawn with fillText)
     ctx.fillStyle = color;
-    ctx.font = 'bold 12px Arial';
+    ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(type.icon, screen.x, screen.y - size/2);
+    ctx.fillText(type.name, screen.x, screen.y - size/2);
 
     // Draw validity text
     if (!isValid) {
@@ -2940,8 +2940,17 @@ function initializeEventHandlers() {
             game.placingBuilding = null;
             game.placingBuildingFrom = null;
         } else {
-            // Check if clicking on own building to build from it
-            // Reuse x, y from above (no duplicate calculation needed)
+            // Check if clicking on own unit or building
+            // First check units (they should have priority since they're selectable for commands)
+            const clickedUnit = game.units.find(u => {
+                if (u.playerId !== 0) return false;
+                const screen = worldToScreen(u.x, u.y);
+                const dx = screen.x - x;
+                const dy = screen.y - y;
+                return Math.sqrt(dx * dx + dy * dy) < 25;
+            });
+
+            // Then check buildings
             const clickedBuilding = game.buildings.find(b => {
                 if (b.playerId !== 0) return false;
                 const screen = worldToScreen(b.x, b.y);
@@ -2950,7 +2959,10 @@ function initializeEventHandlers() {
                 return Math.sqrt(dx * dx + dy * dy) < 25;
             });
 
-            if (clickedBuilding) {
+            if (clickedUnit) {
+                // Directly select unit on mousedown for immediate feedback
+                game.selection = [clickedUnit];
+            } else if (clickedBuilding) {
                 // Select this building for building from
                 game.selection = [clickedBuilding];
             } else {
@@ -3109,6 +3121,14 @@ canvas.addEventListener('mousemove', (e) => {
     updateCursorEmoji();
 });
 
+// SVG Cursor definitions (proper vector cursors instead of emoji-based)
+const CURSOR_SVG = {
+    // Harvest cursor - oil drop icon
+    harvest: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="%23fa0" stroke-width="2"/><path d="M16 6c-4 6-8 10-8 14a8 8 0 0 0 16 0c0-4-4-8-8-14z" fill="%23fa0"/><circle cx="13" cy="18" r="2" fill="%23fff" opacity="0.6"/></svg>')}`,
+    // Attack cursor - crosshair with red accent
+    attack: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="10" fill="none" stroke="%23f44" stroke-width="2"/><circle cx="16" cy="16" r="3" fill="%23f44"/><line x1="16" y1="2" x2="16" y2="8" stroke="%23f44" stroke-width="2"/><line x1="16" y1="24" x2="16" y2="30" stroke="%23f44" stroke-width="2"/><line x1="2" y1="16" x2="8" y2="16" stroke="%23f44" stroke-width="2"/><line x1="24" y1="16" x2="30" y2="16" stroke="%23f44" stroke-width="2"/></svg>')}`
+};
+
 function updateCursorEmoji() {
     const tileX = Math.floor(game.mouse.worldX);
     const tileY = Math.floor(game.mouse.worldY);
@@ -3122,7 +3142,7 @@ function updateCursorEmoji() {
             const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
                           game.map[tileY]?.[tileX]?.oil;
             if (hasOil) {
-                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCXpYA8L3RleHQ+PC9zdmc+") 16 16, auto';
+                newCursor = `url("${CURSOR_SVG.harvest}") 16 16, auto`;
             }
         } else if (sel.type && UNIT_TYPES[sel.type]) {
             // Check if any combat unit is selected and mouse is over enemy
@@ -3141,7 +3161,7 @@ function updateCursorEmoji() {
             });
 
             if (isEnemy) {
-                newCursor = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHRleHQgeD0iNSIgeT0iMjUiIGZvbnQtc2l6ZT0iMjQiPvCfk7g8L3RleHQ+PC9zdmc+") 16 16, auto';
+                newCursor = `url("${CURSOR_SVG.attack}") 16 16, auto`;
             }
         }
     }
@@ -3191,14 +3211,33 @@ canvas.addEventListener('mouseup', (e) => {
         }
 
         // Box select or click select
+        // Use the center of the selection box for click detection (more accurate than current mouse position)
+        const clickX = (box.x1 + box.x2) / 2;
+        const clickY = (box.y1 + box.y2) / 2;
+
         if (maxX - minX < 5 && maxY - minY < 5) {
             // Click select (single unit/building)
-            const clicked = [...game.units, ...game.buildings].find(entity => {
-                const screen = worldToScreen(entity.x, entity.y);
-                const dx = screen.x - game.mouse.x;
-                const dy = screen.y - game.mouse.y;
-                return Math.sqrt(dx * dx + dy * dy) < 20;
-            });
+            // Sort by distance to find closest entity, prioritizing units over buildings
+            const entitiesWithDistance = [...game.units, ...game.buildings]
+                .filter(entity => entity.playerId === 0)
+                .map(entity => {
+                    const screen = worldToScreen(entity.x, entity.y);
+                    const dx = screen.x - clickX;
+                    const dy = screen.y - clickY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const isUnit = UNIT_TYPES[entity.type] !== undefined;
+                    return { entity, dist, isUnit };
+                })
+                .filter(({ dist }) => dist < 30) // Increased click radius for better UX
+                .sort((a, b) => {
+                    // Prioritize units over buildings when close
+                    if (a.isUnit !== b.isUnit && Math.abs(a.dist - b.dist) < 15) {
+                        return a.isUnit ? -1 : 1;
+                    }
+                    return a.dist - b.dist;
+                });
+
+            const clicked = entitiesWithDistance.length > 0 ? entitiesWithDistance[0].entity : null;
 
             if (clicked && clicked.playerId === 0) {
                 if (isMultiSelect && game.selection.includes(clicked)) {

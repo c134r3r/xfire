@@ -7,11 +7,25 @@ const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
 const MAP_SIZE = 64;
 
+// SVG Icon Helper - creates inline SVG data URLs for crisp icons
+const SVG_ICONS = {
+    // Units
+    infantry: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-1 6v2H9v2h2v6h2v-6h2v-2h-2v-2h-2z"/><path d="M16 12l2-2v4l-2-2zM8 12l-2-2v4l2-2z"/></svg>`,
+    lightTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="12" width="16" height="6" rx="1"/><rect x="6" y="10" width="8" height="4" rx="1"/><rect x="12" y="11" width="8" height="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></svg>`,
+    mediumTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="11" width="18" height="7" rx="1"/><rect x="6" y="8" width="10" height="5" rx="2"/><rect x="14" y="9" width="8" height="2"/><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/></svg>`,
+    heavyTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="10" width="20" height="8" rx="1"/><rect x="5" y="6" width="12" height="6" rx="2"/><rect x="15" y="7" width="9" height="3" rx="1"/><circle cx="4" cy="18" r="3"/><circle cx="12" cy="18" r="3"/><circle cx="20" cy="18" r="3"/><rect x="7" y="8" width="4" height="2" fill="#333"/></svg>`,
+    harvester: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="8" width="16" height="10" rx="2"/><rect x="6" y="5" width="12" height="5" rx="1" fill="#fa0"/><path d="M3 14h2v4H3zM19 14h2v4h-2z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><rect x="8" y="10" width="8" height="3" fill="#333" opacity="0.3"/></svg>`,
+    artillery: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="10" cy="16" rx="6" ry="4"/><rect x="8" y="6" width="4" height="10" transform="rotate(-30 10 11)"/><circle cx="10" cy="16" r="3"/><circle cx="6" cy="18" r="2"/><circle cx="14" cy="18" r="2"/></svg>`,
+    flak: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="13" width="14" height="6" rx="1"/><circle cx="12" cy="11" r="4"/><rect x="10" y="3" width="1.5" height="8"/><rect x="12.5" y="3" width="1.5" height="8"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>`,
+    scout: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="14" rx="8" ry="4"/><path d="M12 10c-3 0-6 1-6 4h12c0-3-3-4-6-4z"/><circle cx="12" cy="8" r="3"/><path d="M4 14l-2-4h2zM20 14l2-4h-2z" opacity="0.6"/></svg>`,
+    rocket: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="6" r="2.5"/><rect x="10" y="8" width="4" height="8"/><rect x="14" y="10" width="6" height="3" rx="1"/><path d="M20 10l2-1v4l-2-1z" fill="#f44"/><rect x="9" y="16" width="2" height="4"/><rect x="13" y="16" width="2" height="4"/></svg>`
+};
+
 // Unit Types Definition
 const UNIT_TYPES = {
     infantry: {
         name: 'Infantry',
-        icon: '&#9823;',
+        icon: SVG_ICONS.infantry,
         cost: 80,
         hp: 40,
         speed: 0.15,
@@ -24,7 +38,7 @@ const UNIT_TYPES = {
     },
     lightTank: {
         name: 'Light Tank',
-        icon: '🏎️',
+        icon: SVG_ICONS.lightTank,
         cost: 250,
         hp: 150,
         speed: 0.15,
@@ -37,7 +51,7 @@ const UNIT_TYPES = {
     },
     mediumTank: {
         name: 'Battle Tank',
-        icon: '🛻',
+        icon: SVG_ICONS.mediumTank,
         cost: 350,
         hp: 280,
         speed: 0.15,
@@ -50,7 +64,7 @@ const UNIT_TYPES = {
     },
     heavyTank: {
         name: 'Heavy Tank',
-        icon: '⛽',
+        icon: SVG_ICONS.heavyTank,
         cost: 500,
         hp: 450,
         speed: 0.15,
@@ -63,7 +77,7 @@ const UNIT_TYPES = {
     },
     harvester: {
         name: 'Harvester',
-        icon: '&#9819;',
+        icon: SVG_ICONS.harvester,
         cost: 450,
         hp: 150,
         speed: 0.15,
@@ -77,7 +91,7 @@ const UNIT_TYPES = {
     },
     artillery: {
         name: 'Artillery',
-        icon: '&#9814;',
+        icon: SVG_ICONS.artillery,
         cost: 500,
         hp: 120,
         speed: 0.15,
@@ -90,7 +104,7 @@ const UNIT_TYPES = {
     },
     flak: {
         name: 'Flak Cannon',
-        icon: '⚔️',
+        icon: SVG_ICONS.flak,
         cost: 300,
         hp: 100,
         speed: 0.15,
@@ -103,7 +117,7 @@ const UNIT_TYPES = {
     },
     scout: {
         name: 'Scout',
-        icon: '&#9816;',
+        icon: SVG_ICONS.scout,
         cost: 120,
         hp: 25,
         speed: 0.15,
@@ -116,7 +130,7 @@ const UNIT_TYPES = {
     },
     rocket: {
         name: 'Rocket Soldier',
-        icon: '&#9917;',
+        icon: SVG_ICONS.rocket,
         cost: 200,
         hp: 70,
         speed: 0.15,
@@ -129,11 +143,26 @@ const UNIT_TYPES = {
     }
 };
 
+// SVG Building Icons
+const SVG_BUILDING_ICONS = {
+    hq: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><path d="M12 2l9 8H3l9-8z"/><rect x="6" y="14" width="3" height="4" fill="#88ccff"/><rect x="15" y="14" width="3" height="4" fill="#88ccff"/><rect x="10" y="16" width="4" height="6"/><circle cx="18" cy="6" r="2" fill="#ff0"/><line x1="18" y1="2" x2="18" y2="4" stroke="currentColor" stroke-width="1"/></svg>`,
+    barracks: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="14" rx="1"/><path d="M2 8l10-6 10 6"/><rect x="5" y="12" width="2" height="3"/><rect x="9" y="12" width="2" height="3"/><rect x="13" y="12" width="2" height="3"/><rect x="17" y="12" width="2" height="3"/><rect x="8" y="17" width="8" height="5"/></svg>`,
+    factory: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="10" width="20" height="12" rx="1"/><rect x="4" y="4" width="4" height="8"/><rect x="10" y="6" width="4" height="6"/><rect x="16" y="2" width="4" height="10"/><circle cx="18" cy="4" r="1.5" fill="#888"/><rect x="6" y="14" width="5" height="4"/><rect x="13" y="14" width="5" height="4"/></svg>`,
+    derrick: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l-6 10h12L12 2z"/><rect x="10" y="12" width="4" height="10"/><ellipse cx="12" cy="22" rx="6" ry="2"/><circle cx="12" cy="8" r="2" fill="#fa0"/><line x1="8" y1="6" x2="16" y2="6" stroke="currentColor" stroke-width="1"/></svg>`,
+    turret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="18" rx="8" ry="4"/><rect x="8" y="12" width="8" height="8" rx="2"/><circle cx="12" cy="10" r="5"/><rect x="2" y="9" width="10" height="3" rx="1"/><circle cx="12" cy="10" r="2"/></svg>`,
+    rifleTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="18" rx="7" ry="3"/><rect x="9" y="13" width="6" height="6" rx="1"/><circle cx="12" cy="11" r="4"/><rect x="3" y="9.5" width="9" height="1.5"/><rect x="3" y="11.5" width="9" height="1.5"/><circle cx="12" cy="11" r="1.5" fill="#f44"/></svg>`,
+    missileTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="19" rx="8" ry="3"/><rect x="7" y="12" width="10" height="8" rx="2"/><circle cx="12" cy="10" r="5"/><rect x="4" y="6" width="8" height="3" rx="1" transform="rotate(-20 8 7.5)"/><rect x="12" y="6" width="8" height="3" rx="1" transform="rotate(20 16 7.5)"/><circle cx="4" cy="5" r="1.5" fill="#f60"/><circle cx="20" cy="5" r="1.5" fill="#f60"/></svg>`,
+    researchLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="8" width="14" height="4"/><circle cx="8" cy="6" r="2" fill="#0f0"/><circle cx="12" cy="5" r="2" fill="#f0f"/><circle cx="16" cy="6" r="2" fill="#ff0"/><rect x="7" y="14" width="4" height="4" fill="#88ccff"/><rect x="13" y="14" width="4" height="4" fill="#88ccff"/></svg>`,
+    powerplant: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="10" width="16" height="12" rx="1"/><rect x="6" y="6" width="5" height="6"/><rect x="13" y="4" width="5" height="8"/><path d="M11 14l2-4 2 4-2 4z" fill="#ff0"/><rect x="8" y="16" width="8" height="2" fill="#0f0"/></svg>`,
+    academy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="12" width="16" height="10" rx="1"/><path d="M12 4l10 8H2l10-8z"/><rect x="6" y="8" width="2" height="6"/><rect x="16" y="8" width="2" height="6"/><rect x="9" y="15" width="6" height="7"/><circle cx="12" cy="10" r="2" fill="#88f"/></svg>`,
+    techLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="6" width="14" height="6" rx="1"/><circle cx="8" cy="9" r="2"/><circle cx="16" cy="9" r="2"/><path d="M8 9h8" stroke="#0ff" stroke-width="1"/><rect x="6" y="14" width="5" height="4"/><rect x="13" y="14" width="5" height="4"/><circle cx="12" cy="16" r="3" fill="#0ff" opacity="0.5"/></svg>`
+};
+
 // Building Types Definition
 const BUILDING_TYPES = {
     hq: {
         name: 'HQ',
-        icon: '&#127984;',
+        icon: SVG_BUILDING_ICONS.hq,
         cost: 0,
         hp: 1000,
         size: 3,
@@ -142,7 +171,7 @@ const BUILDING_TYPES = {
     },
     barracks: {
         name: 'Barracks',
-        icon: '&#127976;',
+        icon: SVG_BUILDING_ICONS.barracks,
         cost: 400,
         hp: 400,
         size: 2,
@@ -152,7 +181,7 @@ const BUILDING_TYPES = {
     },
     factory: {
         name: 'Factory',
-        icon: '&#127981;',
+        icon: SVG_BUILDING_ICONS.factory,
         cost: 600,
         hp: 600,
         size: 3,
@@ -162,7 +191,7 @@ const BUILDING_TYPES = {
     },
     derrick: {
         name: 'Derrick',
-        icon: '&#9981;',
+        icon: SVG_BUILDING_ICONS.derrick,
         cost: 200,
         hp: 200,
         size: 1,
@@ -173,7 +202,7 @@ const BUILDING_TYPES = {
     },
     turret: {
         name: 'Turret',
-        icon: '&#9876;',
+        icon: SVG_BUILDING_ICONS.turret,
         cost: 350,
         hp: 300,
         size: 1,
@@ -186,7 +215,7 @@ const BUILDING_TYPES = {
     },
     rifleTurret: {
         name: 'Rifle Turret',
-        icon: '🎯',
+        icon: SVG_BUILDING_ICONS.rifleTurret,
         cost: 300,
         hp: 250,
         size: 1,
@@ -200,7 +229,7 @@ const BUILDING_TYPES = {
     },
     missileTurret: {
         name: 'Missile Turret',
-        icon: '🚀',
+        icon: SVG_BUILDING_ICONS.missileTurret,
         cost: 450,
         hp: 200,
         size: 1,
@@ -214,7 +243,7 @@ const BUILDING_TYPES = {
     },
     researchLab: {
         name: 'Research Lab',
-        icon: '🔬',
+        icon: SVG_BUILDING_ICONS.researchLab,
         cost: 500,
         hp: 350,
         size: 2,
@@ -225,7 +254,7 @@ const BUILDING_TYPES = {
     },
     powerplant: {
         name: 'Power Plant',
-        icon: '&#9889;',
+        icon: SVG_BUILDING_ICONS.powerplant,
         cost: 300,
         hp: 250,
         size: 2,
@@ -235,7 +264,7 @@ const BUILDING_TYPES = {
     },
     academy: {
         name: 'Academy',
-        icon: '&#127891;',
+        icon: SVG_BUILDING_ICONS.academy,
         cost: 450,
         hp: 350,
         size: 2,
@@ -245,7 +274,7 @@ const BUILDING_TYPES = {
     },
     techLab: {
         name: 'Tech Lab',
-        icon: '&#128300;',
+        icon: SVG_BUILDING_ICONS.techLab,
         cost: 550,
         hp: 400,
         size: 2,
@@ -255,20 +284,23 @@ const BUILDING_TYPES = {
     }
 };
 
-// Enemy Building Icons - Red-toned alternatives for visual distinction
-const ENEMY_BUILDING_ICONS = {
-    hq: '🏰',
-    barracks: '🔴',
-    factory: '🏗️',
-    derrick: '🛢️',
-    turret: '🔴',
-    rifleTurret: '🔴',
-    missileTurret: '🎯',
-    researchLab: '💣',
-    powerplant: '🔥',
-    academy: '📚',
-    techLab: '⚙️'
+// Enemy Building SVG Icons - Red-toned versions
+const SVG_ENEMY_BUILDING_ICONS = {
+    hq: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><path d="M12 2l9 8H3l9-8z"/><rect x="6" y="14" width="3" height="4" fill="#f88"/><rect x="15" y="14" width="3" height="4" fill="#f88"/><rect x="10" y="16" width="4" height="6"/></svg>`,
+    barracks: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="2" y="8" width="20" height="14" rx="1"/><path d="M2 8l10-6 10 6"/><rect x="8" y="17" width="8" height="5"/></svg>`,
+    factory: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="2" y="10" width="20" height="12" rx="1"/><rect x="4" y="4" width="4" height="8"/><rect x="16" y="2" width="4" height="10"/></svg>`,
+    derrick: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><path d="M12 2l-6 10h12L12 2z"/><rect x="10" y="12" width="4" height="10"/><ellipse cx="12" cy="22" rx="6" ry="2"/></svg>`,
+    turret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="18" rx="8" ry="4"/><circle cx="12" cy="10" r="5"/><rect x="2" y="9" width="10" height="3" rx="1"/></svg>`,
+    rifleTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="18" rx="7" ry="3"/><circle cx="12" cy="11" r="4"/><rect x="3" y="10" width="9" height="2"/></svg>`,
+    missileTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="19" rx="8" ry="3"/><circle cx="12" cy="10" r="5"/><circle cx="6" cy="5" r="2" fill="#f60"/><circle cx="18" cy="5" r="2" fill="#f60"/></svg>`,
+    researchLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="8" width="14" height="4"/></svg>`,
+    powerplant: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="4" y="10" width="16" height="12" rx="1"/><rect x="6" y="6" width="5" height="6"/><rect x="13" y="4" width="5" height="8"/><path d="M11 14l2-4 2 4-2 4z" fill="#f80"/></svg>`,
+    academy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="4" y="12" width="16" height="10" rx="1"/><path d="M12 4l10 8H2l10-8z"/></svg>`,
+    techLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="6" width="14" height="6" rx="1"/></svg>`
 };
+
+// Legacy emoji icons (kept for backward compatibility if needed)
+const ENEMY_BUILDING_ICONS = SVG_ENEMY_BUILDING_ICONS;
 
 // Function to get building icon based on player
 function getBuildingIcon(buildingType, isEnemy = false) {
