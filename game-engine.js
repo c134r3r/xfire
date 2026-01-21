@@ -2965,9 +2965,11 @@ function updateBuildMenu() {
     // Check what's selected
     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
 
+    // Clear menu
+    menu.innerHTML = '';
+
     if (selectedBuilding && selectedBuilding.playerId === 0) {
         const type = BUILDING_TYPES[selectedBuilding.type];
-        menu.innerHTML = '';
 
         // Show research options for Research Lab
         if (selectedBuilding.type === 'researchLab' && type.researches) {
@@ -2989,21 +2991,23 @@ function updateBuildMenu() {
                 if (isResearched) {
                     btn.innerHTML = `${techDef.icon} <span>✓</span>`;
                     btn.title = `${techDef.name} - Already researched`;
-                    btn.disabled = true;
                     btn.style.opacity = '0.5';
                 } else {
                     btn.innerHTML = `${techDef.icon}<span>${techDef.cost}</span>`;
                     btn.title = `${techDef.name} - ${techDef.cost} oil to research`;
-                    btn.disabled = player.oil < techDef.cost;
-                    btn.onclick = () => {
-                        if (player.oil >= techDef.cost && !player.tech[techType]) {
-                            SoundManager.play('ui_click');
-                            player.oil -= techDef.cost;
-                            researchTechnology(techType, 0);
-                            updateBuildMenu();
-                        }
-                    };
+                    if (player.oil < techDef.cost) {
+                        btn.style.opacity = '0.5';
+                    }
                 }
+
+                btn.onclick = () => {
+                    if (player.oil >= techDef.cost && !player.tech[techType]) {
+                        SoundManager.play('ui_click');
+                        player.oil -= techDef.cost;
+                        researchTechnology(techType, 0);
+                        updateBuildMenu();
+                    }
+                };
                 menu.appendChild(btn);
             }
         }
@@ -3038,11 +3042,15 @@ function updateBuildMenu() {
                 const canBuild = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
                 const requirementMet = unitType !== 'harvester' ||
                                       game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
+                const cannotBuild = !canBuild || !requirementMet;
 
                 btn.title = unitType === 'harvester' && !requirementMet
                     ? `${uType.name} - Requires Factory`
                     : `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
-                btn.disabled = !canBuild || !requirementMet;
+
+                if (cannotBuild) {
+                    btn.style.opacity = '0.5';
+                }
 
                 btn.onclick = () => {
                     if (canBuild && requirementMet) {
@@ -3055,25 +3063,7 @@ function updateBuildMenu() {
                 menu.appendChild(btn);
             }
         }
-        // Show turret/defensive building info
-        else if (type.range && type.damage) {
-            const infoDiv = document.createElement('div');
-            infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
-            let infoHTML = `<strong style="color: #fff;">${type.name}</strong><br><br>`;
-            infoHTML += `<span style="color: #f80;">Range:</span> ${type.range}<br>`;
-            infoHTML += `<span style="color: #f00;">Damage:</span> ${type.damage}<br>`;
-            infoHTML += `<span style="color: #0af;">Attack Speed:</span> ${type.attackSpeed}ms<br>`;
-            if (type.versus) {
-                const versusColor = type.versus === 'infantry' ? '#0f0' : '#ff0';
-                infoHTML += `<br><span style="color: ${versusColor};">+50% vs ${type.versus}</span>`;
-            }
-            if (type.powerUse) {
-                infoHTML += `<br><span style="color: #88f;">Power:</span> -${type.powerUse}`;
-            }
-            infoDiv.innerHTML = infoHTML;
-            menu.appendChild(infoDiv);
-        }
-        // Show other building info (powerplant, derrick, etc.)
+        // Show other building info
         else {
             const infoDiv = document.createElement('div');
             infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
@@ -3098,45 +3088,60 @@ function updateBuildMenu() {
             infoDiv.innerHTML = infoHTML;
             menu.appendChild(infoDiv);
         }
-    } else {
-        // Show building options (only available techs)
-        menu.innerHTML = '';
-        const buildable = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
 
-        for (let i = 0; i < buildable.length; i++) {
-            const bType = buildable[i];
-            const type = BUILDING_TYPES[bType];
-            if (!type) continue;
+        // Add separator
+        const separator = document.createElement('div');
+        separator.style.cssText = 'height: 1px; background: #555; margin: 8px 0;';
+        menu.appendChild(separator);
 
-            // Check if tech is available
-            const isTechAvailable = game.players[0].tech[bType] !== false;
-            const keyNum = i + 1; // 1-8
+        // Add header for build options
+        const buildInfo = document.createElement('div');
+        buildInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa;';
+        buildInfo.innerHTML = `<strong>Build from ${selectedBuilding.type}</strong>`;
+        menu.appendChild(buildInfo);
+    }
 
-            const btn = document.createElement('button');
-            btn.className = 'build-btn';
-            btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
-            btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
-            btn.disabled = player.oil < type.cost || !isTechAvailable;
-            btn.onclick = (e) => {
-                console.log(`[BuildMenu] Clicked on ${bType}, oil=${game.players[0].oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
-                e.stopPropagation(); // Prevent event bubbling
-                if (game.players[0].oil >= type.cost && isTechAvailable) {
-                    SoundManager.play('ui_click');
-                    game.placingBuilding = bType;
-                    console.log(`[BuildMenu] Set placingBuilding to ${bType}`);
-                    // If a building is selected, set it as source
-                    const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
-                    if (selectedBuilding && selectedBuilding.playerId === 0) {
-                        game.placingBuildingFrom = selectedBuilding;
-                    } else {
-                        game.placingBuildingFrom = null;
-                    }
-                } else {
-                    console.log(`[BuildMenu] Cannot build: oil=${game.players[0].oil} < cost=${type.cost} or tech not available`);
-                }
-            };
-            menu.appendChild(btn);
+    // Show building options (always available, whether a building is selected or not)
+    const buildable = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
+
+    for (let i = 0; i < buildable.length; i++) {
+        const bType = buildable[i];
+        const type = BUILDING_TYPES[bType];
+        if (!type) continue;
+
+        // Check if tech is available
+        const isTechAvailable = player.tech[bType] !== false;
+        const canAfford = player.oil >= type.cost;
+        const cannotBuild = !canAfford || !isTechAvailable;
+        const keyNum = i + 1; // 1-8
+
+        const btn = document.createElement('button');
+        btn.className = 'build-btn';
+        btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
+        btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
+
+        if (cannotBuild) {
+            btn.style.opacity = '0.5';
         }
+
+        btn.onclick = () => {
+            console.log(`[BuildMenu] Clicked on ${bType}, oil=${player.oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
+            if (player.oil >= type.cost && isTechAvailable) {
+                SoundManager.play('ui_click');
+                game.placingBuilding = bType;
+                console.log(`[BuildMenu] Set placingBuilding to ${bType}`);
+                // If a building is selected, set it as source
+                const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
+                if (selectedBuilding && selectedBuilding.playerId === 0) {
+                    game.placingBuildingFrom = selectedBuilding;
+                } else {
+                    game.placingBuildingFrom = null;
+                }
+            } else {
+                console.log(`[BuildMenu] Cannot build: oil=${player.oil} < cost=${type.cost} or tech not available`);
+            }
+        };
+        menu.appendChild(btn);
     }
 }
 
