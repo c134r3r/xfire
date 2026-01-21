@@ -2473,75 +2473,175 @@ function updateFogOfWar() {
 }
 
 function updateAI() {
-    if (game.tick % 120 !== 0) return; // Run every 2 seconds
+    // Run tactical updates more frequently (every 30 ticks = 0.5 seconds)
+    const isTacticalUpdate = game.tick % 30 === 0;
+    // Run strategic updates less frequently (every 120 ticks = 2 seconds)
+    const isStrategicUpdate = game.tick % 120 === 0;
+
+    if (!isTacticalUpdate && !isStrategicUpdate) return;
 
     const ai = game.players[1];
     const aiUnits = game.units.filter(u => u.playerId === 1);
     const aiBuildings = game.buildings.filter(b => b.playerId === 1);
     const playerUnits = game.units.filter(u => u.playerId === 0);
     const playerBuildings = game.buildings.filter(b => b.playerId === 0);
+    const difficulty = gameSettings.difficulty;
 
-    // Determine AI strategy based on game state
+    // === TACTICAL UPDATES (fast, reactive) ===
+    if (isTacticalUpdate) {
+        // Tactical retreat for damaged units
+        aiTacticalRetreat(aiUnits, aiBuildings, difficulty);
+
+        // Protect harvesters from attackers
+        aiProtectHarvesters(aiUnits, aiBuildings, playerUnits);
+
+        // Scout behavior
+        aiScoutBehavior(aiUnits, aiBuildings, playerBuildings, playerUnits);
+
+        // Threat assessment
+        updateThreatLevel(playerUnits, playerBuildings, aiBuildings);
+    }
+
+    // === STRATEGIC UPDATES (slower, planning) ===
+    if (!isStrategicUpdate) return;
+
+    // Determine AI strategy based on game state and threat
     const gameTime = game.tick / 60; // seconds
-    let aiMode = 'balanced';
+    let aiMode = determineAIMode(ai, aiUnits, aiBuildings, playerUnits, playerBuildings, gameTime);
 
-    if (gameTime < 120) {
-        // Early game: focus on building, not attacking
-        aiMode = 'balanced';
-    } else if (gameTime < 300) {
-        // Mid game: mixed strategy based on economy and units
-        if (ai.oil > 1500) {
-            aiMode = 'tech';
-        } else if (aiUnits.length > playerUnits.length * 1.3) {
-            aiMode = 'rusher'; // Only rush if clearly ahead
-        } else if (playerUnits.length > aiUnits.length * 1.5) {
-            aiMode = 'defender';
-        } else {
-            aiMode = 'balanced';
-        }
-    } else {
-        // Late game: have all strategies
-        if (ai.oil > 3000) {
-            aiMode = 'tech';
-        } else if (playerBuildings.length > 6) {
-            aiMode = 'aggressive';
-        } else if (playerUnits.length > aiUnits.length * 2) {
-            aiMode = 'defender';
-        } else {
-            aiMode = 'balanced';
+    // Execute building and production strategy
+    executeAIStrategy(ai, aiMode, aiUnits, aiBuildings, playerUnits, playerBuildings);
+
+    // Coordinate attack waves based on mode
+    const waveSize = getWaveSize(aiMode, difficulty);
+    if (shouldLaunchAttack(aiMode, aiUnits.length, difficulty)) {
+        aiCoordinateAttackWave(aiUnits, playerUnits, playerBuildings, waveSize, difficulty);
+    }
+
+    // Give AI oil based on difficulty setting
+    // FAIR PLAY: Reduced cheating, smarter play instead
+    const difficultyOilBonus = {
+        easy: 3,    // Reduced from 5 - AI should play fair
+        normal: 6,  // Reduced from 10
+        hard: 10    // Reduced from 18 - hard AI is smarter, not richer
+    };
+    ai.oil += difficultyOilBonus[difficulty] || 6;
+}
+
+// Determine AI strategic mode based on game state
+function determineAIMode(ai, aiUnits, aiBuildings, playerUnits, playerBuildings, gameTime) {
+    const difficulty = gameSettings.difficulty;
+
+    // Calculate relative strength
+    const aiStrength = calculateArmyStrength(aiUnits);
+    const playerStrength = calculateArmyStrength(playerUnits);
+    const strengthRatio = aiStrength / Math.max(playerStrength, 1);
+
+    // Check threat level
+    const underAttack = aiState.threatLevel > 50;
+
+    // Early game: economy focus
+    if (gameTime < 90) {
+        return underAttack ? 'defender' : 'balanced';
+    }
+
+    // Mid game: adapt to situation
+    if (gameTime < 240) {
+        if (underAttack && strengthRatio < 1.2) return 'defender';
+        if (ai.oil > 1500 && strengthRatio > 0.8) return 'tech';
+        if (strengthRatio > 1.5) return 'rusher';
+        if (strengthRatio < 0.6) return 'defender';
+        return 'balanced';
+    }
+
+    // Late game: more aggressive options
+    if (ai.oil > 2500) return 'tech';
+    if (strengthRatio > 1.3) return 'aggressive';
+    if (playerBuildings.length > 5 && strengthRatio > 1.0) return 'aggressive';
+    if (strengthRatio < 0.7) return 'defender';
+    return 'balanced';
+}
+
+// Calculate army strength score
+function calculateArmyStrength(units) {
+    let strength = 0;
+    for (const unit of units) {
+        if (unit.type === 'harvester') continue;
+        const type = UNIT_TYPES[unit.type];
+        if (!type) continue;
+
+        // Factor in HP, damage, and cost
+        const healthRatio = unit.hp / type.hp;
+        strength += (type.cost * 0.5 + type.damage * 10) * healthRatio;
+    }
+    return strength;
+}
+
+// Update threat level based on enemy proximity
+function updateThreatLevel(playerUnits, playerBuildings, aiBuildings) {
+    if (game.tick - aiState.lastThreatUpdate < 60) return; // Update every second
+    aiState.lastThreatUpdate = game.tick;
+
+    const aiHQ = aiBuildings.find(b => b.type === 'hq');
+    if (!aiHQ) {
+        aiState.threatLevel = 100;
+        return;
+    }
+
+    let threat = 0;
+    const dangerRadius = 25;
+
+    for (const enemy of playerUnits) {
+        const dist = getDistance(enemy, aiHQ);
+        if (dist < dangerRadius) {
+            const type = UNIT_TYPES[enemy.type];
+            const threatValue = type?.damage || 10;
+            threat += threatValue * (1 - dist / dangerRadius);
         }
     }
 
-    executeAIStrategy(ai, aiMode, aiUnits, aiBuildings, playerUnits, playerBuildings);
+    // Smooth threat level changes
+    aiState.threatLevel = aiState.threatLevel * 0.7 + threat * 0.3;
+}
 
-    // Give AI oil based on difficulty setting
-    const difficultyOilBonus = {
-        easy: 5,
-        normal: 10,
-        hard: 18
+// Get minimum wave size based on mode and difficulty
+function getWaveSize(mode, difficulty) {
+    const baseSizes = {
+        rusher: { easy: 5, normal: 4, hard: 3 },
+        defender: { easy: 8, normal: 6, hard: 5 },
+        tech: { easy: 10, normal: 8, hard: 6 },
+        balanced: { easy: 6, normal: 5, hard: 4 },
+        aggressive: { easy: 8, normal: 6, hard: 5 }
     };
-    ai.oil += difficultyOilBonus[gameSettings.difficulty] || 10;
+    return baseSizes[mode]?.[difficulty] || 5;
+}
+
+// Determine if AI should launch an attack
+function shouldLaunchAttack(mode, unitCount, difficulty) {
+    const thresholds = {
+        easy: { rusher: 8, tech: 12, balanced: 8, defender: 10, aggressive: 10 },
+        normal: { rusher: 6, tech: 10, balanced: 6, defender: 8, aggressive: 8 },
+        hard: { rusher: 4, tech: 8, balanced: 5, defender: 6, aggressive: 6 }
+    };
+    const threshold = thresholds[difficulty]?.[mode] || 6;
+    return unitCount >= threshold;
 }
 
 function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBuildings) {
     const aiHQ = aiBuildings.find(b => b.type === 'hq');
-    const aiBarracks = aiBuildings.filter(b => b.type === 'barracks');
-    const aiFactory = aiBuildings.filter(b => b.type === 'factory');
+    const aiBarracks = aiBuildings.filter(b => b.type === 'barracks' && !b.isUnderConstruction);
+    const aiFactory = aiBuildings.filter(b => b.type === 'factory' && !b.isUnderConstruction);
     const aiDerricks = aiBuildings.filter(b => b.type === 'derrick');
+    const difficulty = gameSettings.difficulty;
 
     if (!aiHQ) return;
 
-    // Difficulty-based attack thresholds (lower = more aggressive)
-    // These determine how many units the AI needs before attacking
-    const attackThresholds = {
-        easy: { rusher: 8, tech: 15, balanced: 10, defender: 12, aggressive: 14 },
-        normal: { rusher: 6, tech: 12, balanced: 8, defender: 10, aggressive: 12 },
-        hard: { rusher: 4, tech: 10, balanced: 6, defender: 8, aggressive: 10 }
-    };
-    const thresholds = attackThresholds[gameSettings.difficulty] || attackThresholds.normal;
+    // Analyze player army composition for counter-unit decisions
+    const playerComposition = analyzeArmyComposition(playerUnits);
 
-    // Universal: Build more derricks for economy
-    if (ai.oil >= 200 && aiDerricks.length < 5) {
+    // Universal: Build derricks for economy (smarter placement)
+    const maxDerricks = mode === 'tech' ? 6 : 4;
+    if (ai.oil >= 200 && aiDerricks.length < maxDerricks) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
             createBuilding('derrick', 1, pos.x, pos.y, true);
@@ -2551,7 +2651,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
 
     // Universal: Build research lab for tower tech
     const aiResearchLabs = aiBuildings.filter(b => b.type === 'researchLab');
-    if (ai.oil >= 500 && aiResearchLabs.length < 1) {
+    if (ai.oil >= 500 && aiResearchLabs.length < 1 && aiDerricks.length >= 2) {
         const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
         if (pos) {
             createBuilding('researchLab', 1, pos.x, pos.y, true);
@@ -2559,37 +2659,74 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
     }
 
-    // Universal: Research tower tech
+    // Universal: Research tower tech (prioritize based on player composition)
     if (aiResearchLabs.length > 0) {
-        if (ai.oil >= 300 && !ai.tech.rifleTurret) {
-            researchTechnology('rifleTurret', 1);
-            ai.oil -= 300;
-        } else if (ai.oil >= 450 && !ai.tech.missileTurret) {
-            researchTechnology('missileTurret', 1);
-            ai.oil -= 450;
+        // If player has lots of armor, research missile turret first
+        if (playerComposition.armorRatio > 0.5) {
+            if (ai.oil >= 450 && !ai.tech.missileTurret) {
+                researchTechnology('missileTurret', 1);
+                ai.oil -= 450;
+            } else if (ai.oil >= 300 && !ai.tech.rifleTurret) {
+                researchTechnology('rifleTurret', 1);
+                ai.oil -= 300;
+            }
+        } else {
+            // Default: rifle turret first (cheaper, good vs infantry)
+            if (ai.oil >= 300 && !ai.tech.rifleTurret) {
+                researchTechnology('rifleTurret', 1);
+                ai.oil -= 300;
+            } else if (ai.oil >= 450 && !ai.tech.missileTurret) {
+                researchTechnology('missileTurret', 1);
+                ai.oil -= 450;
+            }
         }
     }
 
-    // Universal: Build defensive towers
+    // Strategic defense placement
     const aiTurrets = aiBuildings.filter(b => b.type === 'turret' || b.type === 'rifleTurret' || b.type === 'missileTurret');
+
+    // Calculate direction to player base for defense placement
+    let defenseDirection = null;
+    if (playerBuildings.length > 0) {
+        const playerCenter = getGroupCenter(playerBuildings);
+        defenseDirection = Math.atan2(playerCenter.y - aiHQ.y, playerCenter.x - aiHQ.x);
+    }
+
     const buildDefense = () => {
-        if (ai.oil >= 300 && ai.tech.rifleTurret && Math.random() > 0.5) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+        // Choose turret type based on player composition
+        let turretType = 'turret';
+        let turretCost = 350;
+
+        if (playerComposition.armorRatio > 0.4 && ai.tech.missileTurret) {
+            turretType = 'missileTurret';
+            turretCost = 450;
+        } else if (playerComposition.infantryRatio > 0.4 && ai.tech.rifleTurret) {
+            turretType = 'rifleTurret';
+            turretCost = 300;
+        } else if (ai.tech.rifleTurret && Math.random() > 0.5) {
+            turretType = 'rifleTurret';
+            turretCost = 300;
+        } else if (ai.tech.missileTurret) {
+            turretType = 'missileTurret';
+            turretCost = 450;
+        }
+
+        if (ai.oil >= turretCost) {
+            const pos = getStrategicDefensePosition(aiHQ, aiBuildings, defenseDirection);
             if (pos) {
-                createBuilding('rifleTurret', 1, pos.x, pos.y, true);
-                ai.oil -= 300;
-            }
-        } else if (ai.oil >= 450 && ai.tech.missileTurret) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('missileTurret', 1, pos.x, pos.y, true);
-                ai.oil -= 450;
+                createBuilding(turretType, 1, pos.x, pos.y, true);
+                ai.oil -= turretCost;
             }
         }
     };
 
+    // Ensure at least one scout for intel (all modes)
+    const scoutCount = aiUnits.filter(u => u.type === 'scout').length;
+    const needsScout = scoutCount < (difficulty === 'hard' ? 2 : 1);
+
     if (mode === 'rusher') {
-        // Build barracks quickly, mass produce infantry + rockets
+        // RUSHER: Fast aggression with cheap units
+        // Build multiple barracks for rapid production
         if (ai.oil >= 400 && aiBarracks.length < 3) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
@@ -2598,8 +2735,8 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Build factory for light tanks
-        if (ai.oil >= 600 && aiFactory.length < 1) {
+        // One factory for light tanks
+        if (ai.oil >= 600 && aiFactory.length < 1 && aiBarracks.length >= 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
                 createBuilding('factory', 1, pos.x, pos.y, true);
@@ -2607,45 +2744,50 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce infantry and rockets constantly
+        // Smart barracks production based on enemy composition
         for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10) {
-                if (ai.oil >= 80 && Math.random() > 0.3) {
-                    addToProductionQueue(barracks, 'infantry');
-                    ai.oil -= 80;
-                } else if (ai.oil >= 200) {
-                    addToProductionQueue(barracks, 'rocket');
-                    ai.oil -= 200;
-                }
+            if (barracks.productionQueue.length >= 5) continue; // Don't over-queue
+
+            // Build scout if needed
+            if (needsScout && ai.oil >= 120) {
+                addToProductionQueue(barracks, 'scout');
+                ai.oil -= 120;
+                continue;
+            }
+
+            // Counter-unit production
+            if (playerComposition.armorRatio > 0.4 && ai.oil >= 200) {
+                // Player has tanks - build rockets
+                addToProductionQueue(barracks, 'rocket');
+                ai.oil -= 200;
+            } else if (ai.oil >= 80 && Math.random() > 0.4) {
+                // Default: infantry spam
+                addToProductionQueue(barracks, 'infantry');
+                ai.oil -= 80;
+            } else if (ai.oil >= 200) {
+                addToProductionQueue(barracks, 'rocket');
+                ai.oil -= 200;
             }
         }
 
-        // Produce light tanks for fast raids
+        // Light tanks for fast raids
         for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10 && ai.oil >= 250) {
+            if (factory.productionQueue.length >= 5) continue;
+            if (ai.oil >= 250) {
                 addToProductionQueue(factory, 'lightTank');
                 ai.oil -= 250;
             }
         }
 
-        // Attack early and often
-        if (aiUnits.length >= thresholds.rusher) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
-
     } else if (mode === 'defender') {
-        // Build defensive turrets - prefer specialized ones
-        if (aiTurrets.length < 6) {
+        // DEFENDER: Strong defenses, counter-attack capability
+        // Build defensive turrets - use strategic placement
+        const maxTurrets = difficulty === 'hard' ? 8 : 6;
+        if (aiTurrets.length < maxTurrets) {
             buildDefense();
-        } else if (ai.oil >= 350 && aiTurrets.length < 8) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('turret', 1, pos.x, pos.y, true);
-                ai.oil -= 350;
-            }
         }
 
-        // Build factory for heavy units
+        // Need factory for heavy defensive units
         if (ai.oil >= 600 && aiFactory.length < 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
@@ -2654,42 +2796,7 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce medium and heavy tanks for defense
-        for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
-                if (ai.oil >= 500 && Math.random() > 0.6) {
-                    addToProductionQueue(factory, 'heavyTank');
-                    ai.oil -= 500;
-                } else if (ai.oil >= 350) {
-                    addToProductionQueue(factory, 'mediumTank');
-                    ai.oil -= 350;
-                }
-            }
-        }
-
-        // Produce scout for intel
-        for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10 && ai.oil >= 120 && aiUnits.filter(u => u.type === 'scout').length < 2) {
-                addToProductionQueue(barracks, 'scout');
-                ai.oil -= 120;
-            }
-        }
-
-        // Counter-attack if attacked
-        if (playerUnits.length > 2) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
-
-    } else if (mode === 'tech') {
-        // Focus on late-game units
-        if (ai.oil >= 600 && aiFactory.length < 2) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y, true);
-                ai.oil -= 600;
-            }
-        }
-
+        // Barracks for rockets (anti-armor) and scouts
         if (ai.oil >= 400 && aiBarracks.length < 1) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
@@ -2698,14 +2805,93 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Produce heavy tanks, artillery and flak for late-game power
+        // Heavy units for defense - counter-unit aware
         for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
+            if (factory.productionQueue.length >= 5) continue;
+
+            if (playerComposition.infantryRatio > 0.5 && ai.oil >= 300) {
+                // Counter infantry with flak
+                addToProductionQueue(factory, 'flak');
+                ai.oil -= 300;
+            } else if (ai.oil >= 500 && Math.random() > 0.5) {
+                addToProductionQueue(factory, 'heavyTank');
+                ai.oil -= 500;
+            } else if (ai.oil >= 350) {
+                addToProductionQueue(factory, 'mediumTank');
+                ai.oil -= 350;
+            }
+        }
+
+        // Scouts and rockets from barracks
+        for (const barracks of aiBarracks) {
+            if (barracks.productionQueue.length >= 5) continue;
+
+            if (needsScout && ai.oil >= 120) {
+                addToProductionQueue(barracks, 'scout');
+                ai.oil -= 120;
+            } else if (playerComposition.armorRatio > 0.3 && ai.oil >= 200) {
+                addToProductionQueue(barracks, 'rocket');
+                ai.oil -= 200;
+            }
+        }
+
+    } else if (mode === 'tech') {
+        // TECH: Late-game powerhouse with heavy units
+        // Multiple factories for heavy production
+        if (ai.oil >= 600 && aiFactory.length < 2) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('factory', 1, pos.x, pos.y, true);
+                ai.oil -= 600;
+            }
+        }
+
+        // Barracks for support units
+        if (ai.oil >= 400 && aiBarracks.length < 1) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('barracks', 1, pos.x, pos.y, true);
+                ai.oil -= 400;
+            }
+        }
+
+        // Power plant for late-game power needs
+        const aiPowerPlants = aiBuildings.filter(b => b.type === 'powerplant');
+        if (ai.oil >= 300 && aiPowerPlants.length < 2 && ai.lowPower) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('powerplant', 1, pos.x, pos.y, true);
+                ai.oil -= 300;
+            }
+        }
+
+        // Heavy tanks, artillery, and flak - intelligent mix
+        for (const factory of aiFactory) {
+            if (factory.productionQueue.length >= 5) continue;
+
+            // Build harvesters for economy
+            const harvesterCount = aiUnits.filter(u => u.type === 'harvester').length;
+            if (harvesterCount < 2 && ai.oil >= 450) {
+                addToProductionQueue(factory, 'harvester');
+                ai.oil -= 450;
+                continue;
+            }
+
+            // Counter-unit production
+            if (playerComposition.infantryRatio > 0.5 && ai.oil >= 300) {
+                addToProductionQueue(factory, 'flak');
+                ai.oil -= 300;
+            } else if (playerComposition.hasArtillery && ai.oil >= 250) {
+                // Counter artillery with fast light tanks
+                addToProductionQueue(factory, 'lightTank');
+                ai.oil -= 250;
+            } else {
+                // Default tech mix
                 const rand = Math.random();
-                if (ai.oil >= 500 && rand > 0.4) {
+                if (rand > 0.5 && ai.oil >= 500) {
                     addToProductionQueue(factory, 'heavyTank');
                     ai.oil -= 500;
-                } else if (ai.oil >= 500 && rand > 0.2) {
+                } else if (rand > 0.2 && ai.oil >= 500) {
                     addToProductionQueue(factory, 'artillery');
                     ai.oil -= 500;
                 } else if (ai.oil >= 300) {
@@ -2715,27 +2901,74 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Build some harvesters
-        if (ai.oil >= 450 && aiUnits.filter(u => u.type === 'harvester').length < 2) {
-            const factory = aiFactory[0];
-            if (factory && factory.productionQueue.length < 10) {
-                addToProductionQueue(factory, 'harvester');
-                ai.oil -= 450;
+        // Rockets from barracks
+        for (const barracks of aiBarracks) {
+            if (barracks.productionQueue.length >= 5) continue;
+
+            if (needsScout && ai.oil >= 120) {
+                addToProductionQueue(barracks, 'scout');
+                ai.oil -= 120;
+            } else if (ai.oil >= 200) {
+                addToProductionQueue(barracks, 'rocket');
+                ai.oil -= 200;
             }
         }
 
-        // Build missile turrets for late-game defense
-        if (aiTurrets.length < 3) {
+        // Missile turrets for late-game defense
+        if (aiTurrets.length < 4) {
             buildDefense();
         }
 
-        // Powerful late-game attack
-        if (aiUnits.length >= thresholds.tech) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
+    } else if (mode === 'aggressive') {
+        // AGGRESSIVE: All-out attack mode
+        // Build production buildings
+        if (ai.oil >= 400 && aiBarracks.length < 2) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('barracks', 1, pos.x, pos.y, true);
+                ai.oil -= 400;
+            }
+        }
+
+        if (ai.oil >= 600 && aiFactory.length < 2) {
+            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
+            if (pos) {
+                createBuilding('factory', 1, pos.x, pos.y, true);
+                ai.oil -= 600;
+            }
+        }
+
+        // Mass produce attack units
+        for (const factory of aiFactory) {
+            if (factory.productionQueue.length >= 5) continue;
+
+            // Counter-unit or power units
+            if (playerComposition.infantryRatio > 0.5 && ai.oil >= 300) {
+                addToProductionQueue(factory, 'flak');
+                ai.oil -= 300;
+            } else if (ai.oil >= 350) {
+                addToProductionQueue(factory, 'mediumTank');
+                ai.oil -= 350;
+            } else if (ai.oil >= 250) {
+                addToProductionQueue(factory, 'lightTank');
+                ai.oil -= 250;
+            }
+        }
+
+        for (const barracks of aiBarracks) {
+            if (barracks.productionQueue.length >= 5) continue;
+
+            if (playerComposition.armorRatio > 0.4 && ai.oil >= 200) {
+                addToProductionQueue(barracks, 'rocket');
+                ai.oil -= 200;
+            } else if (ai.oil >= 80) {
+                addToProductionQueue(barracks, 'infantry');
+                ai.oil -= 80;
+            }
         }
 
     } else {
-        // Balanced mode
+        // BALANCED: Standard mixed strategy
         if (ai.oil >= 400 && aiBarracks.length < 2) {
             const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
             if (pos) {
@@ -2752,16 +2985,22 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Mix of unit types
+        // Intelligent mixed production
         for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10) {
-                const rand = Math.random();
-                if (ai.oil >= 80 && rand > 0.5) {
+            if (barracks.productionQueue.length >= 5) continue;
+
+            if (needsScout && ai.oil >= 120) {
+                addToProductionQueue(barracks, 'scout');
+                ai.oil -= 120;
+            } else {
+                // Counter-unit aware production
+                const counterUnit = getCounterUnit(playerComposition, ['infantry', 'rocket', 'scout'], ai);
+                if (counterUnit) {
+                    addToProductionQueue(barracks, counterUnit);
+                    ai.oil -= UNIT_TYPES[counterUnit].cost;
+                } else if (ai.oil >= 80 && Math.random() > 0.4) {
                     addToProductionQueue(barracks, 'infantry');
                     ai.oil -= 80;
-                } else if (ai.oil >= 120 && rand > 0.7) {
-                    addToProductionQueue(barracks, 'scout');
-                    ai.oil -= 120;
                 } else if (ai.oil >= 200) {
                     addToProductionQueue(barracks, 'rocket');
                     ai.oil -= 200;
@@ -2769,68 +3008,590 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
             }
         }
 
-        // Balanced mix of light and medium tanks
+        // Factory production with counter-units
         for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
-                if (ai.oil >= 350 && Math.random() > 0.5) {
-                    addToProductionQueue(factory, 'mediumTank');
-                    ai.oil -= 350;
-                } else if (ai.oil >= 250) {
-                    addToProductionQueue(factory, 'lightTank');
-                    ai.oil -= 250;
-                } else if (ai.oil >= 240) {
-                    addToProductionQueue(factory, 'harvester');
-                    ai.oil -= 240;
-                }
+            if (factory.productionQueue.length >= 5) continue;
+
+            // Build harvester if needed
+            const harvesterCount = aiUnits.filter(u => u.type === 'harvester').length;
+            if (harvesterCount < 1 && ai.oil >= 450) {
+                addToProductionQueue(factory, 'harvester');
+                ai.oil -= 450;
+                continue;
+            }
+
+            const counterUnit = getCounterUnit(playerComposition, ['lightTank', 'mediumTank', 'flak'], ai);
+            if (counterUnit) {
+                addToProductionQueue(factory, counterUnit);
+                ai.oil -= UNIT_TYPES[counterUnit].cost;
+            } else if (ai.oil >= 350 && Math.random() > 0.5) {
+                addToProductionQueue(factory, 'mediumTank');
+                ai.oil -= 350;
+            } else if (ai.oil >= 250) {
+                addToProductionQueue(factory, 'lightTank');
+                ai.oil -= 250;
             }
         }
 
-        // Build some defensive towers for balance
-        if (aiTurrets.length < 2) {
+        // Some defensive towers
+        if (aiTurrets.length < 3) {
             buildDefense();
-        }
-
-        // Attack when ready
-        if (aiUnits.length >= thresholds.balanced) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
         }
     }
 }
 
-function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
-    // Only attack if there are visible enemies nearby
-    // Each unit should find its own target based on sight range
-    for (const unit of aiUnits) {
-        if (unit.attackTarget) {
-            // Already has a target, skip
-            continue;
+// ============================================
+// C&C-STYLE SMART AI SYSTEM
+// Intelligent targeting, tactics, and coordination
+// ============================================
+
+// AI State for coordinated behavior
+const aiState = {
+    attackWave: [],           // Units grouped for coordinated attack
+    waveTarget: null,         // Current wave target location
+    lastWaveTime: 0,          // Tick when last wave was launched
+    scoutTargets: [],         // Unexplored areas for scouts
+    threatLevel: 0,           // Current threat assessment
+    lastThreatUpdate: 0,
+    harvesterEscorts: new Map() // Harvester -> escort unit mapping
+};
+
+// Target priority scores (higher = more important)
+function getTargetPriority(target, attacker) {
+    const attackerType = UNIT_TYPES[attacker.type];
+    let score = 100;
+
+    // Is it a unit or building?
+    const isUnit = target.type && UNIT_TYPES[target.type];
+    const isBuilding = target.type && BUILDING_TYPES[target.type];
+
+    if (isUnit) {
+        const targetType = UNIT_TYPES[target.type];
+
+        // High-value targets get priority
+        if (target.type === 'harvester') score += 80;  // Economic damage
+        if (target.type === 'artillery') score += 60;  // Dangerous long-range
+        if (target.type === 'rocket') score += 40;     // Anti-armor threat
+
+        // Damaged units - finish them off (C&C classic behavior)
+        const healthPercent = target.hp / targetType.hp;
+        if (healthPercent < 0.3) score += 100;         // Critical - focus fire!
+        else if (healthPercent < 0.5) score += 50;     // Wounded
+        else if (healthPercent < 0.75) score += 20;    // Damaged
+
+        // Counter-unit bonus - use the right tool for the job
+        if (attackerType.category === 'infantry') {
+            // Infantry good vs other infantry
+            if (targetType.category === 'infantry') score += 30;
+        }
+        if (attacker.type === 'rocket' || attacker.type === 'missileTurret') {
+            // Rockets/missiles good vs armor
+            if (targetType.category === 'armor') score += 50;
+        }
+        if (attacker.type === 'flak') {
+            // Flak good vs infantry
+            if (targetType.category === 'infantry') score += 50;
         }
 
-        const unitType = UNIT_TYPES[unit.type];
-        const sightRange = unitType?.sight || 100;
-
-        // Look for nearby enemy units first
-        let target = playerUnits.find(u => {
-            const dx = u.x - unit.x;
-            const dy = u.y - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            return dist <= sightRange;
-        });
-
-        // If no units found, look for nearby buildings
-        if (!target) {
-            target = playerBuildings.find(b => {
-                const dx = b.x - unit.x;
-                const dy = b.y - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                return dist <= sightRange;
-            });
+        // Threat assessment - prioritize units attacking our stuff
+        if (target.attackTarget && target.attackTarget.playerId === attacker.playerId) {
+            score += 40; // It's attacking us!
         }
 
-        if (target) {
-            unit.attackTarget = target;
+    } else if (isBuilding) {
+        const buildingType = BUILDING_TYPES[target.type];
+
+        // Production buildings are high priority
+        if (target.type === 'factory') score += 70;
+        if (target.type === 'barracks') score += 60;
+        if (target.type === 'hq') score += 50;
+
+        // Economic buildings
+        if (target.type === 'derrick') score += 45;
+        if (target.type === 'powerplant') score += 40;
+
+        // Defensive structures - take out if they're a threat
+        if (buildingType.damage && buildingType.damage > 0) {
+            score += 35;
+        }
+
+        // Damaged buildings
+        const healthPercent = target.hp / buildingType.hp;
+        if (healthPercent < 0.3) score += 60;
+        else if (healthPercent < 0.5) score += 30;
+    }
+
+    return score;
+}
+
+// Calculate distance between two entities
+function getDistance(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Smart targeting with focus fire and priority system
+function aiSmartTargeting(playerBuildings, playerUnits, aiUnits, difficulty) {
+    // Group AI units by proximity for coordinated attacks
+    const unitGroups = groupUnitsByProximity(aiUnits, 15);
+
+    for (const group of unitGroups) {
+        // Find the best target for this group
+        let bestTarget = null;
+        let bestScore = -Infinity;
+
+        // Get all potential targets in range of any group member
+        const potentialTargets = [];
+        const maxSightRange = Math.max(...group.map(u => UNIT_TYPES[u.type]?.sight || 100));
+        const groupCenter = getGroupCenter(group);
+
+        for (const target of playerUnits) {
+            const dist = getDistance(groupCenter, target);
+            if (dist <= maxSightRange * 1.5) {
+                potentialTargets.push(target);
+            }
+        }
+        for (const target of playerBuildings) {
+            const dist = getDistance(groupCenter, target);
+            if (dist <= maxSightRange * 1.5) {
+                potentialTargets.push(target);
+            }
+        }
+
+        // Score each target and pick the best one (FOCUS FIRE!)
+        for (const target of potentialTargets) {
+            if (target.hp <= 0) continue;
+
+            // Calculate average score from group perspective
+            let totalScore = 0;
+            for (const unit of group) {
+                const dist = getDistance(unit, target);
+                const unitType = UNIT_TYPES[unit.type];
+                const sightRange = unitType?.sight || 100;
+
+                if (dist <= sightRange * 1.2) {
+                    let score = getTargetPriority(target, unit);
+                    // Distance penalty - prefer closer targets
+                    score -= dist * 0.5;
+                    totalScore += score;
+                }
+            }
+
+            if (totalScore > bestScore) {
+                bestScore = totalScore;
+                bestTarget = target;
+            }
+        }
+
+        // On harder difficulties, more units focus on the same target
+        const focusFireChance = difficulty === 'hard' ? 0.9 : (difficulty === 'normal' ? 0.7 : 0.5);
+
+        // Assign target to group members
+        for (const unit of group) {
+            if (unit.attackTarget && unit.attackTarget.hp > 0) {
+                // Already has valid target - chance to switch based on difficulty
+                const shouldSwitch = difficulty === 'hard' ? Math.random() < 0.3 : Math.random() < 0.1;
+                if (!shouldSwitch) continue;
+            }
+
+            const unitType = UNIT_TYPES[unit.type];
+            const sightRange = unitType?.sight || 100;
+
+            // Focus fire on group target or pick individual
+            if (bestTarget && Math.random() < focusFireChance) {
+                const dist = getDistance(unit, bestTarget);
+                if (dist <= sightRange * 1.5) {
+                    unit.attackTarget = bestTarget;
+                    continue;
+                }
+            }
+
+            // Individual targeting as fallback
+            let individualBest = null;
+            let individualScore = -Infinity;
+
+            for (const target of [...playerUnits, ...playerBuildings]) {
+                if (target.hp <= 0) continue;
+                const dist = getDistance(unit, target);
+                if (dist > sightRange) continue;
+
+                let score = getTargetPriority(target, unit);
+                score -= dist * 0.5;
+
+                if (score > individualScore) {
+                    individualScore = score;
+                    individualBest = target;
+                }
+            }
+
+            if (individualBest) {
+                unit.attackTarget = individualBest;
+            }
         }
     }
+}
+
+// Group units by proximity for coordinated behavior
+function groupUnitsByProximity(units, maxDistance) {
+    const groups = [];
+    const assigned = new Set();
+
+    for (const unit of units) {
+        if (assigned.has(unit)) continue;
+
+        const group = [unit];
+        assigned.add(unit);
+
+        // Find nearby units
+        for (const other of units) {
+            if (assigned.has(other)) continue;
+            const dist = getDistance(unit, other);
+            if (dist <= maxDistance) {
+                group.push(other);
+                assigned.add(other);
+            }
+        }
+
+        groups.push(group);
+    }
+
+    return groups;
+}
+
+// Get center position of a group
+function getGroupCenter(group) {
+    if (group.length === 0) return { x: 0, y: 0 };
+    const sumX = group.reduce((sum, u) => sum + u.x, 0);
+    const sumY = group.reduce((sum, u) => sum + u.y, 0);
+    return { x: sumX / group.length, y: sumY / group.length };
+}
+
+// Tactical retreat for damaged units
+function aiTacticalRetreat(aiUnits, aiBuildings, difficulty) {
+    const aiHQ = aiBuildings.find(b => b.type === 'hq');
+    if (!aiHQ) return;
+
+    // Retreat thresholds based on difficulty (easier AI retreats earlier = fair)
+    const retreatThreshold = difficulty === 'hard' ? 0.2 : (difficulty === 'normal' ? 0.3 : 0.4);
+
+    for (const unit of aiUnits) {
+        const unitType = UNIT_TYPES[unit.type];
+        if (!unitType || unit.type === 'harvester') continue;
+
+        const healthPercent = unit.hp / unitType.hp;
+
+        // Check if unit should retreat
+        if (healthPercent < retreatThreshold && !unit.isRetreating) {
+            // Find safe position (near turrets or HQ)
+            let safePos = { x: aiHQ.x, y: aiHQ.y };
+
+            // Look for nearby turrets as cover
+            const turrets = aiBuildings.filter(b =>
+                BUILDING_TYPES[b.type]?.damage > 0 && !b.isUnderConstruction
+            );
+
+            if (turrets.length > 0) {
+                // Find nearest turret
+                let nearest = turrets[0];
+                let nearestDist = getDistance(unit, turrets[0]);
+                for (const turret of turrets) {
+                    const dist = getDistance(unit, turret);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = turret;
+                    }
+                }
+                safePos = { x: nearest.x + (Math.random() - 0.5) * 5, y: nearest.y + (Math.random() - 0.5) * 5 };
+            }
+
+            // Set retreat
+            unit.isRetreating = true;
+            unit.attackTarget = null;
+            unit.targetX = safePos.x;
+            unit.targetY = safePos.y;
+        }
+
+        // Clear retreat flag once healed or in safe position
+        if (unit.isRetreating && healthPercent > retreatThreshold + 0.1) {
+            unit.isRetreating = false;
+        }
+    }
+}
+
+// Coordinate attack waves instead of trickling units
+function aiCoordinateAttackWave(aiUnits, playerUnits, playerBuildings, minWaveSize, difficulty) {
+    // Only launch wave every 15-30 seconds
+    const waveCooldown = difficulty === 'hard' ? 900 : (difficulty === 'normal' ? 1200 : 1800);
+    if (game.tick - aiState.lastWaveTime < waveCooldown) return;
+
+    // Gather idle combat units (not retreating, not harvesting)
+    const idleUnits = aiUnits.filter(u =>
+        !u.isRetreating &&
+        !u.attackTarget &&
+        u.type !== 'harvester' &&
+        UNIT_TYPES[u.type]?.damage > 0
+    );
+
+    if (idleUnits.length < minWaveSize) return;
+
+    // Find target location (enemy base or concentration)
+    let targetPos = null;
+
+    // Prioritize enemy HQ
+    const enemyHQ = playerBuildings.find(b => b.type === 'hq');
+    if (enemyHQ) {
+        targetPos = { x: enemyHQ.x, y: enemyHQ.y };
+    } else if (playerBuildings.length > 0) {
+        // Target building cluster
+        const center = getGroupCenter(playerBuildings);
+        targetPos = center;
+    } else if (playerUnits.length > 0) {
+        // Target unit cluster
+        const center = getGroupCenter(playerUnits);
+        targetPos = center;
+    }
+
+    if (!targetPos) return;
+
+    // Launch the wave!
+    aiState.lastWaveTime = game.tick;
+
+    // Calculate attack positions (flanking on harder difficulties)
+    const useFlank = difficulty === 'hard' && idleUnits.length >= 6;
+
+    if (useFlank) {
+        // Split into two groups for pincer attack
+        const half = Math.floor(idleUnits.length / 2);
+        const group1 = idleUnits.slice(0, half);
+        const group2 = idleUnits.slice(half);
+
+        // Calculate flank angles
+        const angle1 = Math.PI / 4;  // 45 degrees
+        const angle2 = -Math.PI / 4; // -45 degrees
+        const flankDist = 10;
+
+        const flank1 = {
+            x: targetPos.x + Math.cos(angle1) * flankDist,
+            y: targetPos.y + Math.sin(angle1) * flankDist
+        };
+        const flank2 = {
+            x: targetPos.x + Math.cos(angle2) * flankDist,
+            y: targetPos.y + Math.sin(angle2) * flankDist
+        };
+
+        for (const unit of group1) {
+            unit.targetX = flank1.x + (Math.random() - 0.5) * 3;
+            unit.targetY = flank1.y + (Math.random() - 0.5) * 3;
+            unit.closeTarget = enemyHQ || playerBuildings[0];
+        }
+        for (const unit of group2) {
+            unit.targetX = flank2.x + (Math.random() - 0.5) * 3;
+            unit.targetY = flank2.y + (Math.random() - 0.5) * 3;
+            unit.closeTarget = enemyHQ || playerBuildings[0];
+        }
+    } else {
+        // Standard wave - all units attack together
+        for (const unit of idleUnits) {
+            unit.targetX = targetPos.x + (Math.random() - 0.5) * 8;
+            unit.targetY = targetPos.y + (Math.random() - 0.5) * 8;
+            unit.closeTarget = enemyHQ || playerBuildings[0];
+        }
+    }
+}
+
+// Scout behavior - explore map and find enemy base
+function aiScoutBehavior(aiUnits, aiBuildings, playerBuildings, playerUnits) {
+    const scouts = aiUnits.filter(u => u.type === 'scout');
+    if (scouts.length === 0) return;
+
+    const mapSize = getMapSize();
+    const aiHQ = aiBuildings.find(b => b.type === 'hq');
+    if (!aiHQ) return;
+
+    for (const scout of scouts) {
+        // Skip if already has target or retreating
+        if (scout.attackTarget || scout.isRetreating) continue;
+        if (scout.targetX !== undefined) continue;
+
+        // Scout should explore unexplored areas
+        // Prioritize direction away from own base towards enemy
+        let exploreTarget = null;
+
+        // If we know where enemy is, scout around there
+        if (playerBuildings.length > 0) {
+            const enemyCenter = getGroupCenter(playerBuildings);
+            // Scout around enemy perimeter
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 15 + Math.random() * 10;
+            exploreTarget = {
+                x: enemyCenter.x + Math.cos(angle) * dist,
+                y: enemyCenter.y + Math.sin(angle) * dist
+            };
+        } else {
+            // Explore in direction away from own base
+            const angle = Math.atan2(mapSize/2 - aiHQ.y, mapSize/2 - aiHQ.x) + (Math.random() - 0.5) * Math.PI;
+            const dist = 20 + Math.random() * 20;
+            exploreTarget = {
+                x: aiHQ.x + Math.cos(angle) * dist,
+                y: aiHQ.y + Math.sin(angle) * dist
+            };
+        }
+
+        // Clamp to map bounds
+        exploreTarget.x = Math.max(2, Math.min(mapSize - 2, exploreTarget.x));
+        exploreTarget.y = Math.max(2, Math.min(mapSize - 2, exploreTarget.y));
+
+        scout.targetX = exploreTarget.x;
+        scout.targetY = exploreTarget.y;
+    }
+}
+
+// Harvester protection - assign escorts
+function aiProtectHarvesters(aiUnits, aiBuildings, playerUnits) {
+    const harvesters = aiUnits.filter(u => u.type === 'harvester');
+    const combatUnits = aiUnits.filter(u =>
+        u.type !== 'harvester' &&
+        UNIT_TYPES[u.type]?.damage > 0 &&
+        !u.isRetreating
+    );
+
+    if (harvesters.length === 0 || combatUnits.length === 0) return;
+
+    for (const harvester of harvesters) {
+        // Check if harvester is in danger
+        let threat = null;
+        let threatDist = Infinity;
+
+        for (const enemy of playerUnits) {
+            const dist = getDistance(harvester, enemy);
+            const enemyType = UNIT_TYPES[enemy.type];
+            if (enemyType?.damage > 0 && dist < 20 && dist < threatDist) {
+                threat = enemy;
+                threatDist = dist;
+            }
+        }
+
+        if (threat) {
+            // Find nearest combat unit to escort
+            let escort = null;
+            let escortDist = Infinity;
+
+            for (const unit of combatUnits) {
+                if (unit.attackTarget && unit.attackTarget !== threat) continue;
+                const dist = getDistance(harvester, unit);
+                if (dist < escortDist) {
+                    escort = unit;
+                    escortDist = dist;
+                }
+            }
+
+            if (escort) {
+                escort.attackTarget = threat;
+            }
+        }
+    }
+}
+
+// Analyze player army composition for counter decisions
+function analyzeArmyComposition(units) {
+    let infantry = 0;
+    let armor = 0;
+    let total = 0;
+
+    for (const unit of units) {
+        if (unit.type === 'harvester') continue;
+        const type = UNIT_TYPES[unit.type];
+        if (!type) continue;
+
+        total++;
+        if (type.category === 'infantry') infantry++;
+        else if (type.category === 'armor') armor++;
+    }
+
+    return {
+        infantry,
+        armor,
+        total,
+        infantryRatio: total > 0 ? infantry / total : 0.5,
+        armorRatio: total > 0 ? armor / total : 0.5,
+        hasArtillery: units.some(u => u.type === 'artillery'),
+        hasHarvesters: units.some(u => u.type === 'harvester')
+    };
+}
+
+// Get counter unit for enemy composition
+function getCounterUnit(playerComposition, availableUnits, ai) {
+    // Counter-unit logic: rock-paper-scissors style
+    // Infantry beats: other infantry (cheap spam)
+    // Rockets beat: armor
+    // Flak beats: infantry
+    // Tanks beat: most things with raw power
+    // Artillery beats: buildings and grouped units
+
+    if (playerComposition.armorRatio > 0.5) {
+        // Player has lots of tanks - build rockets and medium tanks
+        if (availableUnits.includes('rocket') && ai.oil >= 200) return 'rocket';
+        if (availableUnits.includes('mediumTank') && ai.oil >= 350) return 'mediumTank';
+    }
+
+    if (playerComposition.infantryRatio > 0.5) {
+        // Player has lots of infantry - build flak
+        if (availableUnits.includes('flak') && ai.oil >= 300) return 'flak';
+        if (availableUnits.includes('infantry') && ai.oil >= 80) return 'infantry';
+    }
+
+    if (playerComposition.hasArtillery) {
+        // Counter artillery with fast units
+        if (availableUnits.includes('lightTank') && ai.oil >= 250) return 'lightTank';
+        if (availableUnits.includes('scout') && ai.oil >= 120) return 'scout';
+    }
+
+    // Default: balanced mix
+    return null;
+}
+
+// Strategic defense placement
+function getStrategicDefensePosition(aiHQ, aiBuildings, direction) {
+    const mapSize = getMapSize();
+    const baseRadius = 8 + aiBuildings.length * 0.5;
+
+    // Place turrets in direction of enemy
+    let angle = direction || Math.random() * Math.PI * 2;
+
+    // Try to space turrets around base
+    const existingTurrets = aiBuildings.filter(b =>
+        BUILDING_TYPES[b.type]?.damage > 0
+    );
+
+    // Find a good angle that's not too close to existing turrets
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const testAngle = angle + attempt * (Math.PI / 4);
+        const testPos = {
+            x: aiHQ.x + Math.cos(testAngle) * baseRadius,
+            y: aiHQ.y + Math.sin(testAngle) * baseRadius
+        };
+
+        let tooClose = false;
+        for (const turret of existingTurrets) {
+            if (getDistance(testPos, turret) < 4) {
+                tooClose = true;
+                break;
+            }
+        }
+
+        if (!tooClose) {
+            return findBuildPosition(Math.floor(testPos.x), Math.floor(testPos.y), 1);
+        }
+    }
+
+    // Fallback to random position near HQ
+    return findBuildPosition(aiHQ.x, aiHQ.y, 1);
+}
+
+// Legacy function - now uses smart targeting
+function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
+    aiSmartTargeting(playerBuildings, playerUnits, aiUnits, gameSettings.difficulty);
 }
 
 function assignHarvestersToOil(harvesters) {
