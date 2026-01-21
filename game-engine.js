@@ -185,6 +185,28 @@ const SoundManager = {
 SoundManager.init();
 const dpr = window.devicePixelRatio || 1;
 
+// Resize canvas to match actual display size
+function resizeCanvas() {
+    if (!canvas || !ctx) return;
+
+    // Get actual rendered size
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width || canvas.clientWidth || 800;
+    const height = rect.height || canvas.clientHeight || 500;
+
+    // Set canvas internal dimensions for high DPI
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    ctx.scale(dpr, dpr);
+
+    // Enable image smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    console.log(`Canvas resized to ${width}x${height} (${canvas.width}x${canvas.height} internal)`);
+}
+
 // Initialize canvas when DOM is ready
 function initializeCanvases() {
     canvas = document.getElementById('canvas');
@@ -199,16 +221,7 @@ function initializeCanvases() {
         return false;
     }
 
-    // High-DPI canvas setup for crisp graphics
-    canvas.width = canvas.offsetWidth * dpr;
-    canvas.height = canvas.offsetHeight * dpr;
-    ctx.scale(dpr, dpr);
-    canvas.style.width = (canvas.width / dpr) + 'px';
-    canvas.style.height = (canvas.height / dpr) + 'px';
-
-    // Enable image smoothing for better rendering
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    // Canvas will be properly sized when game starts (when visible)
 
     minimapCanvas = document.getElementById('minimap');
     if (!minimapCanvas) {
@@ -4204,6 +4217,9 @@ function startGame() {
     document.getElementById('gameContainer').classList.add('game-active');
     document.getElementById('footer').classList.add('game-active');
 
+    // Resize canvas now that it's visible
+    setTimeout(resizeCanvas, 0);
+
     // Stop intro music and play background music
     const introMusic = document.getElementById('introMusic');
     const bgMusic = document.getElementById('backgroundMusic');
@@ -4439,6 +4455,7 @@ function setupMenuHandlers() {
         document.getElementById('header').classList.add('game-active');
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
+        setTimeout(resizeCanvas, 0);
         // Restart background music
         const bgMusic = document.getElementById('backgroundMusic');
         if (bgMusic) {
@@ -4457,6 +4474,7 @@ function setupMenuHandlers() {
         document.getElementById('header').classList.add('game-active');
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
+        setTimeout(resizeCanvas, 0);
         // Restart background music
         const bgMusic = document.getElementById('backgroundMusic');
         if (bgMusic) {
