@@ -4377,6 +4377,7 @@ function resetGame() {
     game.buildings = [];
     game.projectiles = [];
     game.particles = [];
+    game.damageNumbers = [];
     game.map = [];
     game.fogOfWar = [];
     game.group1 = [];
