@@ -1773,7 +1773,7 @@ function findPath(startX, startY, endX, endY) {
                 const prev = cameFrom.get(key(curr.x, curr.y));
                 curr = prev;
             }
-            console.log(`[findPath] FOUND PATH: ${path.length} waypoints in ${iterations} iterations`);
+            console.log(`[findPath] FOUND PATH: ${path.length} waypoints in ${iterations} iterations from (${start.x},${start.y}) to (${end.x},${end.y})`);
             return path;
         }
 
@@ -1781,6 +1781,7 @@ function findPath(startX, startY, endX, endY) {
         openSet.splice(currentIndex, 1);
 
         // Check neighbors
+        let validNeighbors = 0;
         for (const dir of directions) {
             const nx = current.x + dir.dx;
             const ny = current.y + dir.dy;
@@ -1792,6 +1793,7 @@ function findPath(startX, startY, endX, endY) {
             const tile = game.map[ny]?.[nx];
             if (!tile || tile.type === 'water' || tile.type === 'hill') continue;
 
+            validNeighbors++;
             const tentativeG = (gScore.get(key(current.x, current.y)) || Infinity) +
                               (dir.dx !== 0 && dir.dy !== 0 ? 1.414 : 1); // Diagonal cost
 
@@ -1809,9 +1811,14 @@ function findPath(startX, startY, endX, endY) {
                 }
             }
         }
+
+        // Debug: Check if we're stuck
+        if (validNeighbors === 0 && openSet.length === 0) {
+            console.log(`[findPath] STUCK: No valid neighbors from (${current.x},${current.y}), current tile=${game.map[current.y]?.[current.x]?.type || 'NULL'}`);
+        }
     }
 
-    console.log(`[findPath] NO PATH FOUND: reached max iterations or openSet empty`);
+    console.log(`[findPath] NO PATH FOUND: reached max iterations (${iterations}) or openSet empty. Start=(${start.x},${start.y}) End=(${end.x},${end.y})`);
     return null; // No path found
 }
 
