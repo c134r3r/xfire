@@ -2119,12 +2119,19 @@ function updateHarvester(unit, type, dt) {
         const targetOilY = unit.targetOilY;
 
         // Check if oil still exists at target location
+        const tile = game.map[targetOilY]?.[targetOil];
         const oilStillThere = targetOil >= 0 && targetOil < getMapSize() &&
                               targetOilY >= 0 && targetOilY < getMapSize() &&
-                              game.map[targetOilY]?.[targetOil]?.oil;
+                              tile?.oil;
+
+        // DEBUG: Log why oil check fails
+        if (!oilStillThere && game.tick % 30 === 0) {
+            console.log(`[Harvester] Oil check FAILED at ${targetOil},${targetOilY}: tile=${tile ? JSON.stringify(tile) : 'NULL'}, mapSize=${getMapSize()}`);
+        }
 
         if (!oilStillThere) {
             // Oil depleted or invalid - clear target
+            console.log(`[Harvester] Clearing target - oil not found at ${targetOil},${targetOilY}`);
             unit.targetOilX = undefined;
             unit.targetOilY = undefined;
             if (unit.cargo > 0) unit.returning = true;
