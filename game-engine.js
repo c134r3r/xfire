@@ -2991,21 +2991,23 @@ function updateBuildMenu() {
                 if (isResearched) {
                     btn.innerHTML = `${techDef.icon} <span>✓</span>`;
                     btn.title = `${techDef.name} - Already researched`;
-                    btn.disabled = true;
                     btn.style.opacity = '0.5';
                 } else {
                     btn.innerHTML = `${techDef.icon}<span>${techDef.cost}</span>`;
                     btn.title = `${techDef.name} - ${techDef.cost} oil to research`;
-                    btn.disabled = player.oil < techDef.cost;
-                    btn.onclick = () => {
-                        if (player.oil >= techDef.cost && !player.tech[techType]) {
-                            SoundManager.play('ui_click');
-                            player.oil -= techDef.cost;
-                            researchTechnology(techType, 0);
-                            updateBuildMenu();
-                        }
-                    };
+                    if (player.oil < techDef.cost) {
+                        btn.style.opacity = '0.5';
+                    }
                 }
+
+                btn.onclick = () => {
+                    if (player.oil >= techDef.cost && !player.tech[techType]) {
+                        SoundManager.play('ui_click');
+                        player.oil -= techDef.cost;
+                        researchTechnology(techType, 0);
+                        updateBuildMenu();
+                    }
+                };
                 menu.appendChild(btn);
             }
         }
@@ -3040,11 +3042,15 @@ function updateBuildMenu() {
                 const canBuild = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
                 const requirementMet = unitType !== 'harvester' ||
                                       game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
+                const cannotBuild = !canBuild || !requirementMet;
 
                 btn.title = unitType === 'harvester' && !requirementMet
                     ? `${uType.name} - Requires Factory`
                     : `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
-                btn.disabled = !canBuild || !requirementMet;
+
+                if (cannotBuild) {
+                    btn.style.opacity = '0.5';
+                }
 
                 btn.onclick = () => {
                     if (canBuild && requirementMet) {
@@ -3104,18 +3110,23 @@ function updateBuildMenu() {
         if (!type) continue;
 
         // Check if tech is available
-        const isTechAvailable = game.players[0].tech[bType] !== false;
+        const isTechAvailable = player.tech[bType] !== false;
+        const canAfford = player.oil >= type.cost;
+        const cannotBuild = !canAfford || !isTechAvailable;
         const keyNum = i + 1; // 1-8
 
         const btn = document.createElement('button');
         btn.className = 'build-btn';
         btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
         btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
-        btn.disabled = player.oil < type.cost || !isTechAvailable;
-        btn.onclick = (e) => {
-            console.log(`[BuildMenu] Clicked on ${bType}, oil=${game.players[0].oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
-            e.stopPropagation(); // Prevent event bubbling
-            if (game.players[0].oil >= type.cost && isTechAvailable) {
+
+        if (cannotBuild) {
+            btn.style.opacity = '0.5';
+        }
+
+        btn.onclick = () => {
+            console.log(`[BuildMenu] Clicked on ${bType}, oil=${player.oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
+            if (player.oil >= type.cost && isTechAvailable) {
                 SoundManager.play('ui_click');
                 game.placingBuilding = bType;
                 console.log(`[BuildMenu] Set placingBuilding to ${bType}`);
@@ -3127,7 +3138,7 @@ function updateBuildMenu() {
                     game.placingBuildingFrom = null;
                 }
             } else {
-                console.log(`[BuildMenu] Cannot build: oil=${game.players[0].oil} < cost=${type.cost} or tech not available`);
+                console.log(`[BuildMenu] Cannot build: oil=${player.oil} < cost=${type.cost} or tech not available`);
             }
         };
         menu.appendChild(btn);
