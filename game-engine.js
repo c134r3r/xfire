@@ -1711,12 +1711,20 @@ function findPath(startX, startY, endX, endY) {
     // Bounds check
     if (start.x < 0 || start.x >= mapSize || start.y < 0 || start.y >= mapSize ||
         end.x < 0 || end.x >= mapSize || end.y < 0 || end.y >= mapSize) {
+        console.log(`[findPath] OUT OF BOUNDS: start=(${start.x},${start.y}) end=(${end.x},${end.y}) mapSize=${mapSize}`);
+        return null;
+    }
+
+    // Check if map exists
+    if (!game.map || game.map.length === 0) {
+        console.log(`[findPath] MAP NOT INITIALIZED`);
         return null;
     }
 
     // Check if end is passable
     const endTile = game.map[end.y]?.[end.x];
     if (endTile && (endTile.type === 'water' || endTile.type === 'hill')) {
+        console.log(`[findPath] END NOT PASSABLE: end=(${end.x},${end.y}) tile=${endTile.type}`);
         return null;
     }
 
@@ -1765,6 +1773,7 @@ function findPath(startX, startY, endX, endY) {
                 const prev = cameFrom.get(key(curr.x, curr.y));
                 curr = prev;
             }
+            console.log(`[findPath] FOUND PATH: ${path.length} waypoints in ${iterations} iterations from (${start.x},${start.y}) to (${end.x},${end.y})`);
             return path;
         }
 
@@ -1772,6 +1781,7 @@ function findPath(startX, startY, endX, endY) {
         openSet.splice(currentIndex, 1);
 
         // Check neighbors
+        let validNeighbors = 0;
         for (const dir of directions) {
             const nx = current.x + dir.dx;
             const ny = current.y + dir.dy;
@@ -1779,10 +1789,17 @@ function findPath(startX, startY, endX, endY) {
             // Bounds check
             if (nx < 0 || nx >= mapSize || ny < 0 || ny >= mapSize) continue;
 
-            // Check if passable
-            const tile = game.map[ny]?.[nx];
-            if (!tile || tile.type === 'water' || tile.type === 'hill') continue;
+            // Check if passable - be defensive about undefined values
+            const tile = game.map?.[ny]?.[nx];
+            if (!tile) {
+                // Tile doesn't exist or isn't defined, assume not passable
+                continue;
+            }
+            if (tile.type === 'water' || tile.type === 'hill') {
+                continue;
+            }
 
+            validNeighbors++;
             const tentativeG = (gScore.get(key(current.x, current.y)) || Infinity) +
                               (dir.dx !== 0 && dir.dy !== 0 ? 1.414 : 1); // Diagonal cost
 
@@ -1800,8 +1817,14 @@ function findPath(startX, startY, endX, endY) {
                 }
             }
         }
+
+        // Debug: Check if we're stuck
+        if (validNeighbors === 0 && openSet.length === 0) {
+            console.log(`[findPath] STUCK: No valid neighbors from (${current.x},${current.y}), current tile=${game.map[current.y]?.[current.x]?.type || 'NULL'}`);
+        }
     }
 
+    console.log(`[findPath] NO PATH FOUND: reached max iterations (${iterations}) or openSet empty. Start=(${start.x},${start.y}) End=(${end.x},${end.y})`);
     return null; // No path found
 }
 
@@ -2119,10 +2142,11 @@ function updateHarvester(unit, type, dt) {
         const targetOilY = unit.targetOilY;
 
         // Check if oil still exists at target location
-        const tile = game.map[targetOilY]?.[targetOil];
-        const oilStillThere = targetOil >= 0 && targetOil < getMapSize() &&
-                              targetOilY >= 0 && targetOilY < getMapSize() &&
-                              tile?.oil;
+        const mapSize = getMapSize();
+        const tile = game.map?.[targetOilY]?.[targetOil];
+        const oilStillThere = targetOil >= 0 && targetOil < mapSize &&
+                              targetOilY >= 0 && targetOilY < mapSize &&
+                              tile && tile.oil === true;
 
         // DEBUG: Log why oil check fails
         if (!oilStillThere && game.tick % 30 === 0) {
@@ -2140,7 +2164,26 @@ function updateHarvester(unit, type, dt) {
 
         // Use pathfinding to reach oil
         if (!unit.harvestPath || unit.harvestPath.length === 0) {
+            // Try to find path to the oil tile first
             unit.harvestPath = findPath(unit.x, unit.y, targetOil, targetOilY);
+
+            // If direct path fails, try adjacent tiles
+            if (!unit.harvestPath) {
+                const adjacentTiles = [
+                    { x: targetOil + 1, y: targetOilY },
+                    { x: targetOil - 1, y: targetOilY },
+                    { x: targetOil, y: targetOilY + 1 },
+                    { x: targetOil, y: targetOilY - 1 }
+                ];
+
+                for (const tile of adjacentTiles) {
+                    if (tile.x >= 0 && tile.x < getMapSize() && tile.y >= 0 && tile.y < getMapSize()) {
+                        unit.harvestPath = findPath(unit.x, unit.y, tile.x, tile.y);
+                        if (unit.harvestPath) break;
+                    }
+                }
+            }
+
             if (game.tick % 60 === 0) {
                 console.log(`[Harvester] Finding path from ${unit.x.toFixed(1)},${unit.y.toFixed(1)} to ${targetOil},${targetOilY} - result: ${unit.harvestPath ? unit.harvestPath.length + ' waypoints' : 'NULL'}`);
             }
@@ -2176,11 +2219,19 @@ function updateHarvester(unit, type, dt) {
                     });
                 }
             }
-        } else {
-            // No path found, clear target and return
-            unit.targetOilX = undefined;
-            unit.targetOilY = undefined;
-            if (unit.cargo > 0) unit.returning = true;
+        } else if (unit.harvestPath === null) {
+            // Pathfinding failed - try direct approach to oil
+            const dx = targetOil - unit.x;
+            const dy = targetOilY - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 1) {
+                // Not at oil yet, move directly towards it
+                const speed = type.speed * dt * 60;
+                unit.x += (dx / dist) * speed;
+                unit.y += (dy / dist) * speed;
+                unit.angle = Math.atan2(dy, dx);
+            }
         }
 
         // Check if reached oil location
@@ -3122,22 +3173,45 @@ function assignHarvesterToNearestOil(harvester) {
     let nearestOil = null;
     let nearestDist = Infinity;
     let oilCount = 0;
+    const mapSize = getMapSize();
 
-    // Find nearest oil location
-    for (let y = 0; y < getMapSize(); y++) {
-        for (let x = 0; x < getMapSize(); x++) {
+    // Find nearest oil location that is on a passable tile (not surrounded by water/hills)
+    for (let y = 0; y < mapSize; y++) {
+        for (let x = 0; x < mapSize; x++) {
             if (game.map[y]?.[x]?.oil) {
                 oilCount++;
-                const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
-                if (dist < nearestDist) {
-                    nearestDist = dist;
-                    nearestOil = { x, y };
+
+                // Check if this oil tile is at least somewhat reachable (has at least one adjacent passable tile)
+                let hasAccessibleNeighbor = false;
+                const directions = [
+                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                ];
+
+                for (const dir of directions) {
+                    const nx = x + dir.dx;
+                    const ny = y + dir.dy;
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) {
+                        const neighborTile = game.map[ny]?.[nx];
+                        if (neighborTile && neighborTile.type === 'grass') {
+                            hasAccessibleNeighbor = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Only consider oil that has at least one accessible neighbor
+                if (hasAccessibleNeighbor) {
+                    const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestOil = { x, y };
+                    }
                 }
             }
         }
     }
 
-    console.log(`[assignHarvester] Found ${oilCount} oil deposits, nearest at ${nearestOil?.x},${nearestOil?.y} dist=${nearestDist.toFixed(1)}`);
+    console.log(`[assignHarvester] Found ${oilCount} oil deposits, nearest accessible at ${nearestOil?.x},${nearestOil?.y} dist=${nearestDist.toFixed(1)}`);
 
     // Assign harvester to nearest oil
     if (nearestOil) {
@@ -3146,7 +3220,7 @@ function assignHarvesterToNearestOil(harvester) {
         harvester.harvestPath = null;
         console.log(`[assignHarvester] Assigned harvester to oil at ${nearestOil.x},${nearestOil.y}`);
     } else {
-        console.log(`[assignHarvester] No oil found!`);
+        console.log(`[assignHarvester] No accessible oil found!`);
     }
 }
 
