@@ -1721,13 +1721,6 @@ function findPath(startX, startY, endX, endY) {
         return null;
     }
 
-    // Check if start is passable
-    const startTile = game.map[start.y]?.[start.x];
-    if (!startTile || startTile.type === 'water' || startTile.type === 'hill') {
-        console.log(`[findPath] START NOT PASSABLE: start=(${start.x},${start.y}) tile=${startTile ? startTile.type : 'NULL'}`);
-        return null;
-    }
-
     // Check if end is passable
     const endTile = game.map[end.y]?.[end.x];
     if (endTile && (endTile.type === 'water' || endTile.type === 'hill')) {
@@ -2157,7 +2150,26 @@ function updateHarvester(unit, type, dt) {
 
         // Use pathfinding to reach oil
         if (!unit.harvestPath || unit.harvestPath.length === 0) {
+            // Try to find path to the oil tile first
             unit.harvestPath = findPath(unit.x, unit.y, targetOil, targetOilY);
+
+            // If direct path fails, try adjacent tiles
+            if (!unit.harvestPath) {
+                const adjacentTiles = [
+                    { x: targetOil + 1, y: targetOilY },
+                    { x: targetOil - 1, y: targetOilY },
+                    { x: targetOil, y: targetOilY + 1 },
+                    { x: targetOil, y: targetOilY - 1 }
+                ];
+
+                for (const tile of adjacentTiles) {
+                    if (tile.x >= 0 && tile.x < getMapSize() && tile.y >= 0 && tile.y < getMapSize()) {
+                        unit.harvestPath = findPath(unit.x, unit.y, tile.x, tile.y);
+                        if (unit.harvestPath) break;
+                    }
+                }
+            }
+
             if (game.tick % 60 === 0) {
                 console.log(`[Harvester] Finding path from ${unit.x.toFixed(1)},${unit.y.toFixed(1)} to ${targetOil},${targetOilY} - result: ${unit.harvestPath ? unit.harvestPath.length + ' waypoints' : 'NULL'}`);
             }
@@ -2193,11 +2205,19 @@ function updateHarvester(unit, type, dt) {
                     });
                 }
             }
-        } else {
-            // No path found, clear target and return
-            unit.targetOilX = undefined;
-            unit.targetOilY = undefined;
-            if (unit.cargo > 0) unit.returning = true;
+        } else if (unit.harvestPath === null) {
+            // Pathfinding failed - try direct approach to oil
+            const dx = targetOil - unit.x;
+            const dy = targetOilY - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 1) {
+                // Not at oil yet, move directly towards it
+                const speed = type.speed * dt * 60;
+                unit.x += (dx / dist) * speed;
+                unit.y += (dy / dist) * speed;
+                unit.angle = Math.atan2(dy, dx);
+            }
         }
 
         // Check if reached oil location
