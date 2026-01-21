@@ -4140,6 +4140,11 @@ function goToMainMenu() {
     game.selection = [];
     showScreen('mainMenu');
 
+    // Hide game interface
+    document.getElementById('header').classList.remove('game-active');
+    document.getElementById('gameContainer').classList.remove('game-active');
+    document.getElementById('footer').classList.remove('game-active');
+
     // Stop background music and play intro music
     const bgMusic = document.getElementById('backgroundMusic');
     const introMusic = document.getElementById('introMusic');
@@ -4193,6 +4198,11 @@ function startGame() {
     showScreen('mainMenu');
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('timerDisplay').style.display = 'block';
+
+    // Show game interface
+    document.getElementById('header').classList.add('game-active');
+    document.getElementById('gameContainer').classList.add('game-active');
+    document.getElementById('footer').classList.add('game-active');
 
     // Stop intro music and play background music
     const introMusic = document.getElementById('introMusic');
@@ -4385,6 +4395,13 @@ All your units and buildings have been destroyed.`;
 }
 
 function setupMenuHandlers() {
+    // Add click sound to ALL menu buttons
+    document.querySelectorAll('.menu-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            SoundManager.play('ui_click');
+        });
+    });
+
     // Main menu buttons
     const newGameBtn = document.getElementById('newGameBtn');
     const settingsBtn = document.getElementById('settingsBtn');
@@ -4418,6 +4435,10 @@ function setupMenuHandlers() {
         showScreen('mainMenu');
         document.getElementById('mainMenu').classList.add('hidden');
         document.getElementById('timerDisplay').style.display = 'block';
+        // Show game interface
+        document.getElementById('header').classList.add('game-active');
+        document.getElementById('gameContainer').classList.add('game-active');
+        document.getElementById('footer').classList.add('game-active');
         // Restart background music
         const bgMusic = document.getElementById('backgroundMusic');
         if (bgMusic) {
@@ -4432,6 +4453,10 @@ function setupMenuHandlers() {
         showScreen('mainMenu');
         document.getElementById('mainMenu').classList.add('hidden');
         document.getElementById('timerDisplay').style.display = 'block';
+        // Show game interface
+        document.getElementById('header').classList.add('game-active');
+        document.getElementById('gameContainer').classList.add('game-active');
+        document.getElementById('footer').classList.add('game-active');
         // Restart background music
         const bgMusic = document.getElementById('backgroundMusic');
         if (bgMusic) {
@@ -4554,6 +4579,10 @@ function showLoadingScreen() {
                 if (goButton) {
                     goButton.style.display = 'block';
                     goButton.onclick = () => {
+                        // Play click sound and unlock audio
+                        SoundManager.init();
+                        SoundManager.resume();
+                        SoundManager.play('ui_click');
                         // Start intro music and show menu
                         if (introMusic) {
                             introMusic.volume = 0.3;
