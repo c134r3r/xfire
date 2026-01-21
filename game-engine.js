@@ -1711,12 +1711,27 @@ function findPath(startX, startY, endX, endY) {
     // Bounds check
     if (start.x < 0 || start.x >= mapSize || start.y < 0 || start.y >= mapSize ||
         end.x < 0 || end.x >= mapSize || end.y < 0 || end.y >= mapSize) {
+        console.log(`[findPath] OUT OF BOUNDS: start=(${start.x},${start.y}) end=(${end.x},${end.y}) mapSize=${mapSize}`);
+        return null;
+    }
+
+    // Check if map exists
+    if (!game.map || game.map.length === 0) {
+        console.log(`[findPath] MAP NOT INITIALIZED`);
+        return null;
+    }
+
+    // Check if start is passable
+    const startTile = game.map[start.y]?.[start.x];
+    if (!startTile || startTile.type === 'water' || startTile.type === 'hill') {
+        console.log(`[findPath] START NOT PASSABLE: start=(${start.x},${start.y}) tile=${startTile ? startTile.type : 'NULL'}`);
         return null;
     }
 
     // Check if end is passable
     const endTile = game.map[end.y]?.[end.x];
     if (endTile && (endTile.type === 'water' || endTile.type === 'hill')) {
+        console.log(`[findPath] END NOT PASSABLE: end=(${end.x},${end.y}) tile=${endTile.type}`);
         return null;
     }
 
@@ -1765,6 +1780,7 @@ function findPath(startX, startY, endX, endY) {
                 const prev = cameFrom.get(key(curr.x, curr.y));
                 curr = prev;
             }
+            console.log(`[findPath] FOUND PATH: ${path.length} waypoints in ${iterations} iterations`);
             return path;
         }
 
@@ -1802,6 +1818,7 @@ function findPath(startX, startY, endX, endY) {
         }
     }
 
+    console.log(`[findPath] NO PATH FOUND: reached max iterations or openSet empty`);
     return null; // No path found
 }
 
