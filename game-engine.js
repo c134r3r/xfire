@@ -2047,6 +2047,11 @@ function updateUnits(dt) {
 function updateHarvester(unit, type, dt) {
     const player = game.players[unit.playerId];
 
+    // DEBUG: Log harvester state
+    if (game.tick % 60 === 0) { // Log every second
+        console.log(`[Harvester P${unit.playerId}] cargo=${unit.cargo}, targetOil=${unit.targetOilX},${unit.targetOilY}, returning=${unit.returning}, path=${unit.harvestPath?.length || 0}`);
+    }
+
     // Find nearest HQ for dropoff
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
 
@@ -2129,6 +2134,9 @@ function updateHarvester(unit, type, dt) {
         // Use pathfinding to reach oil
         if (!unit.harvestPath || unit.harvestPath.length === 0) {
             unit.harvestPath = findPath(unit.x, unit.y, targetOil, targetOilY);
+            if (game.tick % 60 === 0) {
+                console.log(`[Harvester] Finding path from ${unit.x.toFixed(1)},${unit.y.toFixed(1)} to ${targetOil},${targetOilY} - result: ${unit.harvestPath ? unit.harvestPath.length + ' waypoints' : 'NULL'}`);
+            }
         }
 
         if (unit.harvestPath && unit.harvestPath.length > 0) {
@@ -3051,10 +3059,13 @@ function updateBuildMenu() {
             btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
             btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
             btn.disabled = player.oil < type.cost || !isTechAvailable;
-            btn.onclick = () => {
-                if (player.oil >= type.cost && isTechAvailable) {
+            btn.onclick = (e) => {
+                console.log(`[BuildMenu] Clicked on ${bType}, oil=${game.players[0].oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
+                e.stopPropagation(); // Prevent event bubbling
+                if (game.players[0].oil >= type.cost && isTechAvailable) {
                     SoundManager.play('ui_click');
                     game.placingBuilding = bType;
+                    console.log(`[BuildMenu] Set placingBuilding to ${bType}`);
                     // If a building is selected, set it as source
                     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
                     if (selectedBuilding && selectedBuilding.playerId === 0) {
@@ -3062,9 +3073,11 @@ function updateBuildMenu() {
                     } else {
                         game.placingBuildingFrom = null;
                     }
+                } else {
+                    console.log(`[BuildMenu] Cannot build: oil=${game.players[0].oil} < cost=${type.cost} or tech not available`);
                 }
             };
-            menu.appendChild(btn);;
+            menu.appendChild(btn);
         }
     }
 }
@@ -3094,15 +3107,20 @@ function spawnUnit(type, playerId, x, y) {
 
 function assignHarvesterToNearestOil(harvester) {
     // Skip if already has a target or has cargo to deliver
-    if (harvester.targetOilX !== undefined || harvester.cargo > 0) return;
+    if (harvester.targetOilX !== undefined || harvester.cargo > 0) {
+        console.log(`[assignHarvester] Skipping - already has target or cargo`);
+        return;
+    }
 
     let nearestOil = null;
     let nearestDist = Infinity;
+    let oilCount = 0;
 
     // Find nearest oil location
     for (let y = 0; y < getMapSize(); y++) {
         for (let x = 0; x < getMapSize(); x++) {
             if (game.map[y]?.[x]?.oil) {
+                oilCount++;
                 const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
                 if (dist < nearestDist) {
                     nearestDist = dist;
@@ -3112,11 +3130,16 @@ function assignHarvesterToNearestOil(harvester) {
         }
     }
 
+    console.log(`[assignHarvester] Found ${oilCount} oil deposits, nearest at ${nearestOil?.x},${nearestOil?.y} dist=${nearestDist.toFixed(1)}`);
+
     // Assign harvester to nearest oil
     if (nearestOil) {
         harvester.targetOilX = nearestOil.x;
         harvester.targetOilY = nearestOil.y;
         harvester.harvestPath = null;
+        console.log(`[assignHarvester] Assigned harvester to oil at ${nearestOil.x},${nearestOil.y}`);
+    } else {
+        console.log(`[assignHarvester] No oil found!`);
     }
 }
 
