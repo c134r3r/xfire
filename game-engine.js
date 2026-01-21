@@ -2142,10 +2142,11 @@ function updateHarvester(unit, type, dt) {
         const targetOilY = unit.targetOilY;
 
         // Check if oil still exists at target location
-        const tile = game.map[targetOilY]?.[targetOil];
-        const oilStillThere = targetOil >= 0 && targetOil < getMapSize() &&
-                              targetOilY >= 0 && targetOilY < getMapSize() &&
-                              tile?.oil;
+        const mapSize = getMapSize();
+        const tile = game.map?.[targetOilY]?.[targetOil];
+        const oilStillThere = targetOil >= 0 && targetOil < mapSize &&
+                              targetOilY >= 0 && targetOilY < mapSize &&
+                              tile && tile.oil === true;
 
         // DEBUG: Log why oil check fails
         if (!oilStillThere && game.tick % 30 === 0) {
