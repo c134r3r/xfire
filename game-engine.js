@@ -2132,7 +2132,7 @@ function updateHarvester(unit, type, dt) {
         const tile = game.map?.[targetOilY]?.[targetOil];
         const oilStillThere = targetOil >= 0 && targetOil < mapSize &&
                               targetOilY >= 0 && targetOilY < mapSize &&
-                              tile && tile.oil === true;
+                              tile && tile.oil;
 
         if (!oilStillThere) {
             // Oil depleted or invalid - clear target
@@ -2775,37 +2775,65 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
 }
 
 function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
-    // Only attack if there are visible enemies nearby
-    // Each unit should find its own target based on sight range
+    // Find the player HQ or nearest player building as rally point
+    const playerHQ = playerBuildings.find(b => b.type === 'hq');
+    const rallyTarget = playerHQ || playerBuildings[0];
+
     for (const unit of aiUnits) {
-        if (unit.attackTarget) {
-            // Already has a target, skip
+        // Skip harvesters - they should keep harvesting
+        if (unit.type === 'harvester') continue;
+
+        if (unit.attackTarget && unit.attackTarget.hp > 0) {
+            // Already has a living target, skip
             continue;
         }
 
         const unitType = UNIT_TYPES[unit.type];
         const sightRange = unitType?.sight || 100;
 
-        // Look for nearby enemy units first
-        let target = playerUnits.find(u => {
+        // Look for nearby enemy units first (prioritize closest)
+        let nearestTarget = null;
+        let nearestDist = Infinity;
+
+        for (const u of playerUnits) {
             const dx = u.x - unit.x;
             const dy = u.y - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            return dist <= sightRange;
-        });
+            if (dist <= sightRange && dist < nearestDist) {
+                nearestDist = dist;
+                nearestTarget = u;
+            }
+        }
 
         // If no units found, look for nearby buildings
-        if (!target) {
-            target = playerBuildings.find(b => {
+        if (!nearestTarget) {
+            for (const b of playerBuildings) {
                 const dx = b.x - unit.x;
                 const dy = b.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                return dist <= sightRange;
-            });
+                if (dist <= sightRange && dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestTarget = b;
+                }
+            }
         }
 
-        if (target) {
-            unit.attackTarget = target;
+        if (nearestTarget) {
+            unit.attackTarget = nearestTarget;
+        } else if (rallyTarget) {
+            // No enemy in sight range - march toward player base
+            // Use pathfinding to move as a coordinated attack wave
+            if (unit.targetX === undefined || Math.abs(unit.targetX - rallyTarget.x) > 5 || Math.abs(unit.targetY - rallyTarget.y) > 5) {
+                // Add slight offset so units don't all converge on one tile
+                const offsetX = (Math.random() - 0.5) * 6;
+                const offsetY = (Math.random() - 0.5) * 6;
+                unit.targetX = rallyTarget.x + offsetX;
+                unit.targetY = rallyTarget.y + offsetY;
+                unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                if (unit.path) {
+                    unit.pathIndex = 0;
+                }
+            }
         }
     }
 }
@@ -3251,10 +3279,10 @@ function canBuildAt(buildingType, x, y) {
     // Check map bounds
     if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) return false;
 
-    // Check terrain - cannot build on water or hills
-    const bSize = type.size || 1;
-    for (let dy = -bSize; dy <= bSize; dy++) {
-        for (let dx = -bSize; dx <= bSize; dx++) {
+    // Check terrain - use a small footprint around center (not full visual size)
+    const footprint = Math.ceil((type.size || 1) / 2);
+    for (let dy = -footprint; dy <= footprint; dy++) {
+        for (let dx = -footprint; dx <= footprint; dx++) {
             const checkX = Math.floor(x + dx);
             const checkY = Math.floor(y + dy);
             if (checkX >= 0 && checkX < mapSize && checkY >= 0 && checkY < mapSize) {
@@ -3266,17 +3294,19 @@ function canBuildAt(buildingType, x, y) {
         }
     }
 
-    // Check for building collision (don't build on top of other buildings)
+    // Check for building collision - prevent overlap but allow adjacent placement
     let canPlaceHere = true;
+    const myFootprint = Math.ceil((type.size || 1) / 2);
 
     for (const building of game.buildings) {
         const bType = BUILDING_TYPES[building.type];
+        const otherFootprint = Math.ceil((bType.size || 1) / 2);
         const bdx = Math.abs(x - building.x);
         const bdy = Math.abs(y - building.y);
         const dist = Math.max(bdx, bdy);
 
-        // If too close to another building, can't place
-        if (dist < bSize + (bType.size || 1)) {
+        // Minimum distance: sum of footprints + 1 tile gap
+        if (dist < myFootprint + otherFootprint + 1) {
             canPlaceHere = false;
             break;
         }
@@ -3788,12 +3818,38 @@ function initializeEventHandlers() {
             }
         }
 
-        // Check if clicking on oil
-        const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
-                       game.map[tileY]?.[tileX]?.oil;
+        // Check if clicking on oil - also check neighboring tiles for precision
+        let hasOil = false;
+        let oilTileX = tileX;
+        let oilTileY = tileY;
+        const mapSize = getMapSize();
+        // Check clicked tile and immediate neighbors
+        for (let dy = -1; dy <= 1 && !hasOil; dy++) {
+            for (let dx = -1; dx <= 1 && !hasOil; dx++) {
+                const cx = tileX + dx;
+                const cy = tileY + dy;
+                if (cx >= 0 && cx < mapSize && cy >= 0 && cy < mapSize && game.map[cy]?.[cx]?.oil) {
+                    hasOil = true;
+                    oilTileX = cx;
+                    oilTileY = cy;
+                }
+            }
+        }
 
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
+                // For harvesters, prioritize oil over enemy targeting
+                if (sel.type === 'harvester' && hasOil) {
+                    sel.targetOilX = oilTileX;
+                    sel.targetOilY = oilTileY;
+                    sel.targetX = undefined;
+                    sel.targetY = undefined;
+                    sel.attackTarget = null;
+                    sel.path = null;
+                    sel.harvestPath = null;
+                    sel.returning = false;
+                    continue;
+                }
                 if (enemyDirectClick) {
                     // Direct click on enemy - move back slightly while keeping in range
                     const type = UNIT_TYPES[sel.type];
@@ -3835,16 +3891,6 @@ function initializeEventHandlers() {
                         sel.harvestPath = null;
                         sel.returning = false;
                     }
-                } else if (sel.type === 'harvester' && hasOil) {
-                    // Assign harvester to oil
-                    sel.targetOilX = tileX;
-                    sel.targetOilY = tileY;
-                    sel.targetX = undefined;
-                    sel.targetY = undefined;
-                    sel.attackTarget = null;
-                    sel.path = null;
-                    sel.harvestPath = null; // Reset harvest path so new path is calculated
-                    sel.returning = false; // Stop returning to HQ
                 } else {
                     // Calculate path for movement
                     const path = findPath(sel.x, sel.y, world.x, world.y);
@@ -4094,13 +4140,20 @@ canvas.addEventListener('wheel', (e) => {
     if (minimapCanvas) {
         minimapCanvas.addEventListener('click', (e) => {
             const rect = minimapCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            // Convert CSS coordinates to canvas internal coordinates
+            const canvasX = (e.clientX - rect.left) * (minimapCanvas.width / rect.width);
+            const canvasY = (e.clientY - rect.top) * (minimapCanvas.height / rect.height);
 
-            const minimapSize = minimapCanvas.width;
-            const scale = getMapSize() / minimapSize;
-            game.camera.x = x * scale * TILE_WIDTH / 2;
-            game.camera.y = y * scale * TILE_HEIGHT;
+            const minimapSize = Math.min(minimapCanvas.width, minimapCanvas.height);
+            const scale = minimapSize / getMapSize();
+
+            // Convert minimap pixel position to world tile coordinates
+            const worldX = canvasX / scale;
+            const worldY = canvasY / scale;
+
+            // Convert world tile coords to isometric camera position
+            game.camera.x = (worldX - worldY) * (TILE_WIDTH / 2);
+            game.camera.y = (worldX + worldY) * (TILE_HEIGHT / 2);
         });
     }
 
