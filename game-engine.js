@@ -2058,152 +2058,126 @@ function updateUnits(dt) {
     }
 }
 
+function moveHarvesterAlongPath(unit, type, dt) {
+    if (unit.harvestPath && unit.harvestPath.length > 0) {
+        const target = unit.harvestPath[0];
+        const dx = target.x - unit.x;
+        const dy = target.y - unit.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 0.5) {
+            unit.harvestPath.shift();
+        } else {
+            const speed = type.speed * dt * 60;
+            unit.x += (dx / dist) * speed;
+            unit.y += (dy / dist) * speed;
+            unit.angle = Math.atan2(dy, dx);
+
+            // Dust trail
+            if (Math.random() < 0.2) {
+                game.particles.push({
+                    x: unit.x + (Math.random() - 0.5) * type.size,
+                    y: unit.y + (Math.random() - 0.5) * type.size,
+                    z: 0,
+                    vx: (Math.random() - 0.5) * 0.1,
+                    vy: (Math.random() - 0.5) * 0.1,
+                    vz: Math.random() * 0.08,
+                    color: '#777777',
+                    size: Math.random() * 2 + 1.5,
+                    life: 0.4
+                });
+            }
+        }
+        return true; // moving
+    }
+    return false; // not moving
+}
+
 function updateHarvester(unit, type, dt) {
     const player = game.players[unit.playerId];
 
     // Find nearest HQ for dropoff
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
 
+    // STATE 1: Cargo full or returning with cargo → go to HQ
     if (unit.cargo >= type.capacity || (unit.returning && unit.cargo > 0)) {
-        // Return to HQ - only if HQ exists
         if (hq) {
             unit.returning = true;
 
-            // Use pathfinding to reach HQ
+            // Find path to HQ
             if (!unit.harvestPath || unit.harvestPath.length === 0) {
                 unit.harvestPath = findPath(unit.x, unit.y, hq.x, hq.y);
             }
 
-            if (unit.harvestPath && unit.harvestPath.length > 0) {
-                const target = unit.harvestPath[0];
-                const dx = target.x - unit.x;
-                const dy = target.y - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 0.5) {
-                    // Reached waypoint, move to next
-                    unit.harvestPath.shift();
-                } else {
-                    const speed = type.speed * dt * 60;
-                    unit.x += (dx / dist) * speed;
-                    unit.y += (dy / dist) * speed;
-                    unit.angle = Math.atan2(dy, dx);
-
-                    // Create dust trail effect
-                    if (Math.random() < 0.2) {
-                        game.particles.push({
-                            x: unit.x + (Math.random() - 0.5) * type.size,
-                            y: unit.y + (Math.random() - 0.5) * type.size,
-                            z: 0,
-                            vx: (Math.random() - 0.5) * 0.1,
-                            vy: (Math.random() - 0.5) * 0.1,
-                            vz: Math.random() * 0.08,
-                            color: '#777777',
-                            size: Math.random() * 2 + 1.5,
-                            life: 0.4
-                        });
-                    }
-                }
-            } else {
-                // No path found, clear returning state
-                unit.returning = false;
-            }
+            moveHarvesterAlongPath(unit, type, dt);
 
             // Check if reached HQ
             const hqDist = Math.sqrt((hq.x - unit.x) ** 2 + (hq.y - unit.y) ** 2);
-            if (hqDist < 2) {
-                // Deposit cargo
+            if (hqDist < 2.5) {
+                // Deposit cargo and immediately go back to oil
                 player.oil += unit.cargo;
                 unit.cargo = 0;
                 unit.returning = false;
-                unit.harvestPath = [];
+                unit.harvestPath = null; // will recalculate path to oil next frame
+                // Keep targetOilX/Y so harvester goes back to same oil field
             }
         } else {
-            // HQ doesn't exist - reset returning state
             unit.returning = false;
         }
+
+    // STATE 2: Has oil target → go harvest
     } else if (unit.targetOilX !== undefined && unit.targetOilY !== undefined) {
-        // Go to assigned oil location
-        const targetOil = unit.targetOilX;
+        const targetOilX = unit.targetOilX;
         const targetOilY = unit.targetOilY;
 
-        // Check if oil still exists at target location
+        // Check if oil still exists
         const mapSize = getMapSize();
-        const tile = game.map?.[targetOilY]?.[targetOil];
-        const oilStillThere = targetOil >= 0 && targetOil < mapSize &&
+        const tile = game.map?.[targetOilY]?.[targetOilX];
+        const oilStillThere = targetOilX >= 0 && targetOilX < mapSize &&
                               targetOilY >= 0 && targetOilY < mapSize &&
                               tile && tile.oil;
 
         if (!oilStillThere) {
-            // Oil depleted or invalid - clear target
+            // Oil gone - find new oil field
             unit.targetOilX = undefined;
             unit.targetOilY = undefined;
-            if (unit.cargo > 0) unit.returning = true;
+            unit.harvestPath = null;
+            if (unit.cargo > 0) {
+                unit.returning = true;
+            } else {
+                // Immediately try to find new oil
+                assignHarvesterToNearestOil(unit);
+            }
             return;
         }
 
-        // Use pathfinding to reach oil
+        // Find path to oil
         if (!unit.harvestPath || unit.harvestPath.length === 0) {
-            // Try to find path to the oil tile first
-            unit.harvestPath = findPath(unit.x, unit.y, targetOil, targetOilY);
+            unit.harvestPath = findPath(unit.x, unit.y, targetOilX, targetOilY);
 
             // If direct path fails, try adjacent tiles
             if (!unit.harvestPath) {
                 const adjacentTiles = [
-                    { x: targetOil + 1, y: targetOilY },
-                    { x: targetOil - 1, y: targetOilY },
-                    { x: targetOil, y: targetOilY + 1 },
-                    { x: targetOil, y: targetOilY - 1 }
+                    { x: targetOilX + 1, y: targetOilY },
+                    { x: targetOilX - 1, y: targetOilY },
+                    { x: targetOilX, y: targetOilY + 1 },
+                    { x: targetOilX, y: targetOilY - 1 }
                 ];
-
-                for (const tile of adjacentTiles) {
-                    if (tile.x >= 0 && tile.x < getMapSize() && tile.y >= 0 && tile.y < getMapSize()) {
-                        unit.harvestPath = findPath(unit.x, unit.y, tile.x, tile.y);
+                for (const adj of adjacentTiles) {
+                    if (adj.x >= 0 && adj.x < mapSize && adj.y >= 0 && adj.y < mapSize) {
+                        unit.harvestPath = findPath(unit.x, unit.y, adj.x, adj.y);
                         if (unit.harvestPath) break;
                     }
                 }
             }
-
         }
 
-        if (unit.harvestPath && unit.harvestPath.length > 0) {
-            const target = unit.harvestPath[0];
-            const dx = target.x - unit.x;
-            const dy = target.y - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < 0.5) {
-                // Reached waypoint, move to next
-                unit.harvestPath.shift();
-            } else {
-                const speed = type.speed * dt * 60;
-                unit.x += (dx / dist) * speed;
-                unit.y += (dy / dist) * speed;
-                unit.angle = Math.atan2(dy, dx);
-
-                // Create dust trail effect
-                if (Math.random() < 0.2) {
-                    game.particles.push({
-                        x: unit.x + (Math.random() - 0.5) * type.size,
-                        y: unit.y + (Math.random() - 0.5) * type.size,
-                        z: 0,
-                        vx: (Math.random() - 0.5) * 0.1,
-                        vy: (Math.random() - 0.5) * 0.1,
-                        vz: Math.random() * 0.08,
-                        color: '#777777',
-                        size: Math.random() * 2 + 1.5,
-                        life: 0.4
-                    });
-                }
-            }
-        } else if (unit.harvestPath === null) {
-            // Pathfinding failed - try direct approach to oil
-            const dx = targetOil - unit.x;
+        if (!moveHarvesterAlongPath(unit, type, dt) && unit.harvestPath === null) {
+            // Pathfinding failed - direct approach
+            const dx = targetOilX - unit.x;
             const dy = targetOilY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-
             if (dist > 1) {
-                // Not at oil yet, move directly towards it
                 const speed = type.speed * dt * 60;
                 unit.x += (dx / dist) * speed;
                 unit.y += (dy / dist) * speed;
@@ -2211,17 +2185,20 @@ function updateHarvester(unit, type, dt) {
             }
         }
 
-        // Check if reached oil location
-        const oilDist = Math.sqrt((targetOil - unit.x) ** 2 + (targetOilY - unit.y) ** 2);
-        if (oilDist < 1) {
-            // Harvest at target location
-            unit.cargo = Math.min(type.capacity, unit.cargo + 1);
+        // Harvest when close to oil (faster rate: +5 per frame)
+        const oilDist = Math.sqrt((targetOilX - unit.x) ** 2 + (targetOilY - unit.y) ** 2);
+        if (oilDist < 1.5) {
+            unit.cargo = Math.min(type.capacity, unit.cargo + 5);
         }
+
+    // STATE 3: Has cargo but no target → return to HQ
     } else if (unit.cargo > 0) {
-        // Have cargo but no target - return to HQ
         unit.returning = true;
+
+    // STATE 4: Idle (no target, no cargo) → auto-assign to nearest oil
+    } else {
+        assignHarvesterToNearestOil(unit);
     }
-    // Else: idle (no target, no cargo)
 }
 
 function updateBuildings(dt) {
@@ -2970,6 +2947,19 @@ function updateBuildMenu() {
     // Check what's selected
     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
 
+    // Build a state key to detect actual changes - only rebuild DOM when needed
+    const selType = selectedBuilding ? selectedBuilding.type : 'none';
+    const selId = selectedBuilding ? (selectedBuilding.x + ',' + selectedBuilding.y) : '';
+    const queueLen = selectedBuilding ? selectedBuilding.productionQueue.length : 0;
+    const progress = selectedBuilding && queueLen > 0 ? Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100) : 0;
+    const oilBucket = Math.floor(player.oil / 50); // only update on significant oil change
+    const techKeys = Object.keys(player.tech).filter(k => player.tech[k]).join(',');
+    const placing = game.placingBuilding || '';
+    const stateKey = `${selType}|${selId}|${queueLen}|${progress}|${oilBucket}|${techKeys}|${placing}`;
+
+    if (menu._lastStateKey === stateKey) return; // No change, skip DOM rebuild
+    menu._lastStateKey = stateKey;
+
     // Clear menu
     menu.innerHTML = '';
 
@@ -3197,7 +3187,7 @@ function assignHarvesterToNearestOil(harvester) {
                     const ny = y + dir.dy;
                     if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) {
                         const neighborTile = game.map[ny]?.[nx];
-                        if (neighborTile && neighborTile.type === 'grass') {
+                        if (neighborTile && neighborTile.type !== 'water' && neighborTile.type !== 'hill') {
                             hasAccessibleNeighbor = true;
                             break;
                         }
@@ -3657,8 +3647,9 @@ function findBuildPosition(nearX, nearY, playerId) {
             if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock' || game.map[y][x].type === 'hill') continue;
 
             const blocked = game.buildings.some(b => {
-                const size = BUILDING_TYPES[b.type].size;
-                return Math.abs(b.x - x) < size + 1 && Math.abs(b.y - y) < size + 1;
+                const footprint = Math.ceil((BUILDING_TYPES[b.type].size || 1) / 2);
+                const minDist = footprint + 2; // footprint + 1 tile gap + 1 for new building
+                return Math.abs(b.x - x) < minDist && Math.abs(b.y - y) < minDist;
             });
 
             if (!blocked) return { x, y };
