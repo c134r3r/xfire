@@ -3,7 +3,7 @@ const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 if (isMac) {
     const helpEl = document.getElementById('controlsHelp');
     if (helpEl) {
-        helpEl.innerHTML = 'Controls: Left-click select | ⌘+Click or right-click move/attack | Drag to box-select | WASD/Arrows scroll | ⌘+1–5 unit groups';
+        helpEl.innerHTML = 'Controls: Click select | ⌘+Click/Right-click move/attack | Drag box-select | WASD/Edge scroll | Middle-drag pan | Wheel zoom | X stop | 1-8 build/produce';
     }
 }
 
@@ -1711,20 +1711,17 @@ function findPath(startX, startY, endX, endY) {
     // Bounds check
     if (start.x < 0 || start.x >= mapSize || start.y < 0 || start.y >= mapSize ||
         end.x < 0 || end.x >= mapSize || end.y < 0 || end.y >= mapSize) {
-        console.log(`[findPath] OUT OF BOUNDS: start=(${start.x},${start.y}) end=(${end.x},${end.y}) mapSize=${mapSize}`);
         return null;
     }
 
     // Check if map exists
     if (!game.map || game.map.length === 0) {
-        console.log(`[findPath] MAP NOT INITIALIZED`);
         return null;
     }
 
     // Check if end is passable
     const endTile = game.map[end.y]?.[end.x];
     if (endTile && (endTile.type === 'water' || endTile.type === 'hill')) {
-        console.log(`[findPath] END NOT PASSABLE: end=(${end.x},${end.y}) tile=${endTile.type}`);
         return null;
     }
 
@@ -1773,7 +1770,6 @@ function findPath(startX, startY, endX, endY) {
                 const prev = cameFrom.get(key(curr.x, curr.y));
                 curr = prev;
             }
-            console.log(`[findPath] FOUND PATH: ${path.length} waypoints in ${iterations} iterations from (${start.x},${start.y}) to (${end.x},${end.y})`);
             return path;
         }
 
@@ -1818,13 +1814,8 @@ function findPath(startX, startY, endX, endY) {
             }
         }
 
-        // Debug: Check if we're stuck
-        if (validNeighbors === 0 && openSet.length === 0) {
-            console.log(`[findPath] STUCK: No valid neighbors from (${current.x},${current.y}), current tile=${game.map[current.y]?.[current.x]?.type || 'NULL'}`);
-        }
     }
 
-    console.log(`[findPath] NO PATH FOUND: reached max iterations (${iterations}) or openSet empty. Start=(${start.x},${start.y}) End=(${end.x},${end.y})`);
     return null; // No path found
 }
 
@@ -2070,11 +2061,6 @@ function updateUnits(dt) {
 function updateHarvester(unit, type, dt) {
     const player = game.players[unit.playerId];
 
-    // DEBUG: Log harvester state
-    if (game.tick % 60 === 0) { // Log every second
-        console.log(`[Harvester P${unit.playerId}] cargo=${unit.cargo}, targetOil=${unit.targetOilX},${unit.targetOilY}, returning=${unit.returning}, path=${unit.harvestPath?.length || 0}`);
-    }
-
     // Find nearest HQ for dropoff
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
 
@@ -2148,14 +2134,8 @@ function updateHarvester(unit, type, dt) {
                               targetOilY >= 0 && targetOilY < mapSize &&
                               tile && tile.oil === true;
 
-        // DEBUG: Log why oil check fails
-        if (!oilStillThere && game.tick % 30 === 0) {
-            console.log(`[Harvester] Oil check FAILED at ${targetOil},${targetOilY}: tile=${tile ? JSON.stringify(tile) : 'NULL'}, mapSize=${getMapSize()}`);
-        }
-
         if (!oilStillThere) {
             // Oil depleted or invalid - clear target
-            console.log(`[Harvester] Clearing target - oil not found at ${targetOil},${targetOilY}`);
             unit.targetOilX = undefined;
             unit.targetOilY = undefined;
             if (unit.cargo > 0) unit.returning = true;
@@ -2184,9 +2164,6 @@ function updateHarvester(unit, type, dt) {
                 }
             }
 
-            if (game.tick % 60 === 0) {
-                console.log(`[Harvester] Finding path from ${unit.x.toFixed(1)},${unit.y.toFixed(1)} to ${targetOil},${targetOilY} - result: ${unit.harvestPath ? unit.harvestPath.length + ' waypoints' : 'NULL'}`);
-            }
         }
 
         if (unit.harvestPath && unit.harvestPath.length > 0) {
@@ -3125,11 +3102,9 @@ function updateBuildMenu() {
         }
 
         btn.onclick = () => {
-            console.log(`[BuildMenu] Clicked on ${bType}, oil=${player.oil}, cost=${type.cost}, techAvail=${isTechAvailable}`);
             if (player.oil >= type.cost && isTechAvailable) {
                 SoundManager.play('ui_click');
                 game.placingBuilding = bType;
-                console.log(`[BuildMenu] Set placingBuilding to ${bType}`);
                 // If a building is selected, set it as source
                 const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
                 if (selectedBuilding && selectedBuilding.playerId === 0) {
@@ -3137,8 +3112,6 @@ function updateBuildMenu() {
                 } else {
                     game.placingBuildingFrom = null;
                 }
-            } else {
-                console.log(`[BuildMenu] Cannot build: oil=${player.oil} < cost=${type.cost} or tech not available`);
             }
         };
         menu.appendChild(btn);
@@ -3171,7 +3144,6 @@ function spawnUnit(type, playerId, x, y) {
 function assignHarvesterToNearestOil(harvester) {
     // Skip if already has a target or has cargo to deliver
     if (harvester.targetOilX !== undefined || harvester.cargo > 0) {
-        console.log(`[assignHarvester] Skipping - already has target or cargo`);
         return;
     }
 
@@ -3216,16 +3188,11 @@ function assignHarvesterToNearestOil(harvester) {
         }
     }
 
-    console.log(`[assignHarvester] Found ${oilCount} oil deposits, nearest accessible at ${nearestOil?.x},${nearestOil?.y} dist=${nearestDist.toFixed(1)}`);
-
     // Assign harvester to nearest oil
     if (nearestOil) {
         harvester.targetOilX = nearestOil.x;
         harvester.targetOilY = nearestOil.y;
         harvester.harvestPath = null;
-        console.log(`[assignHarvester] Assigned harvester to oil at ${nearestOil.x},${nearestOil.y}`);
-    } else {
-        console.log(`[assignHarvester] No accessible oil found!`);
     }
 }
 
@@ -3696,6 +3663,19 @@ function initializeEventHandlers() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // Middle mouse button (button 1) - camera drag
+    if (e.button === 1) {
+        e.preventDefault();
+        middleMouseDrag = {
+            startX: e.clientX,
+            startY: e.clientY,
+            cameraStartX: game.camera.x,
+            cameraStartY: game.camera.y
+        };
+        canvas.style.cursor = 'grabbing';
+        return;
+    }
+
     // Right click (button 2) or Command+Click (macOS) or Ctrl+Click (Windows/Linux)
     const isRightClick = e.button === 2 || (e.button === 0 && (e.metaKey || e.ctrlKey));
 
@@ -3897,6 +3877,16 @@ canvas.addEventListener('mousemove', (e) => {
     game.mouse.x = e.clientX - rect.left;
     game.mouse.y = e.clientY - rect.top;
 
+    // Middle mouse drag - pan camera
+    if (middleMouseDrag) {
+        const zoom = getZoom();
+        const dx = (e.clientX - middleMouseDrag.startX) * 0.8 / zoom;
+        const dy = (e.clientY - middleMouseDrag.startY) * 0.8 / zoom;
+        game.camera.x = middleMouseDrag.cameraStartX - dx;
+        game.camera.y = middleMouseDrag.cameraStartY - dy;
+        return; // Don't update world coords or selection box while dragging
+    }
+
     const world = screenToWorld(game.mouse.x, game.mouse.y);
     game.mouse.worldX = world.x;
     game.mouse.worldY = world.y;
@@ -3986,6 +3976,13 @@ canvas.addEventListener('dblclick', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
+    // Middle mouse button release - stop camera drag
+    if (e.button === 1 && middleMouseDrag) {
+        middleMouseDrag = null;
+        canvas.style.cursor = game.placingBuilding ? 'none' : 'crosshair';
+        return;
+    }
+
     if (e.button === 0 && game.selectionBox) {
         const box = game.selectionBox;
         const minX = Math.min(box.x1, box.x2);
@@ -4061,6 +4058,11 @@ canvas.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// Prevent middle-click autoscroll browser behavior
+canvas.addEventListener('auxclick', (e) => {
+    if (e.button === 1) e.preventDefault();
+});
+
 // Trackpad scroll and zoom support
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -4068,17 +4070,21 @@ canvas.addEventListener('wheel', (e) => {
     // Trackpad pinch zoom (Cmd+Scroll on Mac) or Ctrl+Scroll
     if (e.ctrlKey || e.metaKey) {
         // Zoom in/out
-        const zoomSpeed = 0.1;
-        const zoomDelta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+        const zoomSpeed = 0.005;
+        const zoomDelta = -e.deltaY * zoomSpeed;
         gameSettings.zoom = Math.max(
             gameSettings.minZoom,
             Math.min(gameSettings.maxZoom, gameSettings.zoom + zoomDelta)
         );
     } else {
-        // Regular scroll for camera movement
-        const scrollSpeed = 20 / getZoom(); // Adjust scroll speed based on zoom
-        game.camera.x += (e.deltaX / Math.abs(e.deltaX || 1)) * scrollSpeed;
-        game.camera.y += (e.deltaY / Math.abs(e.deltaY || 1)) * scrollSpeed;
+        // Regular scroll for camera movement - proportional to scroll delta
+        const zoom = getZoom();
+        // Clamp the delta to avoid huge jumps, but keep proportional feel
+        const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+        const dx = clamp(e.deltaX, -100, 100) * 0.3 / zoom;
+        const dy = clamp(e.deltaY, -100, 100) * 0.3 / zoom;
+        game.camera.x += dx;
+        game.camera.y += dy;
     }
 }, { passive: false });
 
@@ -4159,17 +4165,18 @@ canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
     }
 
-    // A for attack move
-    if (e.key === 'a' || e.key === 'A') {
-        // TODO: Attack move cursor
-    }
-
-    // S for stop
-    if (e.key === 's' || e.key === 'S') {
+    // X for stop (S is used for camera scroll)
+    if (e.key === 'x' || e.key === 'X') {
         for (const sel of game.selection) {
             sel.targetX = undefined;
             sel.targetY = undefined;
             sel.attackTarget = null;
+            sel.path = null;
+            sel.closeTarget = null;
+            if (sel.type === 'harvester') {
+                sel.harvestPath = null;
+                sel.returning = false;
+            }
         }
     }
 
@@ -4229,15 +4236,48 @@ canvas.addEventListener('wheel', (e) => {
 
     document.addEventListener('click', unlockAudio);
     document.addEventListener('keydown', unlockAudio);
+
+    // Handle browser window resize - keep canvas properly sized
+    window.addEventListener('resize', () => {
+        if (game.status === 'PLAYING' || game.status === 'PAUSED') {
+            resizeCanvas();
+        }
+    });
 }
 
-// Camera scrolling
+// Camera scrolling (keyboard + edge scrolling + middle mouse drag)
+const EDGE_SCROLL_MARGIN = 20; // pixels from canvas edge to trigger scrolling
+const EDGE_SCROLL_SPEED = 8;
+
+// Middle mouse drag state
+let middleMouseDrag = null; // { startX, startY, cameraStartX, cameraStartY }
+
 function updateCamera() {
     const speed = 10;
+
+    // Keyboard scrolling
     if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= speed;
     if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += speed;
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= speed;
     if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += speed;
+
+    // Edge scrolling (mouse near canvas edges)
+    if (canvas && game.status === 'PLAYING' && !game.paused) {
+        const mx = game.mouse.x;
+        const my = game.mouse.y;
+        const cw = canvas.offsetWidth;
+        const ch = canvas.offsetHeight;
+        const zoom = getZoom();
+        const edgeSpeed = EDGE_SCROLL_SPEED / zoom;
+
+        // Only edge scroll if mouse is within the canvas area
+        if (mx >= 0 && mx <= cw && my >= 0 && my <= ch) {
+            if (mx < EDGE_SCROLL_MARGIN) game.camera.x -= edgeSpeed;
+            if (mx > cw - EDGE_SCROLL_MARGIN) game.camera.x += edgeSpeed;
+            if (my < EDGE_SCROLL_MARGIN) game.camera.y -= edgeSpeed;
+            if (my > ch - EDGE_SCROLL_MARGIN) game.camera.y += edgeSpeed;
+        }
+    }
 }
 
 // ============================================
