@@ -1743,7 +1743,7 @@ function findPath(startX, startY, endX, endY) {
     ];
 
     let iterations = 0;
-    const maxIterations = 500; // Prevent infinite loops
+    const maxIterations = 1500; // Allow longer paths on bigger maps
 
     while (openSet.length > 0 && iterations < maxIterations) {
         iterations++;
@@ -2095,9 +2095,23 @@ function moveHarvesterAlongPath(unit, type, dt) {
 
 function updateHarvester(unit, type, dt) {
     const player = game.players[unit.playerId];
+    const speed = type.speed * dt * 60;
 
-    // Find nearest HQ for dropoff
+    // Find nearest HQ or derrick for dropoff
     const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
+
+    // Helper: move directly toward a target (fallback when pathfinding fails)
+    function moveDirectlyTo(tx, ty) {
+        const dx = tx - unit.x;
+        const dy = ty - unit.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.5) {
+            unit.x += (dx / dist) * speed;
+            unit.y += (dy / dist) * speed;
+            unit.angle = Math.atan2(dy, dx);
+        }
+        return dist;
+    }
 
     // STATE 1: Cargo full or returning with cargo → go to HQ
     if (unit.cargo >= type.capacity || (unit.returning && unit.cargo > 0)) {
@@ -2109,20 +2123,25 @@ function updateHarvester(unit, type, dt) {
                 unit.harvestPath = findPath(unit.x, unit.y, hq.x, hq.y);
             }
 
-            moveHarvesterAlongPath(unit, type, dt);
+            // Move along path, or directly if path failed
+            if (!moveHarvesterAlongPath(unit, type, dt)) {
+                moveDirectlyTo(hq.x, hq.y);
+            }
 
-            // Check if reached HQ
+            // Check if reached HQ (generous distance)
             const hqDist = Math.sqrt((hq.x - unit.x) ** 2 + (hq.y - unit.y) ** 2);
-            if (hqDist < 2.5) {
+            if (hqDist < 3.5) {
                 // Deposit cargo and immediately go back to oil
                 player.oil += unit.cargo;
                 unit.cargo = 0;
                 unit.returning = false;
-                unit.harvestPath = null; // will recalculate path to oil next frame
+                unit.harvestPath = null;
                 // Keep targetOilX/Y so harvester goes back to same oil field
             }
         } else {
+            // No HQ - just drop cargo where we are and keep going
             unit.returning = false;
+            unit.cargo = 0;
         }
 
     // STATE 2: Has oil target → go harvest
@@ -2130,12 +2149,27 @@ function updateHarvester(unit, type, dt) {
         const targetOilX = unit.targetOilX;
         const targetOilY = unit.targetOilY;
 
-        // Check if oil still exists
+        // Check if oil still exists (check target tile and neighbors)
         const mapSize = getMapSize();
-        const tile = game.map?.[targetOilY]?.[targetOilX];
-        const oilStillThere = targetOilX >= 0 && targetOilX < mapSize &&
-                              targetOilY >= 0 && targetOilY < mapSize &&
-                              tile && tile.oil;
+        let oilStillThere = false;
+        let actualOilX = targetOilX;
+        let actualOilY = targetOilY;
+
+        // Check target tile and immediate neighbors for oil
+        for (let dy = -1; dy <= 1 && !oilStillThere; dy++) {
+            for (let dx = -1; dx <= 1 && !oilStillThere; dx++) {
+                const cx = targetOilX + dx;
+                const cy = targetOilY + dy;
+                if (cx >= 0 && cx < mapSize && cy >= 0 && cy < mapSize) {
+                    const tile = game.map?.[cy]?.[cx];
+                    if (tile && tile.oil) {
+                        oilStillThere = true;
+                        actualOilX = cx;
+                        actualOilY = cy;
+                    }
+                }
+            }
+        }
 
         if (!oilStillThere) {
             // Oil gone - find new oil field
@@ -2145,23 +2179,30 @@ function updateHarvester(unit, type, dt) {
             if (unit.cargo > 0) {
                 unit.returning = true;
             } else {
-                // Immediately try to find new oil
                 assignHarvesterToNearestOil(unit);
             }
             return;
         }
 
+        // Update target to actual oil position
+        unit.targetOilX = actualOilX;
+        unit.targetOilY = actualOilY;
+
         // Find path to oil
         if (!unit.harvestPath || unit.harvestPath.length === 0) {
-            unit.harvestPath = findPath(unit.x, unit.y, targetOilX, targetOilY);
+            unit.harvestPath = findPath(unit.x, unit.y, actualOilX, actualOilY);
 
             // If direct path fails, try adjacent tiles
             if (!unit.harvestPath) {
                 const adjacentTiles = [
-                    { x: targetOilX + 1, y: targetOilY },
-                    { x: targetOilX - 1, y: targetOilY },
-                    { x: targetOilX, y: targetOilY + 1 },
-                    { x: targetOilX, y: targetOilY - 1 }
+                    { x: actualOilX + 1, y: actualOilY },
+                    { x: actualOilX - 1, y: actualOilY },
+                    { x: actualOilX, y: actualOilY + 1 },
+                    { x: actualOilX, y: actualOilY - 1 },
+                    { x: actualOilX + 1, y: actualOilY + 1 },
+                    { x: actualOilX - 1, y: actualOilY - 1 },
+                    { x: actualOilX + 1, y: actualOilY - 1 },
+                    { x: actualOilX - 1, y: actualOilY + 1 }
                 ];
                 for (const adj of adjacentTiles) {
                     if (adj.x >= 0 && adj.x < mapSize && adj.y >= 0 && adj.y < mapSize) {
@@ -2172,23 +2213,15 @@ function updateHarvester(unit, type, dt) {
             }
         }
 
-        if (!moveHarvesterAlongPath(unit, type, dt) && unit.harvestPath === null) {
-            // Pathfinding failed - direct approach
-            const dx = targetOilX - unit.x;
-            const dy = targetOilY - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 1) {
-                const speed = type.speed * dt * 60;
-                unit.x += (dx / dist) * speed;
-                unit.y += (dy / dist) * speed;
-                unit.angle = Math.atan2(dy, dx);
-            }
+        // Move along path or directly
+        if (!moveHarvesterAlongPath(unit, type, dt)) {
+            moveDirectlyTo(actualOilX, actualOilY);
         }
 
-        // Harvest when close to oil (faster rate: +5 per frame)
-        const oilDist = Math.sqrt((targetOilX - unit.x) ** 2 + (targetOilY - unit.y) ** 2);
-        if (oilDist < 1.5) {
-            unit.cargo = Math.min(type.capacity, unit.cargo + 5);
+        // Harvest when close to oil (generous distance, fast rate)
+        const oilDist = Math.sqrt((actualOilX - unit.x) ** 2 + (actualOilY - unit.y) ** 2);
+        if (oilDist < 2.5) {
+            unit.cargo = Math.min(type.capacity, unit.cargo + 8);
         }
 
     // STATE 3: Has cargo but no target → return to HQ
@@ -2670,11 +2703,11 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
         }
 
         // Build some harvesters
-        if (ai.oil >= 450 && aiUnits.filter(u => u.type === 'harvester').length < 2) {
+        if (ai.oil >= 400 && aiUnits.filter(u => u.type === 'harvester').length < 2) {
             const factory = aiFactory[0];
             if (factory && factory.productionQueue.length < 10) {
                 addToProductionQueue(factory, 'harvester');
-                ai.oil -= 450;
+                ai.oil -= 400;
             }
         }
 
@@ -2732,9 +2765,9 @@ function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBu
                 } else if (ai.oil >= 250) {
                     addToProductionQueue(factory, 'lightTank');
                     ai.oil -= 250;
-                } else if (ai.oil >= 240) {
+                } else if (ai.oil >= 400) {
                     addToProductionQueue(factory, 'harvester');
-                    ai.oil -= 240;
+                    ai.oil -= 400;
                 }
             }
         }
@@ -2952,7 +2985,7 @@ function updateBuildMenu() {
     const selId = selectedBuilding ? (selectedBuilding.x + ',' + selectedBuilding.y) : '';
     const queueLen = selectedBuilding ? selectedBuilding.productionQueue.length : 0;
     const progress = selectedBuilding && queueLen > 0 ? Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100) : 0;
-    const oilBucket = Math.floor(player.oil / 50); // only update on significant oil change
+    const oilBucket = Math.floor(player.oil / 10); // update frequently for responsive UI
     const techKeys = Object.keys(player.tech).filter(k => player.tech[k]).join(',');
     const placing = game.placingBuilding || '';
     const stateKey = `${selType}|${selId}|${queueLen}|${progress}|${oilBucket}|${techKeys}|${placing}`;
@@ -2995,14 +3028,16 @@ function updateBuildMenu() {
                     }
                 }
 
-                btn.onclick = () => {
+                btn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
                     if (player.oil >= techDef.cost && !player.tech[techType]) {
                         SoundManager.play('ui_click');
                         player.oil -= techDef.cost;
                         researchTechnology(techType, 0);
+                        menu._lastStateKey = null; // force rebuild
                         updateBuildMenu();
                     }
-                };
+                });
                 menu.appendChild(btn);
             }
         }
@@ -3047,14 +3082,20 @@ function updateBuildMenu() {
                     btn.style.opacity = '0.5';
                 }
 
-                btn.onclick = () => {
-                    if (canBuild && requirementMet) {
+                btn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    // Re-check conditions at click time (not stale closure)
+                    const canNow = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
+                    const reqNow = unitType !== 'harvester' ||
+                                   game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
+                    if (canNow && reqNow) {
                         SoundManager.play('ui_click');
                         player.oil -= uType.cost;
                         addToProductionQueue(selectedBuilding, unitType);
+                        menu._lastStateKey = null; // force rebuild
                         updateBuildMenu();
                     }
-                };
+                });
                 menu.appendChild(btn);
             }
         }
@@ -3119,19 +3160,20 @@ function updateBuildMenu() {
             btn.style.opacity = '0.5';
         }
 
-        btn.onclick = () => {
-            if (player.oil >= type.cost && isTechAvailable) {
+        btn.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            // Re-check oil at click time
+            if (player.oil >= type.cost && player.tech[bType] !== false) {
                 SoundManager.play('ui_click');
                 game.placingBuilding = bType;
-                // If a building is selected, set it as source
-                const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
-                if (selectedBuilding && selectedBuilding.playerId === 0) {
-                    game.placingBuildingFrom = selectedBuilding;
+                const selBld = game.selection.find(s => BUILDING_TYPES[s.type]);
+                if (selBld && selBld.playerId === 0) {
+                    game.placingBuildingFrom = selBld;
                 } else {
                     game.placingBuildingFrom = null;
                 }
             }
-        };
+        });
         menu.appendChild(btn);
     }
 }
@@ -3217,20 +3259,20 @@ function assignHarvesterToNearestOil(harvester) {
 function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     const bType = BUILDING_TYPES[type];
     const buildTimes = {
-        // Small buildings: 20 seconds = 1200 ticks (60 ticks/sec)
-        derrick: 1200,
-        turret: 1200,
-        rifleTurret: 1200,
-        missileTurret: 1200,
-        // Medium buildings: 35 seconds
-        barracks: 2100,
-        researchLab: 2100,
-        powerplant: 2100,
-        factory: 2100,
-        // Large buildings: 35 seconds
-        academy: 2100,
-        techLab: 2100,
-        hq: 2100
+        // Small buildings: 10 seconds = 600 ticks (60 ticks/sec)
+        derrick: 600,
+        turret: 600,
+        rifleTurret: 600,
+        missileTurret: 600,
+        // Medium buildings: 15 seconds
+        barracks: 900,
+        researchLab: 900,
+        powerplant: 900,
+        factory: 900,
+        // Large buildings: 20 seconds
+        academy: 1200,
+        techLab: 1200,
+        hq: 1200
     };
 
     const building = {
@@ -3266,13 +3308,12 @@ function canBuildAt(buildingType, x, y) {
     if (!type) return false;
 
     const mapSize = getMapSize();
-    // Check map bounds
-    if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) return false;
+    // Check map bounds with margin
+    if (x < 1 || x >= mapSize - 1 || y < 1 || y >= mapSize - 1) return false;
 
-    // Check terrain - use a small footprint around center (not full visual size)
-    const footprint = Math.ceil((type.size || 1) / 2);
-    for (let dy = -footprint; dy <= footprint; dy++) {
-        for (let dx = -footprint; dx <= footprint; dx++) {
+    // Check terrain - only check center tile and immediate neighbors
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
             const checkX = Math.floor(x + dx);
             const checkY = Math.floor(y + dy);
             if (checkX >= 0 && checkX < mapSize && checkY >= 0 && checkY < mapSize) {
@@ -3284,19 +3325,15 @@ function canBuildAt(buildingType, x, y) {
         }
     }
 
-    // Check for building collision - prevent overlap but allow adjacent placement
+    // Check for building collision - just prevent direct overlap (minimum 2 tiles apart)
     let canPlaceHere = true;
-    const myFootprint = Math.ceil((type.size || 1) / 2);
 
     for (const building of game.buildings) {
-        const bType = BUILDING_TYPES[building.type];
-        const otherFootprint = Math.ceil((bType.size || 1) / 2);
         const bdx = Math.abs(x - building.x);
         const bdy = Math.abs(y - building.y);
-        const dist = Math.max(bdx, bdy);
 
-        // Minimum distance: sum of footprints + 1 tile gap
-        if (dist < myFootprint + otherFootprint + 1) {
+        // Simple: all buildings need at least 2 tiles gap from any other building
+        if (bdx < 2 && bdy < 2) {
             canPlaceHere = false;
             break;
         }
@@ -3348,7 +3385,7 @@ function addToProductionQueue(building, unitType) {
         lightTank: 120,
         mediumTank: 180,
         heavyTank: 240,
-        harvester: 240,
+        harvester: 150,
         artillery: 200,
         flak: 140
     };
@@ -3647,9 +3684,7 @@ function findBuildPosition(nearX, nearY, playerId) {
             if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock' || game.map[y][x].type === 'hill') continue;
 
             const blocked = game.buildings.some(b => {
-                const footprint = Math.ceil((BUILDING_TYPES[b.type].size || 1) / 2);
-                const minDist = footprint + 2; // footprint + 1 tile gap + 1 for new building
-                return Math.abs(b.x - x) < minDist && Math.abs(b.y - y) < minDist;
+                return Math.abs(b.x - x) < 2 && Math.abs(b.y - y) < 2;
             });
 
             if (!blocked) return { x, y };
@@ -4129,7 +4164,7 @@ canvas.addEventListener('wheel', (e) => {
 
     // Minimap click
     if (minimapCanvas) {
-        minimapCanvas.addEventListener('click', (e) => {
+        minimapCanvas.addEventListener('mousedown', (e) => {
             const rect = minimapCanvas.getBoundingClientRect();
             // Convert CSS coordinates to canvas internal coordinates
             const canvasX = (e.clientX - rect.left) * (minimapCanvas.width / rect.width);
@@ -4698,8 +4733,8 @@ function initGame() {
     const enemyBaseY = mapSizeVal - 12;
 
     // Ensure base areas are passable (clear water/hills)
-    ensurePassableArea(playerBaseX, playerBaseY, 5);
-    ensurePassableArea(enemyBaseX, enemyBaseY, 5);
+    ensurePassableArea(playerBaseX, playerBaseY, 8);
+    ensurePassableArea(enemyBaseX, enemyBaseY, 8);
 
     // Balanced game start: HQ + Harvester only for both players
     // Player base (bottom-left area)

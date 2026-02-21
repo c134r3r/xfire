@@ -78,15 +78,15 @@ const UNIT_TYPES = {
     harvester: {
         name: 'Harvester',
         icon: SVG_ICONS.harvester,
-        cost: 450,
-        hp: 150,
-        speed: 0.10,
+        cost: 400,
+        hp: 200,
+        speed: 0.16,
         range: 0,
         damage: 0,
         attackSpeed: 0,
-        sight: 80,
+        sight: 100,
         size: 18,
-        capacity: 1000,
+        capacity: 500,
         category: 'armor'
     },
     artillery: {
