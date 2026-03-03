@@ -3,7 +3,7 @@ const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 if (isMac) {
     const helpEl = document.getElementById('controlsHelp');
     if (helpEl) {
-        helpEl.innerHTML = 'Controls: Click select | ⌘+Click/Right-click move/attack | Drag box-select | WASD/Edge scroll | Middle-drag pan | Wheel zoom | X stop | 1-8 build/produce';
+        helpEl.innerHTML = 'Controls: Click select | ⌘+Click/Right-click move/attack | A attack-move | ⌘+A select all | Drag box-select | WASD scroll | Wheel zoom | X stop | Del sell | 1-8 build';
     }
 }
 
@@ -329,6 +329,9 @@ const game = {
     projectiles: [],
     particles: [],
     damageNumbers: [],
+    moveMarkers: [],
+    notifications: [],
+    attackMoveMode: false,
     map: [],
     fogOfWar: [],
     group1: [], group2: [], group3: [], group4: [], group5: []
@@ -551,12 +554,22 @@ function render() {
     // Draw buildings (sorted by y for depth)
     const sortedBuildings = [...game.buildings].sort((a, b) => a.y - b.y);
     for (const building of sortedBuildings) {
+        // Hide enemy buildings in unexplored or fog areas
+        if (building.playerId !== 0) {
+            const fogVal = game.fogOfWar[Math.floor(building.y)]?.[Math.floor(building.x)];
+            if (fogVal !== 2) continue; // Only show in currently visible area
+        }
         drawBuilding(building);
     }
 
     // Draw units (sorted by y for depth)
     const sortedUnits = [...game.units].sort((a, b) => a.y - b.y);
     for (const unit of sortedUnits) {
+        // Hide enemy units in fog
+        if (unit.playerId !== 0) {
+            const fogVal = game.fogOfWar[Math.floor(unit.y)]?.[Math.floor(unit.x)];
+            if (fogVal !== 2) continue;
+        }
         // Draw glow for selected units
         if (game.selection.includes(unit)) {
             drawUnitGlow(unit);
@@ -577,6 +590,9 @@ function render() {
     // Draw floating damage numbers
     drawDamageNumbers();
 
+    // Draw move markers
+    drawMoveMarkers();
+
     // Draw selection box
     if (game.selectionBox) {
         ctx.strokeStyle = '#00ff00';
@@ -589,6 +605,21 @@ function render() {
             game.selectionBox.y2 - game.selectionBox.y1
         );
         ctx.setLineDash([]);
+    }
+
+    // Draw rally points for selected buildings
+    drawRallyPoints();
+
+    // Draw notifications
+    drawNotifications();
+
+    // Draw attack-move cursor indicator
+    if (game.attackMoveMode) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff4444';
+        ctx.fillText('ATTACK-MOVE (A) - Click to target', canvas.offsetWidth / 2, 50);
     }
 
     // Draw building placement preview
@@ -730,6 +761,31 @@ function drawTile(tx, ty) {
     // Draw subtle details based on terrain type
     if (zoom > 0.6) { // Only draw details when zoomed in enough
         drawTileDetails(tx, ty, tile.type, screen, zoom);
+    }
+
+    // Fog of War overlay
+    const fogState = game.fogOfWar[ty]?.[tx];
+    if (fogState === 0) {
+        // Unexplored - dark overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y - tileH / 2);
+        ctx.lineTo(screen.x + tileW / 2, screen.y);
+        ctx.lineTo(screen.x, screen.y + tileH / 2);
+        ctx.lineTo(screen.x - tileW / 2, screen.y);
+        ctx.closePath();
+        ctx.fill();
+        return; // Don't draw details on unexplored tiles
+    } else if (fogState === 1) {
+        // Previously explored but not currently visible - dim overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.beginPath();
+        ctx.moveTo(screen.x, screen.y - tileH / 2);
+        ctx.lineTo(screen.x + tileW / 2, screen.y);
+        ctx.lineTo(screen.x, screen.y + tileH / 2);
+        ctx.lineTo(screen.x - tileW / 2, screen.y);
+        ctx.closePath();
+        ctx.fill();
     }
 
     // Draw oil deposit (always visible)
@@ -1158,6 +1214,11 @@ function drawUnitSprite(unit) {
         ctx.fillRect(screen.x - 10, screen.y + 12, 20 * (unit.cargo / type.capacity), 3);
     }
 
+    // Control group number
+    if (unit.playerId === 0) {
+        drawControlGroupNumber(unit, screen.x, screen.y);
+    }
+
     return true;
 }
 
@@ -1223,6 +1284,30 @@ function drawBuildingSprite(building) {
     }
 
     return true;
+}
+
+function getUnitControlGroup(unit) {
+    for (let i = 1; i <= 5; i++) {
+        if (game[`group${i}`] && game[`group${i}`].includes(unit)) return i;
+    }
+    return null;
+}
+
+function drawControlGroupNumber(unit, screenX, screenY) {
+    const groupNum = getUnitControlGroup(unit);
+    if (groupNum === null) return;
+
+    // Draw small group number badge
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.arc(screenX + 10, screenY - 25, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 9px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(groupNum.toString(), screenX + 10, screenY - 25);
 }
 
 function drawUnitGlow(unit) {
@@ -1387,6 +1472,11 @@ function drawUnit(unit) {
         ctx.fillRect(screen.x - 10, screen.y + 8, 20, 3);
         ctx.fillStyle = '#fa0';
         ctx.fillRect(screen.x - 10, screen.y + 8, 20 * (unit.cargo / type.capacity), 3);
+    }
+
+    // Control group number
+    if (unit.playerId === 0) {
+        drawControlGroupNumber(unit, screen.x, screen.y);
     }
 }
 
@@ -1653,14 +1743,22 @@ function renderMinimap() {
         }
     }
 
-    // Draw buildings
+    // Draw buildings (only show enemy buildings in visible fog)
     for (const b of game.buildings) {
+        if (b.playerId !== 0) {
+            const fogVal = game.fogOfWar[Math.floor(b.y)]?.[Math.floor(b.x)];
+            if (fogVal !== 2) continue;
+        }
         minimapCtx.fillStyle = b.playerId === 0 ? game.players[b.playerId].color : '#ff4444';
         minimapCtx.fillRect(b.x * scale - 2, b.y * scale - 2, 4, 4);
     }
 
-    // Draw units
+    // Draw units (only show enemy units in visible fog)
     for (const u of game.units) {
+        if (u.playerId !== 0) {
+            const fogVal = game.fogOfWar[Math.floor(u.y)]?.[Math.floor(u.x)];
+            if (fogVal !== 2) continue;
+        }
         minimapCtx.fillStyle = u.playerId === 0 ? game.players[u.playerId].color : '#ff4444';
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
@@ -1690,7 +1788,14 @@ function update(dt) {
     updateProjectiles(dt);
     updateParticles(dt);
     updateDamageNumbers(dt);
+    updateMoveMarkers(dt);
+    updateNotifications(dt);
     updateAI();
+
+    // Update fog of war every 30 ticks (~0.5 seconds)
+    if (game.tick % 30 === 0) {
+        updateFogOfWar();
+    }
 
     // Assign ALL harvesters (both player and AI) to oil locations
     const allHarvesters = game.units.filter(u => u.type === 'harvester');
@@ -1828,6 +1933,10 @@ function updateUnits(dt) {
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             SoundManager.play('explosion_small');
+            if (unit.playerId === 0) {
+                const uType = UNIT_TYPES[unit.type];
+                createNotification(`${uType?.name || 'Unit'} lost!`, 'warning');
+            }
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
@@ -2015,6 +2124,40 @@ function updateUnits(dt) {
             const validPos = findValidSpawnPosition(Math.floor(unit.x), Math.floor(unit.y), 3);
             unit.x = validPos.x + 0.5;
             unit.y = validPos.y + 0.5;
+        }
+
+        // Attack-Move: units moving with attackMove flag engage enemies in sight range
+        if (unit.attackMove && !unit.attackTarget && unit.targetX !== undefined && type.damage > 0) {
+            const sightRange = type.sight || type.range * 1.5;
+            let nearestEnemy = null;
+            let nearestDist = Infinity;
+
+            for (const enemy of game.units) {
+                if (enemy.playerId === unit.playerId) continue;
+                const dx = enemy.x - unit.x;
+                const dy = enemy.y - unit.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist <= sightRange && dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestEnemy = enemy;
+                }
+            }
+            if (!nearestEnemy) {
+                for (const building of game.buildings) {
+                    if (building.playerId === unit.playerId) continue;
+                    const dx = building.x - unit.x;
+                    const dy = building.y - unit.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= sightRange && dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = building;
+                    }
+                }
+            }
+            if (nearestEnemy && nearestEnemy.hp > 0) {
+                unit.attackTarget = nearestEnemy;
+                // Keep targetX/Y so unit resumes attack-move after killing target
+            }
         }
 
         // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
@@ -2262,6 +2405,10 @@ function updateBuildings(dt) {
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
             SoundManager.play('explosion_large');
+            if (building.playerId === 0) {
+                const bType = BUILDING_TYPES[building.type];
+                createNotification(`${bType?.name || 'Building'} destroyed!`, 'danger');
+            }
             game.buildings.splice(i, 1);
             game.selection = game.selection.filter(s => s !== building);
             continue;
@@ -2332,6 +2479,13 @@ function updateBuildings(dt) {
                 }
 
                 spawnUnit(current.type, building.playerId, spawnX, spawnY);
+                // Auto-move to rally point if set
+                if (building.rallyPoint && current.type !== 'harvester') {
+                    const spawnedUnit = game.units[game.units.length - 1];
+                    spawnedUnit.targetX = building.rallyPoint.x;
+                    spawnedUnit.targetY = building.rallyPoint.y;
+                    spawnedUnit.path = findPath(spawnX, spawnY, building.rallyPoint.x, building.rallyPoint.y);
+                }
                 building.productionQueue.shift();
                 building.produceProgress = 0;
             }
@@ -2378,6 +2532,17 @@ function updateProjectiles(dt) {
                 );
 
                 if (targetStillExists && proj.target.hp > 0) {
+                    // "Under Attack" notification for player entities
+                    if (proj.target.playerId === 0 && proj.playerId === 1) {
+                        const targetType = UNIT_TYPES[proj.target.type] || BUILDING_TYPES[proj.target.type];
+                        const targetName = targetType?.name || 'Unit';
+                        if (BUILDING_TYPES[proj.target.type]) {
+                            createNotification(`${targetName} is under attack!`, 'danger');
+                        } else if (proj.target.hp < targetType.hp * 0.3) {
+                            createNotification(`${targetName} is critically damaged!`, 'warning');
+                        }
+                    }
+
                     let finalDamage = proj.damage;
 
                     // Apply versus bonus (50% extra damage against matching category)
@@ -3125,6 +3290,28 @@ function updateBuildMenu() {
             menu.appendChild(infoDiv);
         }
 
+        // Sell button (not for HQ)
+        if (selectedBuilding.type !== 'hq') {
+            const refund = Math.floor(BUILDING_TYPES[selectedBuilding.type].cost * 0.5);
+            const sellBtn = document.createElement('button');
+            sellBtn.className = 'build-btn';
+            sellBtn.style.cssText = 'background: #442222; border-color: #ff4444; margin-top: 4px;';
+            sellBtn.innerHTML = `<span style="font-size: 11px; color: #ff6666;">Sell [Del]</span><span style="color: #fa0;">+${refund} oil</span>`;
+            sellBtn.title = `Sell building for ${refund} oil (press Delete)`;
+            sellBtn.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                game.players[0].oil += refund;
+                createNotification(`${type.name} sold for ${refund} oil`, 'info');
+                SoundManager.play('ui_build');
+                const idx = game.buildings.indexOf(selectedBuilding);
+                if (idx !== -1) game.buildings.splice(idx, 1);
+                game.selection = game.selection.filter(s => s !== selectedBuilding);
+                menu._lastStateKey = null;
+                updateBuildMenu();
+            });
+            menu.appendChild(sellBtn);
+        }
+
         // Add separator
         const separator = document.createElement('div');
         separator.style.cssText = 'height: 1px; background: #555; margin: 8px 0;';
@@ -3673,6 +3860,176 @@ function drawDamageNumbers() {
     ctx.globalAlpha = 1;
 }
 
+// ============================================
+// MOVE MARKERS
+// ============================================
+
+function createMoveMarker(worldX, worldY, isAttack = false) {
+    game.moveMarkers.push({
+        x: worldX,
+        y: worldY,
+        life: 1.0,
+        isAttack: isAttack
+    });
+}
+
+function updateMoveMarkers(dt) {
+    for (let i = game.moveMarkers.length - 1; i >= 0; i--) {
+        game.moveMarkers[i].life -= 0.03;
+        if (game.moveMarkers[i].life <= 0) {
+            game.moveMarkers.splice(i, 1);
+        }
+    }
+}
+
+function drawMoveMarkers() {
+    for (const marker of game.moveMarkers) {
+        const screen = worldToScreen(marker.x, marker.y);
+        const alpha = Math.min(1, marker.life * 2);
+        const pulse = 1 + Math.sin(marker.life * Math.PI * 4) * 0.2;
+        const radius = 8 * pulse;
+
+        ctx.globalAlpha = alpha * 0.7;
+
+        if (marker.isAttack) {
+            // Red crosshair for attack-move
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(screen.x - radius, screen.y);
+            ctx.lineTo(screen.x + radius, screen.y);
+            ctx.moveTo(screen.x, screen.y - radius);
+            ctx.lineTo(screen.x, screen.y + radius);
+            ctx.stroke();
+        } else {
+            // Green circle for move
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            // Inner dot
+            ctx.fillStyle = '#00ff00';
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
+    }
+}
+
+// ============================================
+// NOTIFICATION SYSTEM
+// ============================================
+
+function createNotification(text, type = 'info') {
+    // Prevent spam - don't add if same text was added recently
+    const now = Date.now();
+    if (game.notifications.length > 0) {
+        const last = game.notifications[game.notifications.length - 1];
+        if (last.text === text && now - last.createdAt < 5000) return;
+    }
+
+    game.notifications.push({
+        text: text,
+        type: type, // 'info', 'warning', 'danger'
+        life: 1.0,
+        createdAt: now
+    });
+
+    // Keep max 5 notifications
+    while (game.notifications.length > 5) {
+        game.notifications.shift();
+    }
+}
+
+function updateNotifications(dt) {
+    for (let i = game.notifications.length - 1; i >= 0; i--) {
+        game.notifications[i].life -= 0.008;
+        if (game.notifications[i].life <= 0) {
+            game.notifications.splice(i, 1);
+        }
+    }
+}
+
+function drawNotifications() {
+    const startY = 80;
+    for (let i = 0; i < game.notifications.length; i++) {
+        const notif = game.notifications[i];
+        const alpha = Math.min(1, notif.life * 3);
+        const y = startY + i * 30;
+        const x = canvas.offsetWidth / 2;
+
+        ctx.globalAlpha = alpha;
+
+        // Background
+        ctx.fillStyle = notif.type === 'danger' ? 'rgba(180,0,0,0.7)' :
+                        notif.type === 'warning' ? 'rgba(180,120,0,0.7)' :
+                        'rgba(0,80,180,0.7)';
+        const textWidth = ctx.measureText(notif.text).width || 200;
+        const padding = 12;
+        ctx.fillRect(x - textWidth/2 - padding, y - 10, textWidth + padding * 2, 24);
+
+        // Border
+        ctx.strokeStyle = notif.type === 'danger' ? '#ff4444' :
+                          notif.type === 'warning' ? '#ffaa00' : '#4488ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - textWidth/2 - padding, y - 10, textWidth + padding * 2, 24);
+
+        // Text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(notif.text, x, y + 2);
+
+        ctx.globalAlpha = 1;
+    }
+}
+
+// ============================================
+// RALLY POINTS
+// ============================================
+
+function drawRallyPoints() {
+    for (const building of game.buildings) {
+        if (building.playerId !== 0 || !building.rallyPoint) continue;
+        if (!game.selection.includes(building)) continue;
+
+        const bScreen = worldToScreen(building.x, building.y);
+        const rScreen = worldToScreen(building.rallyPoint.x, building.rallyPoint.y);
+
+        // Dashed line from building to rally point
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(bScreen.x, bScreen.y);
+        ctx.lineTo(rScreen.x, rScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Rally flag
+        const flagPulse = 1 + Math.sin(Date.now() / 500) * 0.1;
+        ctx.fillStyle = '#ffcc00';
+        ctx.globalAlpha = 0.8;
+        // Flag pole
+        ctx.fillRect(rScreen.x, rScreen.y - 16, 2, 16);
+        // Flag triangle
+        ctx.beginPath();
+        ctx.moveTo(rScreen.x + 2, rScreen.y - 16);
+        ctx.lineTo(rScreen.x + 12 * flagPulse, rScreen.y - 12);
+        ctx.lineTo(rScreen.x + 2, rScreen.y - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
 function findBuildPosition(nearX, nearY, playerId) {
     // Search up to 6 tiles away from the base
     for (let r = 1; r <= 6; r++) {
@@ -3736,6 +4093,24 @@ function initializeEventHandlers() {
     const isRightClick = e.button === 2 || (e.button === 0 && (e.metaKey || e.ctrlKey));
 
     if (e.button === 0 && !isRightClick) { // Left click (not Command/Ctrl)
+        // Attack-Move mode: left click sends units with attack-move
+        if (game.attackMoveMode) {
+            const world = screenToWorld(x, y);
+            createMoveMarker(world.x, world.y, true);
+            for (const sel of game.selection) {
+                if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
+                    sel.targetX = world.x;
+                    sel.targetY = world.y;
+                    sel.attackTarget = null;
+                    sel.attackMove = true; // Flag for attack-move behavior
+                    sel.path = findPath(sel.x, sel.y, world.x, world.y);
+                }
+            }
+            game.attackMoveMode = false;
+            canvas.style.cursor = 'crosshair';
+            return;
+        }
+
         if (game.placingBuilding) {
             // Place building
             const world = screenToWorld(x, y);
@@ -3858,6 +4233,26 @@ function initializeEventHandlers() {
                     hasOil = true;
                     oilTileX = cx;
                     oilTileY = cy;
+                }
+            }
+        }
+
+        // Create move/attack marker
+        if (game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0)) {
+            if (enemyDirectClick || enemyNearbyClick) {
+                createMoveMarker(world.x, world.y, true);
+            } else {
+                createMoveMarker(world.x, world.y, false);
+            }
+        }
+
+        // Set rally point for selected production buildings
+        for (const sel of game.selection) {
+            if (BUILDING_TYPES[sel.type] && sel.playerId === 0) {
+                const bType = BUILDING_TYPES[sel.type];
+                if (bType.produces && bType.produces.length > 0) {
+                    sel.rallyPoint = { x: world.x, y: world.y };
+                    createMoveMarker(world.x, world.y, false);
                 }
             }
         }
@@ -4237,11 +4632,30 @@ canvas.addEventListener('wheel', (e) => {
             }
         }
     }
+    // Ctrl/Cmd+A: Select all army units
+    if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey) && game.status === 'PLAYING') {
+        e.preventDefault();
+        game.selection = game.units.filter(u => u.playerId === 0 && u.type !== 'harvester');
+        if (game.selection.length > 0) {
+            SoundManager.play('unit_select');
+            createNotification(`Selected ${game.selection.length} combat units`, 'info');
+        }
+    }
+
     // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
     else if (e.key >= '1' && e.key <= '5' && (e.metaKey || e.ctrlKey)) {
         // Assign group
         game[`group${e.key}`] = [...game.selection];
         e.preventDefault();
+    }
+
+    // A for attack-move mode
+    if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.metaKey) {
+        const hasSelectedUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
+        if (hasSelectedUnits && game.status === 'PLAYING') {
+            game.attackMoveMode = !game.attackMoveMode;
+            canvas.style.cursor = game.attackMoveMode ? `url("${CURSOR_SVG.attack}") 16 16, auto` : 'crosshair';
+        }
     }
 
     // X for stop (S is used for camera scroll)
@@ -4250,6 +4664,7 @@ canvas.addEventListener('wheel', (e) => {
             sel.targetX = undefined;
             sel.targetY = undefined;
             sel.attackTarget = null;
+            sel.attackMove = false;
             sel.path = null;
             sel.closeTarget = null;
             if (sel.type === 'harvester') {
@@ -4264,10 +4679,31 @@ canvas.addEventListener('wheel', (e) => {
         togglePause();
     }
 
+    // Delete/Backspace to sell selected building (recoup 50%)
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (game.status === 'PLAYING') {
+            for (const sel of [...game.selection]) {
+                if (BUILDING_TYPES[sel.type] && sel.playerId === 0 && sel.type !== 'hq') {
+                    const bType = BUILDING_TYPES[sel.type];
+                    const refund = Math.floor(bType.cost * 0.5);
+                    game.players[0].oil += refund;
+                    createNotification(`${bType.name} sold for ${refund} oil`, 'info');
+                    SoundManager.play('ui_build');
+                    // Remove building
+                    const idx = game.buildings.indexOf(sel);
+                    if (idx !== -1) game.buildings.splice(idx, 1);
+                    game.selection = game.selection.filter(s => s !== sel);
+                }
+            }
+            e.preventDefault();
+        }
+    }
+
     // Escape to cancel
     if (e.key === 'Escape') {
         game.placingBuilding = null;
         game.placingBuildingFrom = null;
+        game.attackMoveMode = false;
         game.selection = [];
     }
 
@@ -4337,8 +4773,8 @@ function updateCamera() {
     // Keyboard scrolling
     if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= speed;
     if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += speed;
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= speed;
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += speed;
+    if (keys['ArrowLeft'] || keys['q'] || keys['Q']) game.camera.x -= speed;
+    if (keys['ArrowRight'] || keys['e'] || keys['E']) game.camera.x += speed;
 
     // Edge scrolling (mouse near canvas edges)
     if (canvas && game.status === 'PLAYING' && !game.paused) {
@@ -4497,6 +4933,9 @@ function resetGame() {
     game.projectiles = [];
     game.particles = [];
     game.damageNumbers = [];
+    game.moveMarkers = [];
+    game.notifications = [];
+    game.attackMoveMode = false;
     game.map = [];
     game.fogOfWar = [];
     game.group1 = [];
@@ -4736,14 +5175,21 @@ function initGame() {
     ensurePassableArea(playerBaseX, playerBaseY, 8);
     ensurePassableArea(enemyBaseX, enemyBaseY, 8);
 
-    // Balanced game start: HQ + Harvester only for both players
-    // Player base (bottom-left area)
+    // Player base (bottom-left area) - start with a small force for immediate action
     createBuilding('hq', 0, playerBaseX, playerBaseY);
+    createBuilding('barracks', 0, playerBaseX + 3, playerBaseY + 1);
     spawnUnit('harvester', 0, playerBaseX + 1, playerBaseY + 2);
+    spawnUnit('infantry', 0, playerBaseX + 2, playerBaseY + 3);
+    spawnUnit('infantry', 0, playerBaseX + 3, playerBaseY + 3);
+    spawnUnit('scout', 0, playerBaseX + 4, playerBaseY + 2);
 
-    // Enemy base (top-right area)
-    createBuilding('hq', 1, mapSizeVal - 12, mapSizeVal - 12);
-    spawnUnit('harvester', 1, mapSizeVal - 13, mapSizeVal - 14);
+    // Enemy base (top-right area) - mirror player starting forces
+    createBuilding('hq', 1, enemyBaseX, enemyBaseY);
+    createBuilding('barracks', 1, enemyBaseX - 3, enemyBaseY - 1);
+    spawnUnit('harvester', 1, enemyBaseX - 1, enemyBaseY - 2);
+    spawnUnit('infantry', 1, enemyBaseX - 2, enemyBaseY - 3);
+    spawnUnit('infantry', 1, enemyBaseX - 3, enemyBaseY - 3);
+    spawnUnit('scout', 1, enemyBaseX - 4, enemyBaseY - 2);
 
     // Center camera on player base using isometric coordinates
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
