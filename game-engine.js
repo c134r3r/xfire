@@ -2924,8 +2924,10 @@ function updateUI() {
     // Show warning if low power
     if (player.lowPower) {
         powerEl.title = 'LOW POWER! Production slowed 50%';
+        powerEl.classList.add('low-power-indicator');
     } else {
         powerEl.title = `Power: ${player.powerProduced || 100} produced, ${player.powerConsumed || 0} consumed`;
+        powerEl.classList.remove('low-power-indicator');
     }
 
     // Unit counts
@@ -2948,25 +2950,31 @@ function updateUI() {
 
     // Selection info
     if (game.selection.length === 0) {
-        infoEl.innerHTML = 'No selection';
+        infoEl.innerHTML = '<span style="color:#555570;">No selection</span>';
     } else if (game.selection.length === 1) {
         const sel = game.selection[0];
         const type = UNIT_TYPES[sel.type] || BUILDING_TYPES[sel.type];
-        let infoText = `<strong>${type.name}</strong><br>HP: ${Math.floor(sel.hp)}/${type.hp}`;
+        const hpPct = Math.round((sel.hp / type.hp) * 100);
+        const hpColor = hpPct > 60 ? '#44dd66' : hpPct > 30 ? '#ffcc00' : '#ff3344';
+        let infoText = `<strong style="font-size:14px;">${type.name}</strong>`;
+        infoText += `<div class="sel-hp-bar"><div class="sel-hp-fill" style="width:${hpPct}%;background:${hpColor};"></div></div>`;
+        infoText += `<span style="font-size:11px;color:#8888aa;">HP: ${Math.floor(sel.hp)} / ${type.hp}</span>`;
         if (sel.cargo !== undefined) {
-            infoText += `<br>Cargo: ${sel.cargo}/${type.capacity}`;
+            const cargoPct = Math.round((sel.cargo / type.capacity) * 100);
+            infoText += `<br><span style="color:#ffcc00;">Cargo: ${sel.cargo}/${type.capacity}</span>`;
         }
         if (sel.productionQueue && sel.productionQueue.length > 0) {
             const progress = Math.round((sel.produceProgress / sel.produceTime) * 100);
             const current = sel.productionQueue[0];
-            infoText += `<br>Building: ${UNIT_TYPES[current.type].name} (${progress}%)`;
+            infoText += `<div class="prod-progress-bar"><div class="prod-progress-fill" style="width:${progress}%;"></div></div>`;
+            infoText += `<span style="font-size:11px;">Building: ${UNIT_TYPES[current.type].name} (${progress}%)</span>`;
             if (sel.productionQueue.length > 1) {
-                infoText += ` [Queue: ${sel.productionQueue.length}]`;
+                infoText += ` <span style="color:#4499ff;">[+${sel.productionQueue.length - 1} queued]</span>`;
             }
         }
         infoEl.innerHTML = infoText;
     } else {
-        infoEl.innerHTML = `${game.selection.length} units selected`;
+        infoEl.innerHTML = `<strong style="font-size:14px;">${game.selection.length} units selected</strong>`;
     }
 
     // Build menu
@@ -3002,7 +3010,7 @@ function updateBuildMenu() {
         // Show research options for Research Lab
         if (selectedBuilding.type === 'researchLab' && type.researches) {
             const researchInfo = document.createElement('div');
-            researchInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
+            researchInfo.className = 'build-section-header';
             researchInfo.innerHTML = `<strong>Research Technologies</strong>`;
             menu.appendChild(researchInfo);
 
@@ -3045,7 +3053,7 @@ function updateBuildMenu() {
         else if (type.produces.length > 0) {
             // Queue info
             const queueInfo = document.createElement('div');
-            queueInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa; border-bottom: 1px solid #444;';
+            queueInfo.className = 'queue-info';
             queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong>`;
             menu.appendChild(queueInfo);
 
@@ -3054,8 +3062,9 @@ function updateBuildMenu() {
                 const current = selectedBuilding.productionQueue[0];
                 const progress = Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100);
                 const progressBar = document.createElement('div');
-                progressBar.style.cssText = `height: 4px; background: #333; margin: 8px; border-radius: 2px; overflow: hidden;`;
-                progressBar.innerHTML = `<div style="height: 100%; background: #4488ff; width: ${progress}%; transition: width 0.1s;"></div>`;
+                progressBar.className = 'prod-progress-bar';
+                progressBar.style.margin = '4px 8px 8px';
+                progressBar.innerHTML = `<div class="prod-progress-fill" style="width: ${progress}%;"></div>`;
                 menu.appendChild(progressBar);
             }
 
@@ -3127,13 +3136,13 @@ function updateBuildMenu() {
 
         // Add separator
         const separator = document.createElement('div');
-        separator.style.cssText = 'height: 1px; background: #555; margin: 8px 0;';
+        separator.style.cssText = 'height: 1px; background: linear-gradient(90deg, transparent, #2a2a44, transparent); margin: 8px 0;';
         menu.appendChild(separator);
 
         // Add header for build options
         const buildInfo = document.createElement('div');
-        buildInfo.style.cssText = 'padding: 8px; font-size: 12px; color: #aaa;';
-        buildInfo.innerHTML = `<strong>Build from ${selectedBuilding.type}</strong>`;
+        buildInfo.className = 'build-section-header';
+        buildInfo.innerHTML = `<strong>Build Structures</strong>`;
         menu.appendChild(buildInfo);
     }
 
