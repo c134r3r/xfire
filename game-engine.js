@@ -268,6 +268,20 @@ function getZoom() {
     return gameSettings.zoom || 1.0;
 }
 
+// Unified hit-detection radii (in screen pixels) for mouse interactions.
+// Keeping these as shared constants prevents subtle bugs where mousedown and
+// mouseup use slightly different radii and the "felt" click target shifts.
+const HIT_RADIUS = {
+    selectUnit: 28,      // Left-click select own unit
+    selectBuilding: 32,  // Left-click select own building (bigger footprint)
+    targetUnit: 40,      // Right-click target enemy unit
+    targetBuilding: 48,  // Right-click target enemy building
+    directAttack: 18,    // Dead-on right-click = direct attack vs nearby
+    cursorHoverUnit: 24, // updateCursorEmoji hover
+    cursorHoverBuilding: 32,
+    doubleClickPick: 24
+};
+
 // Audio initialization flag (required by modern browsers)
 let audioUnlocked = false;
 
@@ -3765,37 +3779,10 @@ function initializeEventHandlers() {
             // If placement failed, keep placingBuilding set so player can try again
             // Player can cancel with right-click or Escape
         } else {
-            // Check if clicking on own unit or building
-            // First check units (they should have priority since they're selectable for commands)
-            const clickedUnit = game.units.find(u => {
-                if (u.playerId !== 0) return false;
-                const screen = worldToScreen(u.x, u.y);
-                const dx = screen.x - x;
-                const dy = screen.y - y;
-                return Math.sqrt(dx * dx + dy * dy) < 25;
-            });
-
-            // Then check buildings
-            const clickedBuilding = game.buildings.find(b => {
-                if (b.playerId !== 0) return false;
-                const screen = worldToScreen(b.x, b.y);
-                const dx = screen.x - x;
-                const dy = screen.y - y;
-                return Math.sqrt(dx * dx + dy * dy) < 25;
-            });
-
-            if (clickedUnit) {
-                // Directly select unit on mousedown for immediate feedback
-                game.selection = [clickedUnit];
-                SoundManager.play('unit_select');
-            } else if (clickedBuilding) {
-                // Select this building for building from
-                game.selection = [clickedBuilding];
-                SoundManager.play('unit_select');
-            } else {
-                // Start selection box
-                game.selectionBox = { x1: x, y1: y, x2: x, y2: y };
-            }
+            // Don't immediately select on mousedown - it prevents shift+box-select
+            // from accumulating. We record the start point and resolve the
+            // selection on mouseup, which also lets the user drag-correct a click.
+            game.selectionBox = { x1: x, y1: y, x2: x, y2: y, startedAt: performance.now() };
         }
     } else if (isRightClick) {
         // Cancel building placement mode with right-click
@@ -3813,42 +3800,45 @@ function initializeEventHandlers() {
         let enemyDirectClick = null;
         let enemyNearbyClick = null;
 
-        // First check units
-        const clickedUnit = game.units.find(u => {
-            if (u.playerId === 0) return false;
+        // Find the closest enemy (unit preferred) to the click. Using
+        // "closest" rather than "first" keeps targeting stable when two
+        // enemies overlap on screen (previously whichever was iterated first
+        // would win).
+        let bestUnit = null, bestUnitDist = Infinity;
+        for (const u of game.units) {
+            if (u.playerId === 0) continue;
             const screen = worldToScreen(u.x, u.y);
-            const dx = screen.x - x;
-            const dy = screen.y - y;
-            return Math.sqrt(dx * dx + dy * dy) < 40;
-        });
-
-        if (clickedUnit) {
-            const screen = worldToScreen(clickedUnit.x, clickedUnit.y);
-            const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
-            if (dist < 15) {
-                enemyDirectClick = clickedUnit;
-            } else {
-                enemyNearbyClick = clickedUnit;
+            const dx = screen.x - x, dy = screen.y - y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < HIT_RADIUS.targetUnit && dist < bestUnitDist) {
+                bestUnit = u;
+                bestUnitDist = dist;
             }
         }
 
-        // If no unit clicked, check buildings
-        if (!clickedUnit) {
-            const clickedBuilding = game.buildings.find(b => {
-                if (b.playerId === 0) return false;
+        if (bestUnit) {
+            if (bestUnitDist < HIT_RADIUS.directAttack) {
+                enemyDirectClick = bestUnit;
+            } else {
+                enemyNearbyClick = bestUnit;
+            }
+        } else {
+            let bestBuilding = null, bestBuildingDist = Infinity;
+            for (const b of game.buildings) {
+                if (b.playerId === 0) continue;
                 const screen = worldToScreen(b.x, b.y);
-                const dx = screen.x - x;
-                const dy = screen.y - y;
-                return Math.sqrt(dx * dx + dy * dy) < 40;
-            });
-
-            if (clickedBuilding) {
-                const screen = worldToScreen(clickedBuilding.x, clickedBuilding.y);
-                const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
-                if (dist < 20) {
-                    enemyDirectClick = clickedBuilding;
+                const dx = screen.x - x, dy = screen.y - y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < HIT_RADIUS.targetBuilding && dist < bestBuildingDist) {
+                    bestBuilding = b;
+                    bestBuildingDist = dist;
+                }
+            }
+            if (bestBuilding) {
+                if (bestBuildingDist < HIT_RADIUS.directAttack + 4) {
+                    enemyDirectClick = bestBuilding;
                 } else {
-                    enemyNearbyClick = clickedBuilding;
+                    enemyNearbyClick = bestBuilding;
                 }
             }
         }
@@ -3958,13 +3948,17 @@ canvas.addEventListener('mousemove', (e) => {
     game.mouse.x = e.clientX - rect.left;
     game.mouse.y = e.clientY - rect.top;
 
-    // Middle mouse drag - pan camera
+    // Middle mouse drag - pan camera. 1:1 mapping (divide by zoom so the
+    // point under the cursor tracks the cursor exactly, which is the
+    // expected behavior for grab-pan in every RTS).
     if (middleMouseDrag) {
         const zoom = getZoom();
-        const dx = (e.clientX - middleMouseDrag.startX) * 0.8 / zoom;
-        const dy = (e.clientY - middleMouseDrag.startY) * 0.8 / zoom;
+        const dx = (e.clientX - middleMouseDrag.startX) / zoom;
+        const dy = (e.clientY - middleMouseDrag.startY) / zoom;
         game.camera.x = middleMouseDrag.cameraStartX - dx;
         game.camera.y = middleMouseDrag.cameraStartY - dy;
+        clampCamera();
+        canvas.style.cursor = 'grabbing';
         return; // Don't update world coords or selection box while dragging
     }
 
@@ -4011,13 +4005,13 @@ function updateCursorEmoji() {
                 const screen = worldToScreen(u.x, u.y);
                 const dx = screen.x - game.mouse.x;
                 const dy = screen.y - game.mouse.y;
-                return Math.sqrt(dx * dx + dy * dy) < 20;
+                return Math.sqrt(dx * dx + dy * dy) < HIT_RADIUS.cursorHoverUnit;
             }) || game.buildings.find(b => {
                 if (b.playerId === 0) return false;
                 const screen = worldToScreen(b.x, b.y);
                 const dx = screen.x - game.mouse.x;
                 const dy = screen.y - game.mouse.y;
-                return Math.sqrt(dx * dx + dy * dy) < 30;
+                return Math.sqrt(dx * dx + dy * dy) < HIT_RADIUS.cursorHoverBuilding;
             });
 
             if (isEnemy) {
@@ -4026,17 +4020,23 @@ function updateCursorEmoji() {
         }
     }
 
-    if (newCursor !== 'default') {
+    // Middle-drag should always show a grabbing cursor, even if selection
+    // is over an enemy. Placement preview hides the cursor entirely so the
+    // placement ghost reads as the pointer.
+    if (middleMouseDrag) {
+        canvas.style.cursor = 'grabbing';
+    } else if (game.placingBuilding) {
+        canvas.style.cursor = 'none';
+    } else if (newCursor !== 'default') {
         canvas.style.cursor = newCursor;
     } else {
-        canvas.style.cursor = game.placingBuilding ? 'none' : 'crosshair';
+        canvas.style.cursor = 'crosshair';
     }
 }
 
-// Double-click to select all units of same type
-let lastClickTarget = null;
-let lastClickTime = 0;
-
+// Double-click an own unit to select every on-screen unit of the same type
+// (scoped to the visible canvas so double-clicking doesn't sneakily drag
+// off-map stragglers into the selection).
 canvas.addEventListener('dblclick', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -4044,15 +4044,22 @@ canvas.addEventListener('dblclick', (e) => {
     const y = e.clientY - rect.top;
 
     const clicked = game.units.find(entity => {
+        if (entity.playerId !== 0) return false;
         const screen = worldToScreen(entity.x, entity.y);
         const dx = screen.x - x;
         const dy = screen.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < 20;
+        return Math.sqrt(dx * dx + dy * dy) < HIT_RADIUS.doubleClickPick;
     });
 
-    if (clicked && clicked.playerId === 0) {
-        // Select all units of same type
-        game.selection = game.units.filter(u => u.playerId === 0 && u.type === clicked.type);
+    if (clicked) {
+        const cw = canvas.offsetWidth;
+        const ch = canvas.offsetHeight;
+        game.selection = game.units.filter(u => {
+            if (u.playerId !== 0 || u.type !== clicked.type) return false;
+            const s = worldToScreen(u.x, u.y);
+            return s.x >= 0 && s.x <= cw && s.y >= 0 && s.y <= ch;
+        });
+        SoundManager.play('unit_select');
     }
 });
 
@@ -4070,21 +4077,25 @@ canvas.addEventListener('mouseup', (e) => {
         const maxX = Math.max(box.x1, box.x2);
         const minY = Math.min(box.y1, box.y2);
         const maxY = Math.max(box.y1, box.y2);
+        const boxW = maxX - minX;
+        const boxH = maxY - minY;
 
-        // Clear selection if not holding shift (Mac: Shift key)
-        const isMultiSelect = keys['Shift'];
+        // Shift modifier: add/toggle selection instead of replacing it.
+        const isMultiSelect = !!(keys['Shift'] || keys['ShiftLeft'] || keys['ShiftRight']);
+        const prevSelectionCount = game.selection.length;
         if (!isMultiSelect) {
             game.selection = [];
         }
 
-        // Box select or click select
-        // Use the center of the selection box for click detection (more accurate than current mouse position)
-        const clickX = (box.x1 + box.x2) / 2;
-        const clickY = (box.y1 + box.y2) / 2;
+        // A 5px jitter threshold distinguishes a click from a drag. Use the
+        // release point for a click (matches user expectation - where the
+        // button was released is what gets selected).
+        if (boxW < 5 && boxH < 5) {
+            const clickX = box.x2;
+            const clickY = box.y2;
 
-        if (maxX - minX < 5 && maxY - minY < 5) {
-            // Click select (single unit/building)
-            // Sort by distance to find closest entity, prioritizing units over buildings
+            // Prioritize units; fall back to buildings. Units generally take
+            // commands so they should win ties.
             const entitiesWithDistance = [...game.units, ...game.buildings]
                 .filter(entity => entity.playerId === 0)
                 .map(entity => {
@@ -4093,11 +4104,12 @@ canvas.addEventListener('mouseup', (e) => {
                     const dy = screen.y - clickY;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     const isUnit = UNIT_TYPES[entity.type] !== undefined;
-                    return { entity, dist, isUnit };
+                    const radius = isUnit ? HIT_RADIUS.selectUnit : HIT_RADIUS.selectBuilding;
+                    return { entity, dist, isUnit, radius };
                 })
-                .filter(({ dist }) => dist < 30) // Increased click radius for better UX
+                .filter(({ dist, radius }) => dist < radius)
                 .sort((a, b) => {
-                    // Prioritize units over buildings when close
+                    // Prefer units over buildings for near-ties.
                     if (a.isUnit !== b.isUnit && Math.abs(a.dist - b.dist) < 15) {
                         return a.isUnit ? -1 : 1;
                     }
@@ -4106,30 +4118,48 @@ canvas.addEventListener('mouseup', (e) => {
 
             const clicked = entitiesWithDistance.length > 0 ? entitiesWithDistance[0].entity : null;
 
-            if (clicked && clicked.playerId === 0) {
+            if (clicked) {
                 if (isMultiSelect && game.selection.includes(clicked)) {
-                    // Deselect if already selected (Shift+Click toggle)
                     game.selection = game.selection.filter(u => u !== clicked);
-                } else if (!isMultiSelect || !game.selection.includes(clicked)) {
-                    // Add to selection or replace
-                    if (!isMultiSelect) {
-                        game.selection = [clicked];
-                    } else {
-                        game.selection.push(clicked);
-                    }
+                } else if (!game.selection.includes(clicked)) {
+                    game.selection.push(clicked);
+                }
+                if (game.selection.length > prevSelectionCount || !isMultiSelect) {
+                    SoundManager.play('unit_select');
                 }
             }
         } else {
-            // Box select (multiple units)
+            // Box select: pick up all player units inside the box. If the
+            // user only brushed over buildings (no units at all), fall back
+            // to selecting the building inside the box so box-drag over a
+            // single factory still selects it.
+            const picked = [];
             for (const unit of game.units) {
                 if (unit.playerId !== 0) continue;
                 const screen = worldToScreen(unit.x, unit.y);
                 if (screen.x >= minX && screen.x <= maxX &&
                     screen.y >= minY && screen.y <= maxY) {
-                    if (!game.selection.includes(unit)) {
-                        game.selection.push(unit);
+                    picked.push(unit);
+                }
+            }
+            if (picked.length === 0) {
+                for (const b of game.buildings) {
+                    if (b.playerId !== 0) continue;
+                    const screen = worldToScreen(b.x, b.y);
+                    if (screen.x >= minX && screen.x <= maxX &&
+                        screen.y >= minY && screen.y <= maxY) {
+                        picked.push(b);
+                        break; // One building is enough for box-select fallback.
                     }
                 }
+            }
+            for (const ent of picked) {
+                if (!game.selection.includes(ent)) {
+                    game.selection.push(ent);
+                }
+            }
+            if (picked.length > 0) {
+                SoundManager.play('unit_select');
             }
         }
 
@@ -4144,51 +4174,85 @@ canvas.addEventListener('auxclick', (e) => {
     if (e.button === 1) e.preventDefault();
 });
 
-// Trackpad scroll and zoom support
+// Trackpad/mousewheel scroll and zoom. Bare wheel = zoom-at-cursor (the most
+// natural default for a top-down game on a laptop). Ctrl/Cmd + wheel also
+// zooms (for trackpad pinch gestures which set ctrlKey). Shift + wheel pans
+// so trackpad users can still scroll.
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
 
-    // Trackpad pinch zoom (Cmd+Scroll on Mac) or Ctrl+Scroll
-    if (e.ctrlKey || e.metaKey) {
-        // Zoom in/out
-        const zoomSpeed = 0.005;
-        const zoomDelta = -e.deltaY * zoomSpeed;
-        gameSettings.zoom = Math.max(
-            gameSettings.minZoom,
-            Math.min(gameSettings.maxZoom, gameSettings.zoom + zoomDelta)
-        );
-    } else {
-        // Regular scroll for camera movement - proportional to scroll delta
+    if (e.shiftKey) {
+        // Shift-scroll: pan the camera instead of zooming.
         const zoom = getZoom();
-        // Clamp the delta to avoid huge jumps, but keep proportional feel
         const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-        const dx = clamp(e.deltaX, -100, 100) * 0.3 / zoom;
-        const dy = clamp(e.deltaY, -100, 100) * 0.3 / zoom;
-        game.camera.x += dx;
-        game.camera.y += dy;
+        // On some browsers shift+scroll flips axes; honor deltaX first.
+        const panDelta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+        game.camera.x += clamp(panDelta, -100, 100) * 0.5 / zoom;
+        clampCamera();
+        return;
     }
+
+    // Zoom toward the mouse cursor so the point under the cursor stays put.
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const worldBefore = screenToWorld(mx, my);
+
+    const zoomSpeed = (e.ctrlKey || e.metaKey) ? 0.005 : 0.0015;
+    const zoomDelta = -e.deltaY * zoomSpeed;
+    const newZoom = Math.max(
+        gameSettings.minZoom,
+        Math.min(gameSettings.maxZoom, gameSettings.zoom + zoomDelta)
+    );
+    if (newZoom === gameSettings.zoom) return;
+    gameSettings.zoom = newZoom;
+
+    // Shift the camera so worldBefore stays under the mouse after zoom.
+    const worldAfter = screenToWorld(mx, my);
+    game.camera.x += (worldBefore.x - worldAfter.x) * (TILE_WIDTH / 2) -
+                     (worldBefore.y - worldAfter.y) * (TILE_WIDTH / 2);
+    game.camera.y += (worldBefore.x - worldAfter.x) * (TILE_HEIGHT / 2) +
+                     (worldBefore.y - worldAfter.y) * (TILE_HEIGHT / 2);
+    clampCamera();
 }, { passive: false });
 
     // Browser-only support (Mobile removed)
 
-    // Minimap click
+    // Minimap click + drag-to-pan. The minimap is small so clicks need to
+    // feel precise; supporting drag means the player can quickly scan the
+    // map without a sequence of individual clicks.
     if (minimapCanvas) {
-        minimapCanvas.addEventListener('mousedown', (e) => {
+        let minimapDragging = false;
+
+        const minimapJumpTo = (e) => {
             const rect = minimapCanvas.getBoundingClientRect();
-            // Convert CSS coordinates to canvas internal coordinates
             const canvasX = (e.clientX - rect.left) * (minimapCanvas.width / rect.width);
             const canvasY = (e.clientY - rect.top) * (minimapCanvas.height / rect.height);
-
             const minimapSize = Math.min(minimapCanvas.width, minimapCanvas.height);
             const scale = minimapSize / getMapSize();
-
-            // Convert minimap pixel position to world tile coordinates
             const worldX = canvasX / scale;
             const worldY = canvasY / scale;
-
-            // Convert world tile coords to isometric camera position
             game.camera.x = (worldX - worldY) * (TILE_WIDTH / 2);
             game.camera.y = (worldX + worldY) * (TILE_HEIGHT / 2);
+            clampCamera();
+        };
+
+        minimapCanvas.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            minimapDragging = true;
+            minimapJumpTo(e);
+            e.preventDefault();
+        });
+
+        minimapCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        minimapCanvas.style.cursor = 'crosshair';
+
+        // Listen on window so a drag that leaves the minimap still releases.
+        window.addEventListener('mousemove', (e) => {
+            if (minimapDragging) minimapJumpTo(e);
+        });
+        window.addEventListener('mouseup', () => {
+            minimapDragging = false;
         });
     }
 
@@ -4246,10 +4310,38 @@ canvas.addEventListener('wheel', (e) => {
             }
         }
     }
-    // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
+    // Control groups (Cmd/Ctrl+1..5).
+    //   Cmd/Ctrl+Shift+N : assign current selection to group N
+    //   Cmd/Ctrl+N       : recall group N (press again within 400ms: center on group)
     else if (e.key >= '1' && e.key <= '5' && (e.metaKey || e.ctrlKey)) {
-        // Assign group
-        game[`group${e.key}`] = [...game.selection];
+        const groupKey = `group${e.key}`;
+        const liveUnits = new Set(game.units);
+        const liveBuildings = new Set(game.buildings);
+        const isLive = (s) => s && s.hp > 0 && (liveUnits.has(s) || liveBuildings.has(s));
+        if (e.shiftKey) {
+            game[groupKey] = game.selection.filter(isLive);
+            SoundManager.play('unit_select');
+        } else {
+            const group = (game[groupKey] || []).filter(isLive);
+            game[groupKey] = group;
+            if (group.length > 0) {
+                const now = performance.now();
+                const lastRecall = game._lastGroupRecall || { key: null, time: 0 };
+                const isDoubleRecall = lastRecall.key === groupKey && (now - lastRecall.time) < 400;
+                game.selection = [...group];
+                if (isDoubleRecall) {
+                    // Center the camera on the group's centroid.
+                    let cx = 0, cy = 0;
+                    for (const u of group) { cx += u.x; cy += u.y; }
+                    cx /= group.length; cy /= group.length;
+                    game.camera.x = (cx - cy) * (TILE_WIDTH / 2);
+                    game.camera.y = (cx + cy) * (TILE_HEIGHT / 2);
+                    clampCamera();
+                }
+                game._lastGroupRecall = { key: groupKey, time: now };
+                SoundManager.play('unit_select');
+            }
+        }
         e.preventDefault();
     }
 
@@ -4340,22 +4432,45 @@ const EDGE_SCROLL_SPEED = 8;
 // Middle mouse drag state
 let middleMouseDrag = null; // { startX, startY, cameraStartX, cameraStartY }
 
+// Clamp camera to keep at least some of the map on screen. Without this the
+// player can scroll into a black void and lose their bearings.
+function clampCamera() {
+    const mapSize = getMapSize();
+    // In isometric projection, camera.x spans roughly [-mapSize, mapSize] * TILE_WIDTH/2
+    // and camera.y spans [0, mapSize] * TILE_HEIGHT. Give generous margins so
+    // the user can edge-view corners.
+    const marginX = TILE_WIDTH * 2;
+    const marginY = TILE_HEIGHT * 2;
+    const minX = -(mapSize * TILE_WIDTH / 2) - marginX;
+    const maxX = (mapSize * TILE_WIDTH / 2) + marginX;
+    const minY = -marginY;
+    const maxY = mapSize * TILE_HEIGHT + marginY;
+    if (game.camera.x < minX) game.camera.x = minX;
+    if (game.camera.x > maxX) game.camera.x = maxX;
+    if (game.camera.y < minY) game.camera.y = minY;
+    if (game.camera.y > maxY) game.camera.y = maxY;
+}
+
 function updateCamera() {
     const speed = 10;
+    const zoom = getZoom();
+    // Keyboard scroll: compensate for zoom so "WASD pan distance" feels the
+    // same regardless of zoom level.
+    const kbSpeed = speed / zoom;
 
     // Keyboard scrolling
-    if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= speed;
-    if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += speed;
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= speed;
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += speed;
+    if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= kbSpeed;
+    if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += kbSpeed;
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= kbSpeed;
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += kbSpeed;
 
-    // Edge scrolling (mouse near canvas edges)
-    if (canvas && game.status === 'PLAYING' && !game.paused) {
+    // Edge scrolling (mouse near canvas edges). Enabled while paused too so
+    // players can scout the map without the game running.
+    if (canvas && (game.status === 'PLAYING' || game.status === 'PAUSED')) {
         const mx = game.mouse.x;
         const my = game.mouse.y;
         const cw = canvas.offsetWidth;
         const ch = canvas.offsetHeight;
-        const zoom = getZoom();
         const edgeSpeed = EDGE_SCROLL_SPEED / zoom;
 
         // Only edge scroll if mouse is within the canvas area
@@ -4366,6 +4481,8 @@ function updateCamera() {
             if (my > ch - EDGE_SCROLL_MARGIN) game.camera.y += edgeSpeed;
         }
     }
+
+    clampCamera();
 }
 
 // ============================================

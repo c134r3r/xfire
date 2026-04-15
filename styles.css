@@ -387,6 +387,12 @@ body {
 
 #controlsHelp {
     letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    cursor: help;
 }
 
 .hotkey {
