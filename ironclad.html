@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>IRONCLAD - Arena Survival</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230d0d1a'/><text x='50' y='70' font-size='60' fill='%23ff6b35' text-anchor='middle' font-weight='bold'>I</text></svg>">
 <style>
@@ -26,11 +29,16 @@
 
 html, body {
   height: 100%;
+  width: 100%;
   background: var(--bg-dark);
   color: var(--text-primary);
   font-family: 'Rajdhani', sans-serif;
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 #wrap {
@@ -118,6 +126,143 @@ html, body {
   box-shadow:
     0 0 60px rgba(255,107,53,0.1),
     inset 0 0 80px rgba(0,0,0,0.7);
+  touch-action: none;
+}
+
+/* Touch controls - hidden by default, shown on touch devices */
+.touch-only { display: none !important; }
+body.touch .joystick.touch-only,
+body.touch #controlsTouch.touch-only { display: block !important; }
+body.touch #touchPauseBtn.touch-only,
+body.touch #touchBoostBtn.touch-only { display: flex !important; }
+body.touch #gameCanvas { cursor: none; border-radius: 0; border: none; }
+body.touch #controlsDesktop { display: none; }
+
+.joystick {
+  position: fixed;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(10,10,20,0.35);
+  border: 2px solid rgba(255,107,53,0.35);
+  z-index: 10;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 0 24px rgba(0,0,0,0.4);
+}
+.joystick.active {
+  background: rgba(255,107,53,0.12);
+  border-color: rgba(255,107,53,0.7);
+}
+.joystick .stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border: 2px solid rgba(255,255,255,0.25);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 16px rgba(255,107,53,0.4);
+  transition: background 0.15s;
+}
+.joystick.aim .stick {
+  background: linear-gradient(180deg, #4dd0e1 0%, #1a8a99 100%);
+  box-shadow: 0 4px 16px rgba(77,208,225,0.4);
+}
+.joystick-label {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  color: var(--text-secondary);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+#joyMove { left: 26px; bottom: 26px; }
+#joyAim { right: 26px; bottom: 26px; }
+
+#touchPauseBtn {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(10,10,20,0.7);
+  border: 1px solid rgba(255,107,53,0.4);
+  color: var(--accent);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+}
+#touchPauseBtn:active { background: rgba(255,107,53,0.2); }
+
+#touchBoostBtn {
+  position: fixed;
+  right: 26px;
+  bottom: 180px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255,170,102,0.15);
+  border: 2px solid rgba(255,170,102,0.5);
+  color: #ffaa66;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  pointer-events: auto;
+}
+#touchBoostBtn:active, #touchBoostBtn.pressed {
+  background: rgba(255,170,102,0.4);
+  transform: scale(0.95);
+}
+
+@media (max-width: 800px) {
+  #hud {
+    top: 6px;
+    left: 6px;
+    right: 56px;
+    font-size: 11px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .hud-block {
+    padding: 5px 9px;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .hud-label { font-size: 9px; letter-spacing: 2px; }
+  .hp-bar { width: 90px; height: 6px; }
+  #powerupHud { bottom: auto; top: 60px; }
+  .pu-active { font-size: 9px; padding: 3px 7px; }
+  .panel { padding: 24px 20px; }
+  .title { font-size: 30px; letter-spacing: 5px; }
+  .controls { font-size: 12px; padding: 14px 16px; }
+  .actions .btn { padding: 12px 18px; font-size: 11px; letter-spacing: 2px; }
+}
+
+@media (max-width: 500px) {
+  .powerup-list { display: none; }
+  #waveBanner { font-size: 36px; letter-spacing: 8px; }
 }
 
 .overlay {
@@ -324,6 +469,18 @@ html, body {
   </div>
   <div id="powerupHud"></div>
   <div id="waveBanner"></div>
+
+  <!-- Touch controls -->
+  <button id="touchPauseBtn" class="touch-only" aria-label="Pause">II</button>
+  <div id="joyMove" class="joystick touch-only">
+    <div class="stick"></div>
+    <div class="joystick-label">MOVE</div>
+  </div>
+  <div id="joyAim" class="joystick aim touch-only">
+    <div class="stick"></div>
+    <div class="joystick-label">AIM &amp; FIRE</div>
+  </div>
+  <button id="touchBoostBtn" class="touch-only">BOOST</button>
 </div>
 
 <!-- Main Menu -->
@@ -331,12 +488,18 @@ html, body {
   <div class="panel">
     <div class="title">IRONCLAD</div>
     <div class="subtitle">Arena Survival</div>
-    <div class="controls">
+    <div class="controls" id="controlsDesktop">
       <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> &nbsp; Drive tank</div>
       <div><span class="key">MOUSE</span> &nbsp; Aim turret</div>
       <div><span class="key">LMB</span> / <span class="key">SPACE</span> &nbsp; Fire</div>
       <div><span class="key">SHIFT</span> &nbsp; Boost (limited)</div>
       <div><span class="key">P</span> &nbsp; Pause</div>
+    </div>
+    <div class="controls touch-only" id="controlsTouch">
+      <div><span class="key">LEFT</span> &nbsp; Drag to drive (joystick spawns where you touch)</div>
+      <div><span class="key">RIGHT</span> &nbsp; Drag to aim &amp; auto-fire</div>
+      <div><span class="key">BOOST</span> &nbsp; Hold for speed burst</div>
+      <div><span class="key">II</span> &nbsp; Pause (top-right)</div>
     </div>
     <div class="powerup-list">
       <div class="pu"><div class="pu-dot" style="color:#ffaa00;background:#ffaa00"></div>Rapid Fire</div>
@@ -394,16 +557,31 @@ const ctx = canvas.getContext('2d');
 const WORLD_W = 1100;
 const WORLD_H = 680;
 
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (isTouch) document.body.classList.add('touch');
+
 function fitCanvas() {
-  const maxW = Math.min(window.innerWidth - 32, WORLD_W);
-  const ratio = WORLD_H / WORLD_W;
   canvas.width = WORLD_W;
   canvas.height = WORLD_H;
-  canvas.style.width = maxW + 'px';
-  canvas.style.height = (maxW * ratio) + 'px';
+  if (isTouch) {
+    // Fill viewport, preserve aspect, letterbox if needed
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const scale = Math.min(vw / WORLD_W, vh / WORLD_H);
+    const w = WORLD_W * scale;
+    const h = WORLD_H * scale;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+  } else {
+    const maxW = Math.min(window.innerWidth - 32, WORLD_W);
+    const ratio = WORLD_H / WORLD_W;
+    canvas.style.width = maxW + 'px';
+    canvas.style.height = (maxW * ratio) + 'px';
+  }
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', () => setTimeout(fitCanvas, 100));
 
 // ----- Audio (WebAudio synth) -----
 let audioCtx = null;
@@ -470,6 +648,152 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { mouse.down = true; getAudio(); });
 canvas.addEventListener('mouseup', () => { mouse.down = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ----- Touch input: dual virtual joysticks -----
+const touchInput = {
+  move: { dx: 0, dy: 0, mag: 0, active: false },
+  aim:  { dx: 0, dy: 0, mag: 0, active: false },
+  boost: false,
+};
+
+const joyEls = {
+  move: { el: document.getElementById('joyMove'), id: null, cx: 0, cy: 0 },
+  aim:  { el: document.getElementById('joyAim'),  id: null, cx: 0, cy: 0 },
+};
+
+const JOY_RADIUS = 50; // max stick offset in CSS pixels
+
+function joyCenter(j) {
+  const r = j.el.getBoundingClientRect();
+  j.cx = r.left + r.width / 2;
+  j.cy = r.top + r.height / 2;
+}
+
+function setStick(name, dx, dy) {
+  const j = joyEls[name];
+  const stick = j.el.querySelector('.stick');
+  stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+}
+function resetStick(name) {
+  const j = joyEls[name];
+  j.el.classList.remove('active');
+  setStick(name, 0, 0);
+  touchInput[name] = { dx: 0, dy: 0, mag: 0, active: false };
+  // Return to default corner position
+  j.el.style.left = '';
+  j.el.style.top = '';
+  j.el.style.right = '';
+  j.el.style.bottom = '';
+}
+
+function updateJoyFromTouch(name, t) {
+  const j = joyEls[name];
+  let dx = t.clientX - j.cx;
+  let dy = t.clientY - j.cy;
+  const mag = Math.hypot(dx, dy);
+  if (mag > JOY_RADIUS) {
+    dx = (dx / mag) * JOY_RADIUS;
+    dy = (dy / mag) * JOY_RADIUS;
+  }
+  setStick(name, dx, dy);
+  const nmag = Math.min(1, Math.hypot(dx, dy) / JOY_RADIUS);
+  const ndx = nmag > 0 ? dx / JOY_RADIUS : 0;
+  const ndy = nmag > 0 ? dy / JOY_RADIUS : 0;
+  touchInput[name] = { dx: ndx, dy: ndy, mag: nmag, active: true };
+  j.el.classList.add('active');
+}
+
+function pickJoyForTouch(t) {
+  // Left half of viewport => move; right half => aim
+  return (t.clientX < window.innerWidth / 2) ? 'move' : 'aim';
+}
+
+function isInteractiveTarget(el) {
+  if (!el) return false;
+  return !!el.closest('.overlay, button, a, select, input');
+}
+
+function handleTouchStart(e) {
+  // If touching the menus or any UI button, let default behavior happen (taps work).
+  let anyGame = false;
+  for (const t of e.changedTouches) {
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    if (isInteractiveTarget(target)) continue;
+    if (target && (target.id === 'touchBoostBtn' || target.id === 'touchPauseBtn')) continue;
+    // Don't activate joysticks while paused or in menu
+    if (game.state !== 'playing') continue;
+
+    anyGame = true;
+    getAudio();
+    const name = pickJoyForTouch(t);
+    const j = joyEls[name];
+    if (j.id !== null) continue;
+    // Reposition joystick to where the user touched, for easier reach
+    const rect = j.el.getBoundingClientRect();
+    const halfW = rect.width / 2;
+    const halfH = rect.height / 2;
+    const cx = Math.max(halfW + 8, Math.min(window.innerWidth - halfW - 8, t.clientX));
+    const cy = Math.max(halfH + 8, Math.min(window.innerHeight - halfH - 8, t.clientY));
+    j.el.style.left = (cx - halfW) + 'px';
+    j.el.style.top = (cy - halfH) + 'px';
+    j.el.style.right = 'auto';
+    j.el.style.bottom = 'auto';
+    j.id = t.identifier;
+    joyCenter(j);
+    updateJoyFromTouch(name, t);
+  }
+  if (anyGame) e.preventDefault();
+}
+function handleTouchMove(e) {
+  let handled = false;
+  for (const t of e.changedTouches) {
+    for (const name of ['move', 'aim']) {
+      if (joyEls[name].id === t.identifier) {
+        updateJoyFromTouch(name, t);
+        handled = true;
+      }
+    }
+  }
+  if (handled) e.preventDefault();
+}
+function handleTouchEnd(e) {
+  let handled = false;
+  for (const t of e.changedTouches) {
+    for (const name of ['move', 'aim']) {
+      if (joyEls[name].id === t.identifier) {
+        joyEls[name].id = null;
+        resetStick(name);
+        handled = true;
+      }
+    }
+  }
+  if (handled) e.preventDefault();
+}
+
+if (isTouch) {
+  // Listen on document so touches anywhere on game area work
+  document.addEventListener('touchstart', handleTouchStart, { passive: false });
+  document.addEventListener('touchmove', handleTouchMove, { passive: false });
+  document.addEventListener('touchend', handleTouchEnd, { passive: false });
+  document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+  const pauseBtn = document.getElementById('touchPauseBtn');
+  pauseBtn.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); togglePause(); }, { passive: false });
+  pauseBtn.addEventListener('click', e => { e.stopPropagation(); togglePause(); });
+
+  const boostBtn = document.getElementById('touchBoostBtn');
+  const setBoost = (on) => {
+    touchInput.boost = on;
+    boostBtn.classList.toggle('pressed', on);
+  };
+  boostBtn.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); setBoost(true); }, { passive: false });
+  boostBtn.addEventListener('touchend',   e => { e.stopPropagation(); e.preventDefault(); setBoost(false); }, { passive: false });
+  boostBtn.addEventListener('touchcancel',e => { e.stopPropagation(); e.preventDefault(); setBoost(false); }, { passive: false });
+
+  // Initialize stick centers after layout
+  setTimeout(() => { joyCenter(joyEls.move); joyCenter(joyEls.aim); }, 50);
+  window.addEventListener('resize', () => { joyCenter(joyEls.move); joyCenter(joyEls.aim); });
+}
 
 // ----- Game state -----
 let game;
@@ -620,18 +944,25 @@ function spawnPickup(x, y) {
 function updatePlayer() {
   const p = game.player;
 
-  // Movement
-  let mx = 0, my = 0;
-  if (keys['w'] || keys['arrowup']) my -= 1;
-  if (keys['s'] || keys['arrowdown']) my += 1;
-  if (keys['a'] || keys['arrowleft']) mx -= 1;
-  if (keys['d'] || keys['arrowright']) mx += 1;
-  const mag = Math.hypot(mx, my);
-  if (mag > 0) { mx /= mag; my /= mag; }
+  // Movement: prefer touch joystick if active, else keyboard
+  let mx = 0, my = 0, mag = 0;
+  if (touchInput.move.active) {
+    mx = touchInput.move.dx;
+    my = touchInput.move.dy;
+    mag = touchInput.move.mag;
+  } else {
+    if (keys['w'] || keys['arrowup']) my -= 1;
+    if (keys['s'] || keys['arrowdown']) my += 1;
+    if (keys['a'] || keys['arrowleft']) mx -= 1;
+    if (keys['d'] || keys['arrowright']) mx += 1;
+    mag = Math.hypot(mx, my);
+    if (mag > 0) { mx /= mag; my /= mag; mag = 1; }
+  }
 
   let speed = p.speed;
-  // Boost
-  if (keys['shift'] && p.boost > 0 && mag > 0) {
+  // Boost (shift on keyboard, BOOST button on touch)
+  const wantBoost = keys['shift'] || touchInput.boost;
+  if (wantBoost && p.boost > 0 && mag > 0) {
     speed *= 1.8;
     p.boost = Math.max(0, p.boost - 0.6);
   } else {
@@ -644,18 +975,24 @@ function updatePlayer() {
   p.y = clamp(p.y + p.vy, p.radius, WORLD_H - p.radius);
 
   // Hull rotates toward movement direction
-  if (mag > 0) {
+  if (mag > 0.05) {
     const target = Math.atan2(my, mx);
     p.hullAngle = angleLerp(p.hullAngle, target, 0.15);
   }
 
-  // Turret aims at mouse
-  const targetTurret = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  // Turret aims: touch aim joystick > mouse
+  let targetTurret;
+  if (touchInput.aim.active && touchInput.aim.mag > 0.15) {
+    targetTurret = Math.atan2(touchInput.aim.dy, touchInput.aim.dx);
+  } else {
+    targetTurret = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  }
   p.turretAngle = angleLerp(p.turretAngle, targetTurret, 0.35);
 
-  // Shoot
+  // Shoot: mouse down, space, or aim joystick pushed
   if (p.shootCooldown > 0) p.shootCooldown--;
-  const wantsToShoot = mouse.down || keys[' '];
+  const aimFiring = touchInput.aim.active && touchInput.aim.mag > 0.3;
+  const wantsToShoot = mouse.down || keys[' '] || aimFiring;
   const fireRate = game.powerups.rapidFire > 0 ? 6 : 14;
   if (wantsToShoot && p.shootCooldown <= 0) {
     fireBullet();
@@ -1003,7 +1340,7 @@ function drawPlayer() {
   drawTank(p.x, p.y, p.hullAngle, p.turretAngle, '#4dd0e1', p.radius, true);
 
   // Boost trail
-  if (keys['shift'] && p.boost > 0 && (p.vx || p.vy)) {
+  if ((keys['shift'] || touchInput.boost) && p.boost > 0 && (p.vx || p.vy)) {
     const back = p.hullAngle + Math.PI;
     spawnParticles(
       p.x + Math.cos(back) * p.radius,
