@@ -731,7 +731,7 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     // Ghost sprite of the building
     const faction = getFaction(0);
     const sprite = IsoSprites.buildingSprite(buildingType, faction, 0);
-    const bscale = zoom * 0.8;
+    const bscale = zoom * 0.65;
     ctx.globalAlpha = isValid ? 0.65 : 0.35;
     ctx.drawImage(sprite,
         screen.x - sprite.anchorX * bscale,
@@ -956,7 +956,7 @@ function drawBuilding(building) {
     }
 
     const sprite = IsoSprites.buildingSprite(building.type, faction, frame);
-    const bscale = zoom * 0.8; // buildings drawn slightly smaller than their footprint
+    const bscale = zoom * 0.65; // buildings drawn well inside their footprint
     const dx = screen.x - sprite.anchorX * bscale;
     const dy = screen.y - sprite.anchorY * bscale;
     const dw = sprite.width * bscale;
@@ -2733,10 +2733,10 @@ function canBuildAt(buildingType, x, y) {
         }
     }
 
-    // Building collision: keep footprints + 1 tile of clearance apart
+    // Building collision: footprints may sit adjacent but not overlap
     for (const building of game.buildings) {
         const otherType = BUILDING_TYPES[building.type];
-        const gap = Math.ceil((type.size + (otherType ? otherType.size : 2)) / 2) + 1;
+        const gap = Math.ceil((type.size + (otherType ? otherType.size : 2)) / 2);
         if (Math.abs(x - building.x) < gap && Math.abs(y - building.y) < gap) {
             return false;
         }
