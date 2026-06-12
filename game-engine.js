@@ -1,19 +1,11 @@
-// Detect Mac and update control help text
+// Detect Mac (used for modifier-key handling)
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
-if (isMac) {
-    const helpEl = document.getElementById('controlsHelp');
-    if (helpEl) {
-        helpEl.innerHTML = 'Controls: Click select | ⌘+Click/Right-click move/attack | Drag box-select | WASD/Edge scroll | Middle-drag pan | Wheel zoom | X stop | 1-8 build/produce';
-    }
-}
 
 // ============================================
-// XFIRE - Skirmish RTS Game Engine
+// XFIRE - Krossfire Skirmish RTS Game Engine
 // ============================================
 
 let canvas, ctx, minimapCanvas, minimapCtx;
-let assetLoader;
-let useSprites = true; // Toggle between sprite-based and procedural graphics
 
 // ============================================
 // SOUND SYSTEM - Web Audio API
@@ -235,14 +227,6 @@ function initializeCanvases() {
         return false;
     }
 
-    // Initialize asset loader with placeholder graphics
-    if (typeof AssetLoader !== 'undefined') {
-        assetLoader = new AssetLoader();
-        assetLoader.createPlaceholders();
-    } else {
-        useSprites = false;
-    }
-
     return true;
 }
 
@@ -251,7 +235,9 @@ const gameSettings = {
     timeLimit: 'unlimited',
     difficulty: 'normal',
     mapSize: 'medium',
-    startingOil: 1200,
+    startingOil: 3000,
+    playerFaction: 'survivors',
+    enemyFaction: 'random',
     MAP_SIZE: MAP_SIZE,
     zoom: 1.0,
     minZoom: 0.5,
@@ -284,44 +270,23 @@ const game = {
     selectionBox: null,
     placingBuilding: null,
     placingBuildingFrom: null,
+    attackMoveMode: false,
     players: [
         {
             id: 0,
             color: '#4488ff',
-            oil: 1200,
-            power: 100,
-            team: 'player',
-            tech: {
-                barracks: true,
-                factory: true,
-                derrick: true,
-                turret: true,
-                powerplant: true,
-                academy: true,
-                techLab: true,
-                researchLab: true,
-                rifleTurret: false,
-                missileTurret: false
-            }
+            faction: 'survivors',
+            oil: 3000,
+            techLevel: 1,
+            team: 'player'
         },
         {
             id: 1,
-            color: '#ff0000',
-            oil: 1200,
-            power: 100,
-            team: 'enemy',
-            tech: {
-                barracks: true,
-                factory: true,
-                derrick: true,
-                turret: true,
-                powerplant: true,
-                academy: true,
-                techLab: true,
-                researchLab: true,
-                rifleTurret: false,
-                missileTurret: false
-            }
+            color: '#ff4444',
+            faction: 'evolved',
+            oil: 3000,
+            techLevel: 1,
+            team: 'enemy'
         }
     ],
     units: [],
@@ -410,13 +375,28 @@ function generateMap() {
         }
     }
 
-    // Add oil deposits - scale with map size
-    const oilCount = Math.floor((8 + Math.floor(Math.random() * 5)) * sizeMultiplier);
-    for (let i = 0; i < oilCount; i++) {
-        const x = 5 + Math.floor(Math.random() * (mapSize - 10));
-        const y = 5 + Math.floor(Math.random() * (mapSize - 10));
-        if (game.map[y][x].type === 'grass') {
-            game.map[y][x].oil = true;
+    // Add oil fields - small clusters of patches, scaled with map size
+    const fieldCount = Math.floor((5 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    for (let i = 0; i < fieldCount; i++) {
+        const x = 6 + Math.floor(Math.random() * (mapSize - 12));
+        const y = 6 + Math.floor(Math.random() * (mapSize - 12));
+        placeOilField(x, y, 1 + Math.floor(Math.random() * 2));
+    }
+}
+
+// Place a cluster of oil patches around (x, y)
+function placeOilField(x, y, extra = 1) {
+    const mapSize = getMapSize();
+    const spots = [[0, 0]];
+    const offsets = [[2, 1], [-1, 2], [2, -2], [-2, -1]];
+    for (let i = 0; i < extra; i++) spots.push(offsets[i % offsets.length]);
+    for (const [dx, dy] of spots) {
+        const px = x + dx, py = y + dy;
+        if (px < 2 || px >= mapSize - 2 || py < 2 || py >= mapSize - 2) continue;
+        const tile = game.map[py][px];
+        if (tile.type === 'grass' && !tile.oil) {
+            tile.oil = true;
+            tile.oilAmount = 25000 + Math.floor(Math.random() * 25000);
         }
     }
 }
@@ -548,20 +528,14 @@ function render() {
         }
     }
 
-    // Draw buildings (sorted by y for depth)
-    const sortedBuildings = [...game.buildings].sort((a, b) => a.y - b.y);
-    for (const building of sortedBuildings) {
-        drawBuilding(building);
-    }
-
-    // Draw units (sorted by y for depth)
-    const sortedUnits = [...game.units].sort((a, b) => a.y - b.y);
-    for (const unit of sortedUnits) {
-        // Draw glow for selected units
-        if (game.selection.includes(unit)) {
-            drawUnitGlow(unit);
+    // Draw buildings and units together, sorted by isometric depth (x + y)
+    const entities = [...game.buildings, ...game.units].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    for (const entity of entities) {
+        if (BUILDING_TYPES[entity.type] && game.buildings.includes(entity)) {
+            drawBuilding(entity);
+        } else {
+            drawUnit(entity);
         }
-        drawUnit(unit);
     }
 
     // Draw projectiles
@@ -611,48 +585,58 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     const type = BUILDING_TYPES[buildingType];
     if (!type) return;
 
+    const zoom = getZoom();
     const screen = worldToScreen(tx, ty);
-    const size = type.size * 20;
+    const color = isValid ? '#44ff66' : '#ff4444';
 
-    // Choose color based on validity
-    let color = isValid ? '#00ff00' : '#ff0000';
-    let alpha = isValid ? 0.5 : 0.3;
-
-    ctx.globalAlpha = alpha;
+    // Footprint diamond (in world tiles)
+    const half = type.size / 2;
+    const c1 = worldToScreen(tx - half, ty - half);
+    const c2 = worldToScreen(tx + half, ty - half);
+    const c3 = worldToScreen(tx + half, ty + half);
+    const c4 = worldToScreen(tx - half, ty + half);
+    ctx.globalAlpha = 0.3;
     ctx.fillStyle = color;
-
-    // Draw building preview box
-    ctx.fillRect(screen.x - size/2, screen.y - size - 5, size, size);
-
+    ctx.beginPath();
+    ctx.moveTo(c1.x, c1.y);
+    ctx.lineTo(c2.x, c2.y);
+    ctx.lineTo(c3.x, c3.y);
+    ctx.lineTo(c4.x, c4.y);
+    ctx.closePath();
+    ctx.fill();
     ctx.globalAlpha = 1;
-
-    // Draw border
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
-    ctx.strokeRect(screen.x - size/2, screen.y - size - 5, size, size);
+    ctx.stroke();
 
-    // Draw range indicator for towers
+    // Ghost sprite of the building
+    const faction = getFaction(0);
+    const sprite = IsoSprites.buildingSprite(buildingType, faction, 0);
+    ctx.globalAlpha = isValid ? 0.65 : 0.35;
+    ctx.drawImage(sprite,
+        screen.x - sprite.anchorX * zoom,
+        screen.y - sprite.anchorY * zoom,
+        sprite.width * zoom,
+        sprite.height * zoom);
+    ctx.globalAlpha = 1;
+
+    // Range indicator for towers
     if (type.range) {
-        ctx.strokeStyle = isValid ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
+        ctx.strokeStyle = isValid ? 'rgba(68,255,102,0.35)' : 'rgba(255,68,68,0.35)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        const rangeRadius = type.range / 64 * 20; // Convert to screen coords
-        ctx.arc(screen.x, screen.y - size/2, rangeRadius, 0, Math.PI * 2);
+        const rangeRadius = (type.range / 32) * (TILE_WIDTH / 2) * zoom * 0.5;
+        ctx.ellipse(screen.x, screen.y, rangeRadius, rangeRadius * 0.5, 0, 0, Math.PI * 2);
         ctx.stroke();
     }
 
-    // Draw building name in center (SVG icons can't be drawn with fillText)
-    ctx.fillStyle = color;
-    ctx.font = 'bold 10px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(type.name, screen.x, screen.y - size/2);
-
-    // Draw validity text
     if (!isValid) {
-        ctx.fillStyle = '#ff0000';
-        ctx.font = 'bold 10px Arial';
-        ctx.fillText('CANNOT BUILD HERE', screen.x, screen.y + 20);
+        ctx.fillStyle = '#ff5555';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const msg = type.needsOil ? 'MUST BE PLACED ON AN OIL PATCH' : 'CANNOT BUILD HERE';
+        ctx.fillText(msg, screen.x, screen.y + 30 * zoom);
     }
 }
 
@@ -673,13 +657,13 @@ function drawTile(tx, ty) {
     const tileW = TILE_WIDTH * zoom;
     const tileH = TILE_HEIGHT * zoom;
 
-    // Base colors with variation
+    // Post-apocalyptic wasteland palette
     const baseColors = {
-        grass: { r: 61, g: 92, b: 61 },
+        grass: { r: 133, g: 113, b: 78 },   // dusty plains
         sand: { r: 160, g: 128, b: 80 },
         rock: { r: 96, g: 96, b: 96 },
-        water: { r: 70, g: 140, b: 200 },
-        hill: { r: 107, g: 68, b: 35 }
+        water: { r: 58, g: 92, b: 102 },    // murky water
+        hill: { r: 104, g: 82, b: 58 }      // rocky outcrop
     };
 
     const base = baseColors[tile.type] || baseColors.grass;
@@ -732,27 +716,38 @@ function drawTile(tx, ty) {
         drawTileDetails(tx, ty, tile.type, screen, zoom);
     }
 
-    // Draw oil deposit (always visible)
+    // Draw oil patch (always visible) - dark bubbling pool, KKnD style
     if (tile.oil) {
+        const depleted = tile.oilAmount !== undefined && tile.oilAmount <= 0;
+        const poolR = depleted ? 8 : 14;
+
+        // Stained ground ring
+        ctx.fillStyle = 'rgba(40,36,22,0.45)';
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y + 1 * zoom, (poolR + 6) * zoom, (poolR + 6) * 0.55 * zoom, 0, 0, Math.PI * 2);
+        ctx.fill();
+
         // Oil pool
-        ctx.fillStyle = 'rgba(20,20,20,0.8)';
+        ctx.fillStyle = depleted ? 'rgba(30,28,20,0.7)' : 'rgba(16,18,10,0.92)';
         ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y + 2 * zoom, 10 * zoom, 6 * zoom, 0, 0, Math.PI * 2);
+        ctx.ellipse(screen.x, screen.y + 1 * zoom, poolR * zoom, poolR * 0.55 * zoom, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Oil shine
-        ctx.fillStyle = 'rgba(60,60,80,0.6)';
-        ctx.beginPath();
-        ctx.ellipse(screen.x - 2 * zoom, screen.y, 4 * zoom, 2.5 * zoom, -0.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Bubbles
-        const bubblePhase = (Date.now() / 1000 + tx + ty) % 3;
-        if (bubblePhase < 1) {
-            ctx.fillStyle = 'rgba(80,80,100,0.5)';
+        if (!depleted) {
+            // Greenish sheen
+            ctx.fillStyle = 'rgba(70,90,60,0.45)';
             ctx.beginPath();
-            ctx.arc(screen.x + 2 * zoom, screen.y - bubblePhase * 3 * zoom, 1.5 * zoom, 0, Math.PI * 2);
+            ctx.ellipse(screen.x - 3 * zoom, screen.y - 1 * zoom, 6 * zoom, 3 * zoom, -0.3, 0, Math.PI * 2);
             ctx.fill();
+
+            // Bubbles
+            const bubblePhase = (Date.now() / 900 + tx * 1.7 + ty) % 3;
+            if (bubblePhase < 1) {
+                ctx.fillStyle = 'rgba(110,120,90,0.5)';
+                ctx.beginPath();
+                ctx.arc(screen.x + 3 * zoom, screen.y - bubblePhase * 3 * zoom, (1.8 - bubblePhase) * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     }
 }
@@ -762,8 +757,8 @@ function drawTileDetails(tx, ty, tileType, screen, zoom) {
 
     switch (tileType) {
         case 'grass':
-            // Draw grass blades
-            ctx.strokeStyle = 'rgba(30,70,30,0.6)';
+            // Draw dry scrub tufts
+            ctx.strokeStyle = 'rgba(88,78,44,0.6)';
             ctx.lineWidth = 1;
             for (let i = 0; i < detailCount; i++) {
                 const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 20 * zoom;
@@ -876,517 +871,186 @@ function drawTileDetails(tx, ty, tileType, screen, zoom) {
 }
 
 function drawBuilding(building) {
-    // Try sprite-based rendering first, fall back to procedural if not available
-    // Always use procedural rendering for enemy buildings to show them in red
-    if (building.playerId === 0 && useSprites && assetLoader && drawBuildingSprite(building)) {
-        // If under construction, draw progress bar on top
-        if (building.isUnderConstruction) {
-            const screen = worldToScreen(building.x, building.y);
-            const progress = building.buildProgress / building.buildTime;
-            ctx.fillStyle = '#333';
-            ctx.fillRect(screen.x - 25, screen.y - 45, 50, 4);
-            ctx.fillStyle = '#4488ff';
-            ctx.fillRect(screen.x - 25, screen.y - 45, 50 * progress, 4);
-        }
+    const type = BUILDING_TYPES[building.type];
+    const screen = worldToScreen(building.x, building.y);
+    const zoom = getZoom();
+    const faction = getFaction(building.playerId);
+
+    // Animation frame (derricks pump while they have oil left)
+    let frame = 0;
+    if (building.type === 'derrick' && !building.isUnderConstruction && building.oilLeft !== 0) {
+        frame = Math.floor(game.tick / 40) % 2;
+    }
+
+    const sprite = IsoSprites.buildingSprite(building.type, faction, frame);
+    const dx = screen.x - sprite.anchorX * zoom;
+    const dy = screen.y - sprite.anchorY * zoom;
+    const dw = sprite.width * zoom;
+    const dh = sprite.height * zoom;
+
+    if (building.isUnderConstruction) {
+        const progress = building.buildProgress / building.buildTime;
+        // Building rises out of the ground while being constructed
+        ctx.save();
+        ctx.globalAlpha = 0.45 + progress * 0.55;
+        const visible = dh * (0.25 + progress * 0.75);
+        ctx.beginPath();
+        ctx.rect(dx - 4, dy + dh - visible, dw + 8, visible);
+        ctx.clip();
+        ctx.drawImage(sprite, dx, dy, dw, dh);
+        ctx.restore();
+
+        // Construction progress bar
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 24, screen.y - 8, 48, 5);
+        ctx.fillStyle = '#ffaa22';
+        ctx.fillRect(screen.x - 24, screen.y - 8, 48 * progress, 5);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screen.x - 24, screen.y - 8, 48, 5);
         return;
     }
 
-    const type = BUILDING_TYPES[building.type];
-    const screen = worldToScreen(building.x, building.y);
-    const player = game.players[building.playerId];
+    ctx.drawImage(sprite, dx, dy, dw, dh);
 
-    // Use red for enemy buildings, team color for own
-    const buildingColor = building.playerId === 0 ? player.color : '#ff4444';
+    const barY = dy - 2;
 
-    // If under construction, reduce alpha
-    const baseAlpha = building.isUnderConstruction ? 0.4 : 0.8;
-
-    // Draw base structure
-    ctx.fillStyle = buildingColor;
-    ctx.globalAlpha = baseAlpha;
-    ctx.fillRect(screen.x - 20, screen.y - 20, 40, 40);
-    ctx.globalAlpha = 1;
-
-    // Draw construction progress bar (if under construction)
-    if (building.isUnderConstruction) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(screen.x - 20, screen.y - 30, 40, 5);
-        ctx.fillStyle = '#4488ff';
-        const progress = building.buildProgress / building.buildTime;
-        ctx.fillRect(screen.x - 20, screen.y - 30, 40 * progress, 5);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
-    }
-    // Draw health bar
-    else if (building.hp < type.hp) {
-        ctx.fillStyle = '#f00';
-        ctx.fillRect(screen.x - 20, screen.y - 30, 40 * (building.hp / type.hp), 5);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(screen.x - 20, screen.y - 30, 40, 5);
-    }
-
-    // Draw emoji/icon (simple colored box, no emoji needed)
-    // Just draw the colored rectangle below
-
-    const size = type.size * 20;
-
-    // Building-specific designs
-    if (building.type === 'hq') {
-        // HQ: prominent command center
-        ctx.fillStyle = shadeColor(buildingColor, -30);
-        ctx.fillRect(screen.x - size/2, screen.y - size - 5, size, size);
-
-        // Main structure
-        ctx.fillStyle = buildingColor;
-        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 3, size - 4, size - 4);
-
-        // Command antenna
-        ctx.strokeStyle = shadeColor(buildingColor, -50);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screen.x + 2, screen.y - size);
-        ctx.lineTo(screen.x + 2, screen.y - size - 12);
-        ctx.stroke();
-
-        // Command light
-        ctx.fillStyle = '#ff0';
-        ctx.beginPath();
-        ctx.arc(screen.x + 2, screen.y - size - 12, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-    } else if (building.type === 'turret') {
-        // Turret: aggressive gun emplacement
-        ctx.fillStyle = shadeColor(buildingColor, -40);
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - size/2, size/2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = buildingColor;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - size/2, size/2 - 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Gun barrel
-        ctx.strokeStyle = shadeColor(buildingColor, -60);
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(screen.x - 2, screen.y - size/2);
-        ctx.lineTo(screen.x - size/2 - 2, screen.y - size/2 - 3);
-        ctx.stroke();
-
-    } else if (building.type === 'factory') {
-        // Factory: industrial complex
-        ctx.fillStyle = shadeColor(buildingColor, -35);
-        ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
-
-        ctx.fillStyle = buildingColor;
-        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
-
-        // Production lines
-        ctx.strokeStyle = shadeColor(buildingColor, -50);
+    // Health bar (only when damaged or selected)
+    const isSelected = game.selection.includes(building);
+    if (building.hp < type.hp || isSelected) {
+        const hpPercent = Math.max(0, building.hp / type.hp);
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 24, barY, 48, 4);
+        ctx.fillStyle = hpPercent > 0.5 ? '#33dd44' : hpPercent > 0.25 ? '#ffcc00' : '#ff3333';
+        ctx.fillRect(screen.x - 24, barY, 48 * hpPercent, 4);
+        ctx.strokeStyle = '#000';
         ctx.lineWidth = 1;
-        for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.moveTo(screen.x - size/2 + 6, screen.y - size + 6 + i * 4);
-            ctx.lineTo(screen.x + size/2 - 6, screen.y - size + 6 + i * 4);
-            ctx.stroke();
-        }
-
-    } else if (building.type === 'barracks') {
-        // Barracks: training facility
-        ctx.fillStyle = shadeColor(buildingColor, -30);
-        ctx.fillRect(screen.x - size/2, screen.y - size + 3, size, size - 6);
-
-        ctx.fillStyle = buildingColor;
-        ctx.fillRect(screen.x - size/2 + 2, screen.y - size + 5, size - 4, size - 10);
-
-        // Training yard lines
-        ctx.strokeStyle = shadeColor(buildingColor, -50);
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(screen.x - size/4, screen.y - size/2 + 3);
-        ctx.lineTo(screen.x - size/4, screen.y + size/2 - 3);
-        ctx.stroke();
-
-    } else if (building.type === 'derrick') {
-        // Oil derrick: tall pump structure
-        ctx.strokeStyle = shadeColor(buildingColor, -40);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - size);
-        ctx.lineTo(screen.x - 4, screen.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - size);
-        ctx.lineTo(screen.x + 4, screen.y);
-        ctx.stroke();
-
-        // Pump head
-        ctx.fillStyle = buildingColor;
-        ctx.fillRect(screen.x - 6, screen.y - size + 4, 12, 8);
-
-        // Oil base
-        ctx.fillStyle = shadeColor(buildingColor, -30);
-        ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y + 2, 10, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-    } else {
-        // PowerPlant and default: rectangular structure
-        ctx.fillStyle = shadeColor(buildingColor, -30);
-        ctx.fillRect(screen.x - size/2, screen.y - size, size, size);
-
-        ctx.fillStyle = buildingColor;
-        ctx.fillRect(screen.x - size/2 + 2, screen.y - size - 8, size - 4, size - 6);
-
-        // Details
-        ctx.fillStyle = shadeColor(buildingColor, -50);
-        ctx.fillRect(screen.x - size/2 + 5, screen.y - size + 3, size/3 - 7, 4);
-        ctx.fillRect(screen.x + size/6, screen.y - size + 3, size/3 - 7, 4);
+        ctx.strokeRect(screen.x - 24, barY, 48, 4);
     }
 
-    // Roof highlight (shared)
-    ctx.fillStyle = shadeColor(buildingColor, 40);
-    ctx.globalAlpha = 0.5;
-    ctx.fillRect(screen.x - size/2 + 3, screen.y - size - 7, size - 6, 3);
-    ctx.globalAlpha = 1;
-
-    // Health bar
-    const hpPercent = building.hp / type.hp;
-    ctx.fillStyle = '#333';
-    ctx.fillRect(screen.x - 20, screen.y - size - 20, 40, 4);
-    ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
-    ctx.fillRect(screen.x - 20, screen.y - size - 20, 40 * hpPercent, 4);
-
-    // Selection indicator
-    if (game.selection.includes(building)) {
-        ctx.strokeStyle = '#00ff00';
+    // Selection: footprint diamond outline
+    if (isSelected) {
+        const half = type.size / 2;
+        const c1 = worldToScreen(building.x - half, building.y - half);
+        const c2 = worldToScreen(building.x + half, building.y - half);
+        const c3 = worldToScreen(building.x + half, building.y + half);
+        const c4 = worldToScreen(building.x - half, building.y + half);
+        ctx.strokeStyle = '#33ff55';
         ctx.lineWidth = 2;
-        ctx.strokeRect(screen.x - size/2 - 3, screen.y - size - 13, size + 6, size + 16);
+        ctx.beginPath();
+        ctx.moveTo(c1.x, c1.y);
+        ctx.lineTo(c2.x, c2.y);
+        ctx.lineTo(c3.x, c3.y);
+        ctx.lineTo(c4.x, c4.y);
+        ctx.closePath();
+        ctx.stroke();
     }
 
-    // Production progress
+    // Derrick oil storage bar
+    if (building.type === 'derrick') {
+        const stored = building.storage || 0;
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 16, screen.y + 6, 32, 3);
+        ctx.fillStyle = '#cfae3a';
+        ctx.fillRect(screen.x - 16, screen.y + 6, 32 * Math.min(1, stored / type.storageMax), 3);
+    }
+
+    // Production / research progress
     if (building.productionQueue.length > 0) {
         const progress = building.produceProgress / building.produceTime;
-        ctx.fillStyle = '#555';
-        ctx.fillRect(screen.x - 15, screen.y + 5, 30, 3);
-        ctx.fillStyle = '#0ff';
-        ctx.fillRect(screen.x - 15, screen.y + 5, 30 * progress, 3);
-    }
-}
-
-/**
- * Draw unit using sprite graphics if available, otherwise use procedural graphics
- */
-function drawUnitSprite(unit) {
-    const type = UNIT_TYPES[unit.type];
-    const screen = worldToScreen(unit.x, unit.y);
-    const sprite = assetLoader?.getAsset('units', unit.type);
-
-    if (!sprite) {
-        return false; // Fall back to procedural drawing
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 18, screen.y + 11, 36, 3);
+        ctx.fillStyle = '#33ccff';
+        ctx.fillRect(screen.x - 18, screen.y + 11, 36 * progress, 3);
+    } else if (building.researching) {
+        const progress = building.researching.progress / building.researching.time;
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 18, screen.y + 11, 36, 3);
+        ctx.fillStyle = '#cc66ff';
+        ctx.fillRect(screen.x - 18, screen.y + 11, 36 * progress, 3);
     }
 
-    // Shadow with blur effect
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y + 8, type.size * 1.2, type.size * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Draw sprite at unit position, scaled appropriately
-    const spriteWidth = sprite.width || 48;
-    const spriteHeight = sprite.height || 48;
-    const scale = (type.size * 2) / spriteWidth;
-
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-
-    // Rotate if needed
-    if (unit.angle) {
-        ctx.translate(screen.x, screen.y);
-        ctx.rotate(unit.angle);
-        ctx.drawImage(sprite, -spriteWidth * scale / 2, -spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
-        ctx.restore();
-    } else {
-        ctx.drawImage(sprite, screen.x - spriteWidth * scale / 2, screen.y - spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
-        ctx.restore();
-    }
-
-    // Health bar - always visible for better combat overview
-    const hpPercent = unit.hp / type.hp;
-    const barWidth = 24;
-    const barHeight = 3;
-    const barY = screen.y - type.size - 18;
-
-    // Background
-    ctx.fillStyle = '#333';
-    ctx.fillRect(screen.x - barWidth/2, barY, barWidth, barHeight);
-
-    // Health fill - color based on health percentage
-    ctx.fillStyle = hpPercent > 0.6 ? '#0f0' : hpPercent > 0.3 ? '#ff0' : '#f00';
-    ctx.fillRect(screen.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
-
-    // Border
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(screen.x - barWidth/2, barY, barWidth, barHeight);
-
-    // Selection indicator
-    if (game.selection.includes(unit)) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
+    // Rally point line for selected production buildings
+    if (isSelected && building.rallyX !== undefined && type.produces.length > 0) {
+        const rally = worldToScreen(building.rallyX, building.rallyY);
+        ctx.strokeStyle = 'rgba(51,255,85,0.5)';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y, type.size + 8, 0, Math.PI * 2);
+        ctx.moveTo(screen.x, screen.y);
+        ctx.lineTo(rally.x, rally.y);
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#33ff55';
+        ctx.beginPath();
+        ctx.arc(rally.x, rally.y, 3, 0, Math.PI * 2);
+        ctx.fill();
     }
-
-    // Harvester cargo indicator
-    if (unit.type === 'harvester' && unit.cargo > 0) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(screen.x - 10, screen.y + 12, 20, 3);
-        ctx.fillStyle = '#fa0';
-        ctx.fillRect(screen.x - 10, screen.y + 12, 20 * (unit.cargo / type.capacity), 3);
-    }
-
-    return true;
-}
-
-/**
- * Draw building using sprite graphics if available, otherwise use procedural graphics
- */
-function drawBuildingSprite(building) {
-    const type = BUILDING_TYPES[building.type];
-    const screen = worldToScreen(building.x, building.y);
-    const sprite = assetLoader?.getAsset('buildings', building.type);
-
-    if (!sprite) {
-        return false; // Fall back to procedural drawing
-    }
-
-    // Shadow with blur effect
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 6;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y + 12, type.size * 18, type.size * 10, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Draw sprite at building position
-    const spriteWidth = sprite.width || 64;
-    const spriteHeight = sprite.height || 64;
-    const scale = (type.size * 25) / spriteWidth;
-
-    ctx.save();
-    ctx.globalAlpha = 0.95;
-    ctx.drawImage(sprite, screen.x - spriteWidth * scale / 2, screen.y - spriteHeight * scale / 2, spriteWidth * scale, spriteHeight * scale);
-    ctx.restore();
-
-    // Health bar
-    const hpPercent = building.hp / type.hp;
-    ctx.fillStyle = '#333';
-    ctx.fillRect(screen.x - 20, screen.y - type.size * 20 - 20, 40, 4);
-    ctx.fillStyle = hpPercent > 0.5 ? '#0f0' : hpPercent > 0.25 ? '#ff0' : '#f00';
-    ctx.fillRect(screen.x - 20, screen.y - type.size * 20 - 20, 40 * hpPercent, 4);
-
-    // Selection indicator
-    if (game.selection.includes(building)) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(screen.x - spriteWidth * scale / 2 - 3, screen.y - spriteHeight * scale / 2 - 3, spriteWidth * scale + 6, spriteHeight * scale + 6);
-    }
-
-    // Production progress
-    if (building.producing) {
-        const progress = building.produceProgress / building.produceTime;
-        ctx.fillStyle = '#555';
-        ctx.fillRect(screen.x - 15, screen.y + 8, 30, 3);
-        ctx.fillStyle = '#0ff';
-        ctx.fillRect(screen.x - 15, screen.y + 8, 30 * progress, 3);
-    }
-
-    return true;
-}
-
-function drawUnitGlow(unit) {
-    const type = UNIT_TYPES[unit.type];
-    const screen = worldToScreen(unit.x, unit.y);
-
-    // Glow effect for selected units
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#00ff00';
-    ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, type.size * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
 }
 
 function drawUnit(unit) {
-    // Try sprite-based rendering first, fall back to procedural if not available
-    if (useSprites && assetLoader && drawUnitSprite(unit)) {
-        return;
-    }
-
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
-    const player = game.players[unit.playerId];
+    const zoom = getZoom();
+    const faction = getFaction(unit.playerId);
 
-    // Draw unit circle background
-    ctx.fillStyle = player.color;
-    ctx.globalAlpha = 0.7;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    const dir = IsoSprites.dirFromAngle(unit.angle || 0);
+    const sprite = IsoSprites.unitSprite(unit.type, faction, dir);
 
-    // Health bar - always visible for better combat overview
-    const hpPercent = unit.hp / type.hp;
-    const barWidth = 24;
-    const barHeight = 3;
-    const barY = screen.y - 20;
+    const isSelected = game.selection.includes(unit);
 
-    ctx.fillStyle = '#333';
-    ctx.fillRect(screen.x - barWidth/2, barY, barWidth, barHeight);
-    ctx.fillStyle = hpPercent > 0.6 ? '#0f0' : hpPercent > 0.3 ? '#ff0' : '#f00';
-    ctx.fillRect(screen.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(screen.x - barWidth/2, barY, barWidth, barHeight);
-
-    // Draw unit (colored circle, specific type drawn below)
-
-    const angle = unit.angle || 0;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-
-    // Unit-specific rendering
-    if (unit.type === 'tank' || unit.type === 'lightTank' || unit.type === 'mediumTank' || unit.type === 'heavyTank') {
-        // Tank: larger rect with turret
-        ctx.fillStyle = player.color;
-        ctx.fillRect(screen.x - type.size * 0.7, screen.y - type.size * 0.5, type.size * 1.4, type.size);
-
-        // Turret
-        ctx.fillStyle = shadeColor(player.color, -20);
+    // Selection ellipse under the unit (green = own, red ring on hover not needed)
+    if (isSelected) {
+        ctx.strokeStyle = unit.playerId === 0 ? '#33ff55' : '#ff5533';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Turret barrel
-        ctx.strokeStyle = shadeColor(player.color, -40);
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - type.size / 2);
-        ctx.lineTo(
-            screen.x + cosA * type.size * 1.3,
-            screen.y - type.size / 2 + sinA * type.size * 1.3
-        );
+        ctx.ellipse(screen.x, screen.y + 2 * zoom, (type.size + 6) * zoom, (type.size + 6) * 0.5 * zoom, 0, 0, Math.PI * 2);
         ctx.stroke();
-    } else if (unit.type === 'harvester') {
-        // Harvester: rounded shape
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y - type.size / 2, type.size * 0.9, type.size * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
+    }
 
-        // Storage capacity indicator
-        ctx.fillStyle = shadeColor(player.color, -30);
-        ctx.fillRect(screen.x - type.size * 0.7, screen.y + 2, type.size * 1.4, 3);
-    } else if (unit.type === 'artillery') {
-        // Artillery: smaller base, long barrel
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.6, 0, Math.PI * 2);
-        ctx.fill();
+    ctx.drawImage(sprite,
+        screen.x - sprite.anchorX * zoom,
+        screen.y - sprite.anchorY * zoom,
+        sprite.width * zoom,
+        sprite.height * zoom);
 
-        // Long barrel
-        ctx.strokeStyle = shadeColor(player.color, -40);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - type.size / 2);
-        ctx.lineTo(
-            screen.x + cosA * type.size * 1.6,
-            screen.y - type.size / 2 + sinA * type.size * 1.6
-        );
-        ctx.stroke();
-    } else if (unit.type === 'scout') {
-        // Scout: small and fast-looking
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - type.size / 2, type.size * 0.8, 0, Math.PI * 2);
-        ctx.fill();
+    // Health bar (damaged or selected)
+    const hpPercent = Math.max(0, unit.hp / type.hp);
+    if (hpPercent < 1 || isSelected) {
+        const barWidth = 22;
+        const barY = screen.y - (type.size + 22) * zoom;
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - barWidth / 2, barY, barWidth, 3);
+        ctx.fillStyle = hpPercent > 0.6 ? '#33dd44' : hpPercent > 0.3 ? '#ffcc00' : '#ff3333';
+        ctx.fillRect(screen.x - barWidth / 2, barY, barWidth * hpPercent, 3);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(screen.x - barWidth / 2, barY, barWidth, 3);
+    }
 
-        // Speed lines
-        ctx.strokeStyle = shadeColor(player.color, 30);
-        ctx.lineWidth = 1;
-        for (let i = -1; i <= 1; i++) {
+    // Veterancy chevrons
+    const rank = veterancyRank(unit.kills);
+    if (rank > 0) {
+        ctx.fillStyle = '#ffd14a';
+        const cy = screen.y - (type.size + 27) * zoom;
+        for (let i = 0; i < rank; i++) {
+            const cx = screen.x - (rank - 1) * 4 + i * 8;
             ctx.beginPath();
-            ctx.moveTo(screen.x + cosA * type.size * 0.7, screen.y - type.size / 2 + sinA * type.size * 0.7 + i * 2);
-            ctx.lineTo(screen.x - cosA * type.size * 1.2, screen.y + sinA * type.size * 1.2 + i * 2);
-            ctx.stroke();
+            ctx.moveTo(cx - 3, cy + 3);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx + 3, cy + 3);
+            ctx.lineTo(cx, cy + 1.5);
+            ctx.closePath();
+            ctx.fill();
         }
-    } else if (unit.type === 'rocket') {
-        // Rocket: pointed triangle shape
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.moveTo(screen.x + cosA * type.size, screen.y - type.size / 2 + sinA * type.size);
-        ctx.lineTo(screen.x - cosA * type.size * 0.7 + sinA * type.size * 0.6, screen.y + sinA * type.size * 0.7 + cosA * type.size * 0.6);
-        ctx.lineTo(screen.x - cosA * type.size * 0.7 - sinA * type.size * 0.6, screen.y + sinA * type.size * 0.7 - cosA * type.size * 0.6);
-        ctx.closePath();
-        ctx.fill();
-    } else {
-        // Infantry: default circle design
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - type.size / 2, type.size, 0, Math.PI * 2);
-        ctx.fill();
     }
 
-    // Highlight for depth
-    ctx.fillStyle = shadeColor(player.color, 40);
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.arc(screen.x - 2, screen.y - type.size / 2 - 2, type.size * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Selection indicator
-    if (game.selection.includes(unit)) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y - type.size / 2, type.size + 4, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-
-    // Harvester cargo indicator
-    if (unit.type === 'harvester' && unit.cargo > 0) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(screen.x - 10, screen.y + 8, 20, 3);
-        ctx.fillStyle = '#fa0';
-        ctx.fillRect(screen.x - 10, screen.y + 8, 20 * (unit.cargo / type.capacity), 3);
+    // Tanker cargo indicator
+    if (unit.type === 'tanker' && unit.cargo > 0) {
+        ctx.fillStyle = '#222';
+        ctx.fillRect(screen.x - 11, screen.y + 8 * zoom, 22, 3);
+        ctx.fillStyle = '#cfae3a';
+        ctx.fillRect(screen.x - 11, screen.y + 8 * zoom, 22 * (unit.cargo / type.capacity), 3);
     }
 }
 
@@ -1409,8 +1073,9 @@ function drawProjectile(proj) {
     }
 
     // Check projectile type
-    const isInfantry = proj.sourceType === 'infantry' || proj.sourceType === 'scout' ||
-                       proj.sourceType === 'rocket' || proj.sourceType === 'flak';
+    const isInfantry = proj.sourceType === 'trooper' || proj.sourceType === 'flamer' ||
+                       proj.sourceType === 'rocketeer' || proj.sourceType === 'bike' ||
+                       proj.sourceType === 'tower';
     const isArtillery = proj.sourceType === 'artillery';
 
     if (isInfantry) {
@@ -1636,18 +1301,18 @@ function renderMinimap() {
             const tile = game.map[y][x];
             if (!tile) continue;
 
-            let color = '#3d5c3d';
-            if (tile.type === 'water') color = '#66aaff';
+            let color = '#85714e';
+            if (tile.type === 'water') color = '#3a5c66';
             else if (tile.type === 'rock') color = '#606060';
             else if (tile.type === 'sand') color = '#a08050';
-            else if (tile.type === 'hill') color = '#6b4423';
+            else if (tile.type === 'hill') color = '#68523a';
 
             minimapCtx.fillStyle = color;
             minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
 
             // Show all oil deposits on minimap
             if (tile.oil) {
-                minimapCtx.fillStyle = '#000';
+                minimapCtx.fillStyle = (tile.oilAmount !== undefined && tile.oilAmount <= 0) ? '#332f1f' : '#cfae3a';
                 minimapCtx.fillRect(x * scale, y * scale, scale, scale);
             }
         }
@@ -1691,13 +1356,6 @@ function update(dt) {
     updateParticles(dt);
     updateDamageNumbers(dt);
     updateAI();
-
-    // Assign ALL harvesters (both player and AI) to oil locations
-    const allHarvesters = game.units.filter(u => u.type === 'harvester');
-    if (allHarvesters.length > 0) {
-        assignHarvestersToOil(allHarvesters);
-    }
-
     updateResources();
     updateUI();
 }
@@ -1833,9 +1491,9 @@ function updateUnits(dt) {
             continue;
         }
 
-        // Harvester logic
-        if (unit.type === 'harvester') {
-            updateHarvester(unit, type, dt);
+        // Tanker logic (hauls oil from derricks to the power station)
+        if (unit.type === 'tanker') {
+            updateTanker(unit, type, dt);
             continue;
         }
 
@@ -1844,6 +1502,11 @@ function updateUnits(dt) {
             const target = unit.attackTarget;
             if (target.hp <= 0) {
                 unit.attackTarget = null;
+                // Attack-move: resume marching to the ordered destination
+                if (unit.attackMove && unit.resumeX !== undefined) {
+                    unit.targetX = unit.resumeX;
+                    unit.targetY = unit.resumeY;
+                }
             } else {
                 const dx = target.x - unit.x;
                 const dy = target.y - unit.y;
@@ -1860,8 +1523,8 @@ function updateUnits(dt) {
                     unit.angle = Math.atan2(dy, dx);
 
                     // Stay at optimal range (75% of max range to have some buffer)
-                    const optimalRange = type.range * 0.75;
-                    const backupDistance = type.range * 0.3; // Only back up if much too close
+                    const optimalRange = rangeT(type) * 0.9;
+                    const backupDistance = rangeT(type) * 0.3; // Only back up if much too close
 
                     if (dist > optimalRange) {
                         // Move towards target to get in range
@@ -1886,7 +1549,7 @@ function updateUnits(dt) {
                     }
                     // Otherwise, stay in place if in optimal range
                     // If in range, attack
-                    if (dist <= type.range && game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                    if (dist <= rangeT(type) && game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
                     }
@@ -1899,6 +1562,39 @@ function updateUnits(dt) {
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
+            // Attack-move: engage anything spotted along the way
+            if (unit.attackMove && type.damage > 0 && (game.tick + i) % 10 === 0) {
+                const sightRange = sightT(type);
+                let nearestEnemy = null;
+                let nearestDist = Infinity;
+                for (const enemy of game.units) {
+                    if (enemy.playerId === unit.playerId) continue;
+                    const edist = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
+                    if (edist <= sightRange && edist < nearestDist) {
+                        nearestDist = edist;
+                        nearestEnemy = enemy;
+                    }
+                }
+                if (!nearestEnemy) {
+                    for (const b of game.buildings) {
+                        if (b.playerId === unit.playerId) continue;
+                        const edist = Math.hypot(b.x - unit.x, b.y - unit.y);
+                        if (edist <= sightRange && edist < nearestDist) {
+                            nearestDist = edist;
+                            nearestEnemy = b;
+                        }
+                    }
+                }
+                if (nearestEnemy) {
+                    unit.resumeX = unit.targetX;
+                    unit.resumeY = unit.targetY;
+                    unit.attackTarget = nearestEnemy;
+                    unit.targetX = undefined;
+                    unit.targetY = undefined;
+                    continue;
+                }
+            }
+
             // If closeTarget is set, look for nearby enemies to attack
             if (unit.closeTarget && unit.closeTarget.hp > 0) {
                 const cdx = unit.closeTarget.x - unit.x;
@@ -1906,7 +1602,7 @@ function updateUnits(dt) {
                 const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
 
                 // If close enough to original target, search for nearest enemy in range
-                if (cdist < type.range * 1.5) {
+                if (cdist < rangeT(type) * 1.5) {
                     let nearestEnemy = null;
                     let nearestDist = Infinity;
 
@@ -1916,7 +1612,7 @@ function updateUnits(dt) {
                         const udy = u.y - unit.y;
                         const udist = Math.sqrt(udx * udx + udy * udy);
 
-                        if (udist <= type.range && udist < nearestDist) {
+                        if (udist <= rangeT(type) && udist < nearestDist) {
                             nearestEnemy = u;
                             nearestDist = udist;
                         }
@@ -2019,7 +1715,7 @@ function updateUnits(dt) {
 
         // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
         if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0) {
-            const sightRange = type.sight || type.range * 1.5;
+            const sightRange = sightT(type);
             let nearestEnemy = null;
             let nearestDist = Infinity;
 
@@ -2058,15 +1754,19 @@ function updateUnits(dt) {
     }
 }
 
-function moveHarvesterAlongPath(unit, type, dt) {
-    if (unit.harvestPath && unit.harvestPath.length > 0) {
-        const target = unit.harvestPath[0];
+// Convert range/sight stats (pixel-ish values) into tile distances
+function rangeT(type) { return (type.range || 0) / 24; }
+function sightT(type) { return (type.sight || 100) / 24; }
+
+function moveTankerAlongPath(unit, type, dt) {
+    if (unit.haulPath && unit.haulPath.length > 0) {
+        const target = unit.haulPath[0];
         const dx = target.x - unit.x;
         const dy = target.y - unit.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 0.5) {
-            unit.harvestPath.shift();
+            unit.haulPath.shift();
         } else {
             const speed = type.speed * dt * 60;
             unit.x += (dx / dist) * speed;
@@ -2076,13 +1776,13 @@ function moveHarvesterAlongPath(unit, type, dt) {
             // Dust trail
             if (Math.random() < 0.2) {
                 game.particles.push({
-                    x: unit.x + (Math.random() - 0.5) * type.size,
-                    y: unit.y + (Math.random() - 0.5) * type.size,
+                    x: unit.x + (Math.random() - 0.5) * 0.4,
+                    y: unit.y + (Math.random() - 0.5) * 0.4,
                     z: 0,
                     vx: (Math.random() - 0.5) * 0.1,
                     vy: (Math.random() - 0.5) * 0.1,
                     vz: Math.random() * 0.08,
-                    color: '#777777',
+                    color: '#8a7a5a',
                     size: Math.random() * 2 + 1.5,
                     life: 0.4
                 });
@@ -2093,145 +1793,99 @@ function moveHarvesterAlongPath(unit, type, dt) {
     return false; // not moving
 }
 
-function updateHarvester(unit, type, dt) {
+function findNearestOwnBuilding(unit, role) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const b of game.buildings) {
+        if (b.playerId !== unit.playerId || b.type !== role || b.isUnderConstruction) continue;
+        const dist = Math.hypot(b.x - unit.x, b.y - unit.y);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = b;
+        }
+    }
+    return best;
+}
+
+// KKnD oil run: dock at the derrick, load stored oil,
+// haul it to the power station, convert to funds.
+function updateTanker(unit, type, dt) {
     const player = game.players[unit.playerId];
-    const speed = type.speed * dt * 60;
 
-    // Find nearest HQ or derrick for dropoff
-    const hq = game.buildings.find(b => b.playerId === unit.playerId && b.type === 'hq');
-
-    // Helper: move directly toward a target (fallback when pathfinding fails)
-    function moveDirectlyTo(tx, ty) {
-        const dx = tx - unit.x;
-        const dy = ty - unit.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0.5) {
-            unit.x += (dx / dist) * speed;
-            unit.y += (dy / dist) * speed;
-            unit.angle = Math.atan2(dy, dx);
-        }
-        return dist;
+    // Validate assigned derrick
+    if (unit.derrick && (unit.derrick.hp <= 0 || !game.buildings.includes(unit.derrick))) {
+        unit.derrick = null;
+        unit.haulPath = null;
+    }
+    if (!unit.derrick) {
+        unit.derrick = findNearestOwnBuilding(unit, 'derrick');
+        if (unit.derrick) unit.haulPath = null;
     }
 
-    // STATE 1: Cargo full or returning with cargo → go to HQ
-    if (unit.cargo >= type.capacity || (unit.returning && unit.cargo > 0)) {
-        if (hq) {
-            unit.returning = true;
+    const station = findNearestOwnBuilding(unit, 'powerStation');
 
-            // Find path to HQ
-            if (!unit.harvestPath || unit.harvestPath.length === 0) {
-                unit.harvestPath = findPath(unit.x, unit.y, hq.x, hq.y);
+    function travelTo(target) {
+        if (!unit.haulPath || unit.haulPath.length === 0 ||
+            unit.haulTargetX !== target.x || unit.haulTargetY !== target.y) {
+            unit.haulPath = findPath(unit.x, unit.y, target.x, target.y);
+            unit.haulTargetX = target.x;
+            unit.haulTargetY = target.y;
+        }
+        if (!moveTankerAlongPath(unit, type, dt)) {
+            // Fallback: direct movement
+            const dx = target.x - unit.x;
+            const dy = target.y - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0.5) {
+                const speed = type.speed * dt * 60;
+                unit.x += (dx / dist) * speed;
+                unit.y += (dy / dist) * speed;
+                unit.angle = Math.atan2(dy, dx);
             }
+        }
+        return Math.hypot(target.x - unit.x, target.y - unit.y);
+    }
 
-            // Move along path, or directly if path failed
-            if (!moveHarvesterAlongPath(unit, type, dt)) {
-                moveDirectlyTo(hq.x, hq.y);
-            }
-
-            // Check if reached HQ (generous distance)
-            const hqDist = Math.sqrt((hq.x - unit.x) ** 2 + (hq.y - unit.y) ** 2);
-            if (hqDist < 3.5) {
-                // Deposit cargo and immediately go back to oil
-                player.oil += unit.cargo;
+    // PHASE: deliver cargo to the power station
+    if (unit.cargo >= type.capacity || (unit.delivering && unit.cargo > 0)) {
+        unit.delivering = true;
+        if (!station) return; // wait until a power station exists
+        const dist = travelTo(station);
+        if (dist < 2.6) {
+            // Unload
+            const amount = Math.min(unit.cargo, 4 * dt * 60);
+            unit.cargo -= amount;
+            player.oil = Math.min(50000, player.oil + amount);
+            if (unit.cargo <= 0) {
                 unit.cargo = 0;
-                unit.returning = false;
-                unit.harvestPath = null;
-                // Keep targetOilX/Y so harvester goes back to same oil field
-            }
-        } else {
-            // No HQ - just drop cargo where we are and keep going
-            unit.returning = false;
-            unit.cargo = 0;
-        }
-
-    // STATE 2: Has oil target → go harvest
-    } else if (unit.targetOilX !== undefined && unit.targetOilY !== undefined) {
-        const targetOilX = unit.targetOilX;
-        const targetOilY = unit.targetOilY;
-
-        // Check if oil still exists (check target tile and neighbors)
-        const mapSize = getMapSize();
-        let oilStillThere = false;
-        let actualOilX = targetOilX;
-        let actualOilY = targetOilY;
-
-        // Check target tile and immediate neighbors for oil
-        for (let dy = -1; dy <= 1 && !oilStillThere; dy++) {
-            for (let dx = -1; dx <= 1 && !oilStillThere; dx++) {
-                const cx = targetOilX + dx;
-                const cy = targetOilY + dy;
-                if (cx >= 0 && cx < mapSize && cy >= 0 && cy < mapSize) {
-                    const tile = game.map?.[cy]?.[cx];
-                    if (tile && tile.oil) {
-                        oilStillThere = true;
-                        actualOilX = cx;
-                        actualOilY = cy;
-                    }
-                }
+                unit.delivering = false;
+                unit.haulPath = null;
             }
         }
-
-        if (!oilStillThere) {
-            // Oil gone - find new oil field
-            unit.targetOilX = undefined;
-            unit.targetOilY = undefined;
-            unit.harvestPath = null;
-            if (unit.cargo > 0) {
-                unit.returning = true;
-            } else {
-                assignHarvesterToNearestOil(unit);
-            }
-            return;
-        }
-
-        // Update target to actual oil position
-        unit.targetOilX = actualOilX;
-        unit.targetOilY = actualOilY;
-
-        // Find path to oil
-        if (!unit.harvestPath || unit.harvestPath.length === 0) {
-            unit.harvestPath = findPath(unit.x, unit.y, actualOilX, actualOilY);
-
-            // If direct path fails, try adjacent tiles
-            if (!unit.harvestPath) {
-                const adjacentTiles = [
-                    { x: actualOilX + 1, y: actualOilY },
-                    { x: actualOilX - 1, y: actualOilY },
-                    { x: actualOilX, y: actualOilY + 1 },
-                    { x: actualOilX, y: actualOilY - 1 },
-                    { x: actualOilX + 1, y: actualOilY + 1 },
-                    { x: actualOilX - 1, y: actualOilY - 1 },
-                    { x: actualOilX + 1, y: actualOilY - 1 },
-                    { x: actualOilX - 1, y: actualOilY + 1 }
-                ];
-                for (const adj of adjacentTiles) {
-                    if (adj.x >= 0 && adj.x < mapSize && adj.y >= 0 && adj.y < mapSize) {
-                        unit.harvestPath = findPath(unit.x, unit.y, adj.x, adj.y);
-                        if (unit.harvestPath) break;
-                    }
-                }
-            }
-        }
-
-        // Move along path or directly
-        if (!moveHarvesterAlongPath(unit, type, dt)) {
-            moveDirectlyTo(actualOilX, actualOilY);
-        }
-
-        // Harvest when close to oil (generous distance, fast rate)
-        const oilDist = Math.sqrt((actualOilX - unit.x) ** 2 + (actualOilY - unit.y) ** 2);
-        if (oilDist < 2.5) {
-            unit.cargo = Math.min(type.capacity, unit.cargo + 8);
-        }
-
-    // STATE 3: Has cargo but no target → return to HQ
-    } else if (unit.cargo > 0) {
-        unit.returning = true;
-
-    // STATE 4: Idle (no target, no cargo) → auto-assign to nearest oil
-    } else {
-        assignHarvesterToNearestOil(unit);
+        return;
     }
+    unit.delivering = false;
+
+    // PHASE: go to the derrick and load
+    if (unit.derrick) {
+        const dist = travelTo(unit.derrick);
+        if (dist < 2.2) {
+            // Dock and load from derrick storage
+            const want = type.capacity - unit.cargo;
+            const amount = Math.min(want, unit.derrick.storage || 0, 2 * dt * 60);
+            if (amount > 0) {
+                unit.derrick.storage -= amount;
+                unit.cargo += amount;
+            }
+            // Leave once full, or once we have a decent load and the well ran dry
+            if (unit.cargo >= type.capacity ||
+                (unit.cargo > 0 && (unit.derrick.storage || 0) <= 0 && unit.derrick.oilLeft === 0)) {
+                unit.delivering = true;
+                unit.haulPath = null;
+            }
+        }
+    }
+    // No derrick at all: idle in place
 }
 
 function updateBuildings(dt) {
@@ -2250,8 +1904,12 @@ function updateBuildings(dt) {
                 if (type.damage) {
                     building.activationTime = game.tick + 180; // ~3 seconds at 60 FPS
                 }
-                // Now unlock tech when construction is complete
-                unlockTech(building.type, building.playerId);
+                // A fresh derrick comes with a free oil tanker (KKnD style)
+                if (building.type === 'derrick') {
+                    const pos = findValidSpawnPosition(Math.floor(building.x) + 2, Math.floor(building.y) + 2, 6);
+                    const tanker = spawnUnit('tanker', building.playerId, pos.x + 0.5, pos.y + 0.5);
+                    if (tanker) tanker.derrick = building;
+                }
             } else {
                 // Construction in progress - keep hp at 1
                 building.hp = 1;
@@ -2284,7 +1942,7 @@ function updateBuildings(dt) {
                     const dy = unit.y - building.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < type.range && dist < nearestDist && dist < (type.sight || 250)) {
+                    if (dist < rangeT(type) && dist < nearestDist) {
                         nearestDist = dist;
                         nearestEnemy = unit;
                     }
@@ -2297,13 +1955,46 @@ function updateBuildings(dt) {
             }
         }
 
+        // Tech research (Research Lab)
+        if (building.researching && !building.isUnderConstruction) {
+            building.researching.progress++;
+            if (building.researching.progress >= building.researching.time) {
+                const player = game.players[building.playerId];
+                player.techLevel = Math.max(player.techLevel, building.researching.level);
+                building.researching = null;
+                if (building.playerId === 0) SoundManager.play('ui_build');
+            }
+        }
+
+        // Repair Bay: slowly heal friendly vehicles nearby (costs oil)
+        if (type.repairRate && !building.isUnderConstruction && game.tick % 30 === 0) {
+            const player = game.players[building.playerId];
+            for (const unit of game.units) {
+                if (unit.playerId !== building.playerId) continue;
+                const uType = UNIT_TYPES[unit.type];
+                if (!uType || uType.category !== 'armor' || unit.hp >= uType.hp) continue;
+                const dist = Math.hypot(unit.x - building.x, unit.y - building.y);
+                if (dist <= type.repairRadius && player.oil >= 2) {
+                    unit.hp = Math.min(uType.hp, unit.hp + type.repairRate / 2);
+                    player.oil -= 2;
+                    // spark effect
+                    if (Math.random() < 0.5) {
+                        game.particles.push({
+                            x: unit.x, y: unit.y, z: 8,
+                            vx: (Math.random() - 0.5) * 0.2,
+                            vy: (Math.random() - 0.5) * 0.2,
+                            vz: 0.2,
+                            color: '#66ffaa', size: 2, life: 0.5, type: 'spark'
+                        });
+                    }
+                }
+            }
+        }
+
         // Production queue
         if (building.productionQueue.length > 0 && !building.isUnderConstruction) {
             const current = building.productionQueue[0];
-            const player = game.players[building.playerId];
-            // Slow production if low power (50% speed)
-            const powerMultiplier = player.lowPower ? 0.5 : 1.0;
-            building.produceProgress += powerMultiplier;
+            building.produceProgress += 1;
             building.produceTime = current.time;
 
             if (building.produceProgress >= building.produceTime) {
@@ -2331,7 +2022,12 @@ function updateBuildings(dt) {
                     spawnY = validPos.y + 0.5;
                 }
 
-                spawnUnit(current.type, building.playerId, spawnX, spawnY);
+                const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
+                // Send to rally point if set
+                if (newUnit && building.rallyX !== undefined && newUnit.type !== 'tanker') {
+                    newUnit.targetX = building.rallyX + (Math.random() - 0.5) * 2;
+                    newUnit.targetY = building.rallyY + (Math.random() - 0.5) * 2;
+                }
                 building.productionQueue.shift();
                 building.produceProgress = 0;
             }
@@ -2389,6 +2085,11 @@ function updateProjectiles(dt) {
                     }
 
                     proj.target.hp -= finalDamage;
+                    // Veterancy: credit the kill to the shooter
+                    if (proj.target.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
+                        game.units.includes(proj.source)) {
+                        proj.source.kills = (proj.source.kills || 0) + 1;
+                    }
                     // Create impact effect on hit
                     createImpact(proj.x, proj.y);
                     // Show damage number (critical if versus bonus was applied)
@@ -2468,330 +2169,149 @@ function updateAI() {
     const playerUnits = game.units.filter(u => u.playerId === 0);
     const playerBuildings = game.buildings.filter(b => b.playerId === 0);
 
-    // Determine AI strategy based on game state
-    const gameTime = game.tick / 60; // seconds
-    let aiMode = 'balanced';
+    executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuildings);
 
-    if (gameTime < 120) {
-        // Early game: focus on building, not attacking
-        aiMode = 'balanced';
-    } else if (gameTime < 300) {
-        // Mid game: mixed strategy based on economy and units
-        if (ai.oil > 1500) {
-            aiMode = 'tech';
-        } else if (aiUnits.length > playerUnits.length * 1.3) {
-            aiMode = 'rusher'; // Only rush if clearly ahead
-        } else if (playerUnits.length > aiUnits.length * 1.5) {
-            aiMode = 'defender';
-        } else {
-            aiMode = 'balanced';
-        }
-    } else {
-        // Late game: have all strategies
-        if (ai.oil > 3000) {
-            aiMode = 'tech';
-        } else if (playerBuildings.length > 6) {
-            aiMode = 'aggressive';
-        } else if (playerUnits.length > aiUnits.length * 2) {
-            aiMode = 'defender';
-        } else {
-            aiMode = 'balanced';
-        }
-    }
-
-    executeAIStrategy(ai, aiMode, aiUnits, aiBuildings, playerUnits, playerBuildings);
-
-    // Give AI oil based on difficulty setting
-    const difficultyOilBonus = {
-        easy: 5,
-        normal: 10,
-        hard: 18
-    };
+    // Small oil drip based on difficulty (keeps the AI in the game)
+    const difficultyOilBonus = { easy: 4, normal: 10, hard: 20 };
     ai.oil += difficultyOilBonus[gameSettings.difficulty] || 10;
 }
 
-function executeAIStrategy(ai, mode, aiUnits, aiBuildings, playerUnits, playerBuildings) {
-    const aiHQ = aiBuildings.find(b => b.type === 'hq');
-    const aiBarracks = aiBuildings.filter(b => b.type === 'barracks');
-    const aiFactory = aiBuildings.filter(b => b.type === 'factory');
-    const aiDerricks = aiBuildings.filter(b => b.type === 'derrick');
+// Find a free oil patch near a position (for AI derrick placement)
+function findFreeOilPatch(nearX, nearY, maxDist = 30) {
+    const mapSize = getMapSize();
+    let best = null;
+    let bestDist = Infinity;
+    for (let y = 0; y < mapSize; y++) {
+        for (let x = 0; x < mapSize; x++) {
+            const tile = game.map[y]?.[x];
+            if (!tile || !tile.oil || (tile.oilAmount !== undefined && tile.oilAmount <= 0)) continue;
+            // already taken by a derrick?
+            const taken = game.buildings.some(b => b.type === 'derrick' &&
+                Math.abs(b.x - x) < 2 && Math.abs(b.y - y) < 2);
+            if (taken) continue;
+            const dist = Math.hypot(x - nearX, y - nearY);
+            if (dist < bestDist && dist <= maxDist) {
+                bestDist = dist;
+                best = { x, y };
+            }
+        }
+    }
+    return best;
+}
 
+function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuildings) {
+    const aiHQ = aiBuildings.find(b => b.type === 'hq') || aiBuildings[0];
     if (!aiHQ) return;
 
-    // Difficulty-based attack thresholds (lower = more aggressive)
-    // These determine how many units the AI needs before attacking
-    const attackThresholds = {
-        easy: { rusher: 8, tech: 15, balanced: 10, defender: 12, aggressive: 14 },
-        normal: { rusher: 6, tech: 12, balanced: 8, defender: 10, aggressive: 12 },
-        hard: { rusher: 4, tech: 10, balanced: 6, defender: 8, aggressive: 10 }
-    };
-    const thresholds = attackThresholds[gameSettings.difficulty] || attackThresholds.normal;
+    // Counts include structures under construction (so the AI doesn't double-build)
+    const count = role => aiBuildings.filter(b => b.type === role).length;
+    const stations = count('powerStation');
+    const derricks = count('derrick');
+    const numBarracks = count('barracks');
+    const numFactories = count('factory');
+    const numLabs = count('researchLab');
+    const barracks = aiBuildings.filter(b => b.type === 'barracks' && !b.isUnderConstruction);
+    const factories = aiBuildings.filter(b => b.type === 'factory' && !b.isUnderConstruction);
+    const labs = aiBuildings.filter(b => b.type === 'researchLab' && !b.isUnderConstruction);
+    const towers = count('tower') + count('towerHeavy');
 
-    // Universal: Build more derricks for economy
-    if (ai.oil >= 200 && aiDerricks.length < 5) {
-        const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-        if (pos) {
-            createBuilding('derrick', 1, pos.x, pos.y, true);
-            ai.oil -= 200;
+    const tryBuild = (role, near) => {
+        const type = BUILDING_TYPES[role];
+        if (ai.oil < type.cost) return false;
+        let pos;
+        if (type.needsOil) {
+            pos = findFreeOilPatch(near.x, near.y, 35);
+        } else {
+            pos = findBuildPosition(near.x, near.y, 1);
         }
-    }
-
-    // Universal: Build research lab for tower tech
-    const aiResearchLabs = aiBuildings.filter(b => b.type === 'researchLab');
-    if (ai.oil >= 500 && aiResearchLabs.length < 1) {
-        const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-        if (pos) {
-            createBuilding('researchLab', 1, pos.x, pos.y, true);
-            ai.oil -= 500;
-        }
-    }
-
-    // Universal: Research tower tech
-    if (aiResearchLabs.length > 0) {
-        if (ai.oil >= 300 && !ai.tech.rifleTurret) {
-            researchTechnology('rifleTurret', 1);
-            ai.oil -= 300;
-        } else if (ai.oil >= 450 && !ai.tech.missileTurret) {
-            researchTechnology('missileTurret', 1);
-            ai.oil -= 450;
-        }
-    }
-
-    // Universal: Build defensive towers
-    const aiTurrets = aiBuildings.filter(b => b.type === 'turret' || b.type === 'rifleTurret' || b.type === 'missileTurret');
-    const buildDefense = () => {
-        if (ai.oil >= 300 && ai.tech.rifleTurret && Math.random() > 0.5) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('rifleTurret', 1, pos.x, pos.y, true);
-                ai.oil -= 300;
-            }
-        } else if (ai.oil >= 450 && ai.tech.missileTurret) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('missileTurret', 1, pos.x, pos.y, true);
-                ai.oil -= 450;
-            }
-        }
+        if (!pos) return false;
+        createBuilding(role, 1, pos.x, pos.y, true);
+        ai.oil -= type.cost;
+        return true;
     };
 
-    if (mode === 'rusher') {
-        // Build barracks quickly, mass produce infantry + rockets
-        if (ai.oil >= 400 && aiBarracks.length < 3) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y, true);
-                ai.oil -= 400;
-            }
-        }
+    // ---- ECONOMY: power station first, then derricks on oil patches ----
+    if (stations < 1) { tryBuild('powerStation', aiHQ); return; }
+    if (derricks < 2) tryBuild('derrick', aiHQ);
 
-        // Build factory for light tanks
-        if (ai.oil >= 600 && aiFactory.length < 1) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y, true);
-                ai.oil -= 600;
-            }
-        }
+    // ---- TECH CHAIN ----
+    if (numBarracks < 1) tryBuild('barracks', aiHQ);
+    if (barracks.length > 0 && numFactories < 1) tryBuild('factory', aiHQ);
+    if (factories.length > 0 && numLabs < 1 && ai.oil > 900) tryBuild('researchLab', aiHQ);
 
-        // Produce infantry and rockets constantly
-        for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10) {
-                if (ai.oil >= 80 && Math.random() > 0.3) {
-                    addToProductionQueue(barracks, 'infantry');
-                    ai.oil -= 80;
-                } else if (ai.oil >= 200) {
-                    addToProductionQueue(barracks, 'rocket');
-                    ai.oil -= 200;
-                }
-            }
+    // Research tech levels
+    if (labs.length > 0 && ai.techLevel < MAX_TECH_LEVEL) {
+        const lab = labs.find(l => !l.researching);
+        const next = ai.techLevel + 1;
+        const upgrade = TECH_UPGRADES[next];
+        if (lab && upgrade && ai.oil >= upgrade.cost + 400) {
+            ai.oil -= upgrade.cost;
+            lab.researching = { level: next, progress: 0, time: upgrade.time };
         }
+    }
 
-        // Produce light tanks for fast raids
-        for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10 && ai.oil >= 250) {
-                addToProductionQueue(factory, 'lightTank');
-                ai.oil -= 250;
-            }
-        }
+    // ---- EXPANSION & DEFENSE ----
+    if (derricks < 4 && ai.oil > 800) tryBuild('derrick', aiHQ);
+    if (stations < 2 && derricks >= 3 && ai.oil > 1200) tryBuild('powerStation', aiHQ);
 
-        // Attack early and often
-        if (aiUnits.length >= thresholds.rusher) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
+    const maxTowers = { easy: 2, normal: 4, hard: 6 }[gameSettings.difficulty] || 4;
+    if (towers < maxTowers && ai.oil > 1000) {
+        tryBuild(ai.techLevel >= 2 && Math.random() > 0.5 ? 'towerHeavy' : 'tower', aiHQ);
+    }
+    if (numBarracks < 2 && ai.oil > 1500) tryBuild('barracks', aiHQ);
+    if (numFactories < 2 && ai.oil > 2000) tryBuild('factory', aiHQ);
 
-    } else if (mode === 'defender') {
-        // Build defensive turrets - prefer specialized ones
-        if (aiTurrets.length < 6) {
-            buildDefense();
-        } else if (ai.oil >= 350 && aiTurrets.length < 8) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('turret', 1, pos.x, pos.y, true);
-                ai.oil -= 350;
-            }
-        }
+    // ---- UNIT PRODUCTION ----
+    const queueUnit = (building, role) => {
+        const uType = UNIT_TYPES[role];
+        if (!uType || ai.oil < uType.cost || ai.techLevel < uType.tech) return false;
+        if (building.productionQueue.length >= 4) return false;
+        ai.oil -= uType.cost;
+        addToProductionQueue(building, role);
+        return true;
+    };
 
-        // Build factory for heavy units
-        if (ai.oil >= 600 && aiFactory.length < 1) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y, true);
-                ai.oil -= 600;
-            }
-        }
+    // Replace lost tankers (one per derrick)
+    const tankers = aiUnits.filter(u => u.type === 'tanker').length;
+    if (tankers < derricks && factories.length > 0) {
+        queueUnit(factories[0], 'tanker');
+    }
 
-        // Produce medium and heavy tanks for defense
-        for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
-                if (ai.oil >= 500 && Math.random() > 0.6) {
-                    addToProductionQueue(factory, 'heavyTank');
-                    ai.oil -= 500;
-                } else if (ai.oil >= 350) {
-                    addToProductionQueue(factory, 'mediumTank');
-                    ai.oil -= 350;
-                }
-            }
-        }
+    // Infantry mix
+    for (const b of barracks) {
+        const roll = Math.random();
+        if (ai.techLevel >= 2 && roll > 0.65) queueUnit(b, 'rocketeer');
+        else if (ai.techLevel >= 2 && roll > 0.45) queueUnit(b, 'flamer');
+        else queueUnit(b, 'trooper');
+    }
 
-        // Produce scout for intel
-        for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10 && ai.oil >= 120 && aiUnits.filter(u => u.type === 'scout').length < 2) {
-                addToProductionQueue(barracks, 'scout');
-                ai.oil -= 120;
-            }
-        }
+    // Vehicle mix scales with tech level
+    for (const f of factories) {
+        const roll = Math.random();
+        if (ai.techLevel >= 3 && roll > 0.75) queueUnit(f, 'heavy');
+        else if (ai.techLevel >= 3 && roll > 0.6) queueUnit(f, 'artillery');
+        else if (ai.techLevel >= 2 && roll > 0.35) queueUnit(f, 'tank');
+        else if (roll > 0.15) queueUnit(f, 'buggy');
+        else queueUnit(f, 'bike');
+    }
 
-        // Counter-attack if attacked
-        if (playerUnits.length > 2) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
-
-    } else if (mode === 'tech') {
-        // Focus on late-game units
-        if (ai.oil >= 600 && aiFactory.length < 2) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y, true);
-                ai.oil -= 600;
-            }
-        }
-
-        if (ai.oil >= 400 && aiBarracks.length < 1) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y, true);
-                ai.oil -= 400;
-            }
-        }
-
-        // Produce heavy tanks, artillery and flak for late-game power
-        for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
-                const rand = Math.random();
-                if (ai.oil >= 500 && rand > 0.4) {
-                    addToProductionQueue(factory, 'heavyTank');
-                    ai.oil -= 500;
-                } else if (ai.oil >= 500 && rand > 0.2) {
-                    addToProductionQueue(factory, 'artillery');
-                    ai.oil -= 500;
-                } else if (ai.oil >= 300) {
-                    addToProductionQueue(factory, 'flak');
-                    ai.oil -= 300;
-                }
-            }
-        }
-
-        // Build some harvesters
-        if (ai.oil >= 400 && aiUnits.filter(u => u.type === 'harvester').length < 2) {
-            const factory = aiFactory[0];
-            if (factory && factory.productionQueue.length < 10) {
-                addToProductionQueue(factory, 'harvester');
-                ai.oil -= 400;
-            }
-        }
-
-        // Build missile turrets for late-game defense
-        if (aiTurrets.length < 3) {
-            buildDefense();
-        }
-
-        // Powerful late-game attack
-        if (aiUnits.length >= thresholds.tech) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
-
-    } else {
-        // Balanced mode
-        if (ai.oil >= 400 && aiBarracks.length < 2) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('barracks', 1, pos.x, pos.y, true);
-                ai.oil -= 400;
-            }
-        }
-
-        if (ai.oil >= 600 && aiFactory.length < 1 && aiBarracks.length > 0) {
-            const pos = findBuildPosition(aiHQ.x, aiHQ.y, 1);
-            if (pos) {
-                createBuilding('factory', 1, pos.x, pos.y, true);
-                ai.oil -= 600;
-            }
-        }
-
-        // Mix of unit types
-        for (const barracks of aiBarracks) {
-            if (barracks.productionQueue.length < 10) {
-                const rand = Math.random();
-                if (ai.oil >= 80 && rand > 0.5) {
-                    addToProductionQueue(barracks, 'infantry');
-                    ai.oil -= 80;
-                } else if (ai.oil >= 120 && rand > 0.7) {
-                    addToProductionQueue(barracks, 'scout');
-                    ai.oil -= 120;
-                } else if (ai.oil >= 200) {
-                    addToProductionQueue(barracks, 'rocket');
-                    ai.oil -= 200;
-                }
-            }
-        }
-
-        // Balanced mix of light and medium tanks
-        for (const factory of aiFactory) {
-            if (factory.productionQueue.length < 10) {
-                if (ai.oil >= 350 && Math.random() > 0.5) {
-                    addToProductionQueue(factory, 'mediumTank');
-                    ai.oil -= 350;
-                } else if (ai.oil >= 250) {
-                    addToProductionQueue(factory, 'lightTank');
-                    ai.oil -= 250;
-                } else if (ai.oil >= 400) {
-                    addToProductionQueue(factory, 'harvester');
-                    ai.oil -= 400;
-                }
-            }
-        }
-
-        // Build some defensive towers for balance
-        if (aiTurrets.length < 2) {
-            buildDefense();
-        }
-
-        // Attack when ready
-        if (aiUnits.length >= thresholds.balanced) {
-            attackPlayerBase(playerBuildings, playerUnits, aiUnits);
-        }
+    // ---- ATTACK WAVES ----
+    const combatUnits = aiUnits.filter(u => u.type !== 'tanker');
+    const attackThreshold = { easy: 14, normal: 10, hard: 7 }[gameSettings.difficulty] || 10;
+    const gameTime = game.tick / 60;
+    if (combatUnits.length >= attackThreshold || (gameTime > 480 && combatUnits.length >= 5)) {
+        attackPlayerBase(playerBuildings, playerUnits, aiUnits);
     }
 }
 
 function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
     // Find the player HQ or nearest player building as rally point
     const playerHQ = playerBuildings.find(b => b.type === 'hq');
-    const rallyTarget = playerHQ || playerBuildings[0];
+    const rallyTarget = playerHQ || playerBuildings[0] || playerUnits[0];
 
     for (const unit of aiUnits) {
-        // Skip harvesters - they should keep harvesting
-        if (unit.type === 'harvester') continue;
+        // Tankers keep hauling oil
+        if (unit.type === 'tanker') continue;
 
         if (unit.attackTarget && unit.attackTarget.hp > 0) {
             // Already has a living target, skip
@@ -2799,16 +2319,14 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
         }
 
         const unitType = UNIT_TYPES[unit.type];
-        const sightRange = unitType?.sight || 100;
+        const sightRange = unitType ? sightT(unitType) : 4;
 
         // Look for nearby enemy units first (prioritize closest)
         let nearestTarget = null;
         let nearestDist = Infinity;
 
         for (const u of playerUnits) {
-            const dx = u.x - unit.x;
-            const dy = u.y - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dist = Math.hypot(u.x - unit.x, u.y - unit.y);
             if (dist <= sightRange && dist < nearestDist) {
                 nearestDist = dist;
                 nearestTarget = u;
@@ -2818,9 +2336,7 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
         // If no units found, look for nearby buildings
         if (!nearestTarget) {
             for (const b of playerBuildings) {
-                const dx = b.x - unit.x;
-                const dy = b.y - unit.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const dist = Math.hypot(b.x - unit.x, b.y - unit.y);
                 if (dist <= sightRange && dist < nearestDist) {
                     nearestDist = dist;
                     nearestTarget = b;
@@ -2831,103 +2347,62 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
         if (nearestTarget) {
             unit.attackTarget = nearestTarget;
         } else if (rallyTarget) {
-            // No enemy in sight range - march toward player base
-            // Use pathfinding to move as a coordinated attack wave
+            // March toward the player base as an attack-move wave
             if (unit.targetX === undefined || Math.abs(unit.targetX - rallyTarget.x) > 5 || Math.abs(unit.targetY - rallyTarget.y) > 5) {
-                // Add slight offset so units don't all converge on one tile
-                const offsetX = (Math.random() - 0.5) * 6;
-                const offsetY = (Math.random() - 0.5) * 6;
-                unit.targetX = rallyTarget.x + offsetX;
-                unit.targetY = rallyTarget.y + offsetY;
+                unit.targetX = rallyTarget.x + (Math.random() - 0.5) * 6;
+                unit.targetY = rallyTarget.y + (Math.random() - 0.5) * 6;
+                unit.attackMove = true;
                 unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
-                if (unit.path) {
-                    unit.pathIndex = 0;
-                }
             }
         }
-    }
-}
-
-function assignHarvestersToOil(harvesters) {
-    // Assign each harvester to nearest available oil location
-    for (const harvester of harvesters) {
-        assignHarvesterToNearestOil(harvester);
     }
 }
 
 function updateResources() {
-    // Calculate power for each player
-    for (const player of game.players) {
-        let powerProduced = 100; // Base power
-        let powerConsumed = 0;
-
-        for (const building of game.buildings) {
-            if (building.playerId !== player.id || building.isUnderConstruction) continue;
-
-            const type = BUILDING_TYPES[building.type];
-
-            // Power production from power plants
-            if (type.powerGen) {
-                powerProduced += type.powerGen;
-            }
-
-            // Power consumption from buildings
-            if (type.powerUse) {
-                powerConsumed += type.powerUse;
-            }
-        }
-
-        // Store power balance (can be negative)
-        player.powerProduced = powerProduced;
-        player.powerConsumed = powerConsumed;
-        player.power = powerProduced - powerConsumed;
-        player.lowPower = player.power < 0;
-    }
-
-    // Derricks generate oil
+    // Derricks pump oil from their patch into local storage;
+    // tankers haul it to the power station (handled in updateTanker).
     for (const building of game.buildings) {
         if (building.type === 'derrick' && !building.isUnderConstruction) {
             const type = BUILDING_TYPES.derrick;
-            const player = game.players[building.playerId];
-            // Reduced oil generation if low power
-            const powerMultiplier = player.lowPower ? 0.5 : 1.0;
-            player.oil += (type.generates / 60) * powerMultiplier;
-        }
-    }
+            if (building.storage === undefined) building.storage = 0;
 
-    // Cap oil at 10,000
-    for (const player of game.players) {
-        player.oil = Math.min(10000, player.oil);
+            // Bind the derrick to its oil tile once
+            if (building.oilLeft === undefined) {
+                const tile = game.map[Math.floor(building.y)]?.[Math.floor(building.x)];
+                building.oilTile = tile && tile.oil ? tile : null;
+                building.oilLeft = building.oilTile ? (building.oilTile.oilAmount ?? 30000) : 0;
+            }
+
+            if (building.oilLeft > 0 && building.storage < type.storageMax) {
+                const pumped = Math.min(type.pumpRate / 60, building.oilLeft, type.storageMax - building.storage);
+                building.storage += pumped;
+                building.oilLeft -= pumped;
+                if (building.oilTile) building.oilTile.oilAmount = Math.max(0, building.oilLeft);
+            }
+        }
     }
 }
 
 function updateUI() {
     const oilEl = document.getElementById('oil');
-    const powerEl = document.getElementById('power');
+    const techEl = document.getElementById('techLevel');
     const playerUnitsEl = document.getElementById('playerUnits');
     const enemyUnitsEl = document.getElementById('enemyUnits');
     const infoEl = document.getElementById('selectionInfo');
 
-    if (!oilEl || !powerEl || !playerUnitsEl || !enemyUnitsEl || !infoEl) {
-        console.warn('UI elements not found - skipping UI update');
+    if (!oilEl || !playerUnitsEl || !enemyUnitsEl || !infoEl) {
         return;
     }
 
-    oilEl.textContent = Math.floor(game.players[0].oil);
-
-    // Show power balance with color coding
     const player = game.players[0];
-    const powerBalance = player.power || 0;
-    powerEl.textContent = powerBalance >= 0 ? `+${Math.floor(powerBalance)}` : Math.floor(powerBalance);
-    powerEl.style.color = powerBalance >= 0 ? '#0f0' : '#f00';
+    const playerFaction = player.faction;
+    oilEl.textContent = Math.floor(player.oil);
 
-    // Show warning if low power
-    if (player.lowPower) {
-        powerEl.title = 'LOW POWER! Production slowed 50%';
-        powerEl.classList.add('low-power-indicator');
-    } else {
-        powerEl.title = `Power: ${player.powerProduced || 100} produced, ${player.powerConsumed || 0} consumed`;
-        powerEl.classList.remove('low-power-indicator');
+    if (techEl) {
+        techEl.textContent = player.techLevel;
+        // Show research-in-progress with a pulsing style
+        const researching = game.buildings.some(b => b.playerId === 0 && b.researching);
+        techEl.style.color = researching ? '#cc66ff' : '#4dffa6';
     }
 
     // Unit counts
@@ -2936,7 +2411,6 @@ function updateUI() {
     playerUnitsEl.textContent = `${playerUnits} units`;
     enemyUnitsEl.textContent = `${enemyUnits} units`;
 
-    // Color code: green if ahead, red if behind, yellow if equal
     if (playerUnits > enemyUnits) {
         playerUnitsEl.style.color = '#0f0';
         enemyUnitsEl.style.color = '#f00';
@@ -2953,23 +2427,41 @@ function updateUI() {
         infoEl.innerHTML = '<span style="color:#555570;">No selection</span>';
     } else if (game.selection.length === 1) {
         const sel = game.selection[0];
+        const isUnit = UNIT_TYPES[sel.type] !== undefined;
         const type = UNIT_TYPES[sel.type] || BUILDING_TYPES[sel.type];
+        const faction = getFaction(sel.playerId);
+        const displayName = isUnit ? unitDisplayName(sel.type, faction) : buildingDisplayName(sel.type, faction);
         const hpPct = Math.round((sel.hp / type.hp) * 100);
         const hpColor = hpPct > 60 ? '#44dd66' : hpPct > 30 ? '#ffcc00' : '#ff3344';
-        let infoText = `<strong style="font-size:14px;">${type.name}</strong>`;
+        let infoText = `<strong style="font-size:14px;">${displayName}</strong>`;
         infoText += `<div class="sel-hp-bar"><div class="sel-hp-fill" style="width:${hpPct}%;background:${hpColor};"></div></div>`;
         infoText += `<span style="font-size:11px;color:#8888aa;">HP: ${Math.floor(sel.hp)} / ${type.hp}</span>`;
-        if (sel.cargo !== undefined) {
-            const cargoPct = Math.round((sel.cargo / type.capacity) * 100);
-            infoText += `<br><span style="color:#ffcc00;">Cargo: ${sel.cargo}/${type.capacity}</span>`;
-        }
-        if (sel.productionQueue && sel.productionQueue.length > 0) {
-            const progress = Math.round((sel.produceProgress / sel.produceTime) * 100);
-            const current = sel.productionQueue[0];
-            infoText += `<div class="prod-progress-bar"><div class="prod-progress-fill" style="width:${progress}%;"></div></div>`;
-            infoText += `<span style="font-size:11px;">Building: ${UNIT_TYPES[current.type].name} (${progress}%)</span>`;
-            if (sel.productionQueue.length > 1) {
-                infoText += ` <span style="color:#4499ff;">[+${sel.productionQueue.length - 1} queued]</span>`;
+        if (isUnit) {
+            const rank = veterancyRank(sel.kills);
+            if (rank > 0) {
+                infoText += `<br><span style="color:#ffd14a;">${'^'.repeat(rank)} Veteran (+${rank * 15}% damage)</span>`;
+            }
+            if (sel.cargo !== undefined && type.capacity) {
+                infoText += `<br><span style="color:#cfae3a;">Oil: ${Math.floor(sel.cargo)}/${type.capacity}</span>`;
+            }
+        } else {
+            if (sel.type === 'derrick') {
+                const left = sel.oilLeft !== undefined ? Math.floor(sel.oilLeft) : '?';
+                infoText += `<br><span style="color:#cfae3a;">Stored: ${Math.floor(sel.storage || 0)}</span>`;
+                infoText += `<br><span style="color:#8888aa;font-size:11px;">Reserves: ${left}</span>`;
+            }
+            if (sel.researching) {
+                const progress = Math.round((sel.researching.progress / sel.researching.time) * 100);
+                infoText += `<br><span style="color:#cc66ff;">Researching Tech ${sel.researching.level} (${progress}%)</span>`;
+            }
+            if (sel.productionQueue && sel.productionQueue.length > 0) {
+                const progress = Math.round((sel.produceProgress / sel.produceTime) * 100);
+                const current = sel.productionQueue[0];
+                infoText += `<div class="prod-progress-bar"><div class="prod-progress-fill" style="width:${progress}%;"></div></div>`;
+                infoText += `<span style="font-size:11px;">Building: ${unitDisplayName(current.type, faction)} (${progress}%)</span>`;
+                if (sel.productionQueue.length > 1) {
+                    infoText += ` <span style="color:#4499ff;">[+${sel.productionQueue.length - 1} queued]</span>`;
+                }
             }
         }
         infoEl.innerHTML = infoText;
@@ -2981,9 +2473,20 @@ function updateUI() {
     updateBuildMenu();
 }
 
+// Does the player have a finished building of this role?
+function hasBuilding(playerId, role) {
+    return game.buildings.some(b => b.playerId === playerId && b.type === role && !b.isUnderConstruction);
+}
+
+function buildingRequirementsMet(playerId, role) {
+    const reqs = BUILDING_REQUIRES[role] || [];
+    return reqs.every(r => hasBuilding(playerId, r));
+}
+
 function updateBuildMenu() {
     const menu = document.getElementById('buildMenu');
     const player = game.players[0];
+    const faction = player.faction;
 
     // Check what's selected
     const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
@@ -2993,10 +2496,11 @@ function updateBuildMenu() {
     const selId = selectedBuilding ? (selectedBuilding.x + ',' + selectedBuilding.y) : '';
     const queueLen = selectedBuilding ? selectedBuilding.productionQueue.length : 0;
     const progress = selectedBuilding && queueLen > 0 ? Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100) : 0;
-    const oilBucket = Math.floor(player.oil / 10); // update frequently for responsive UI
-    const techKeys = Object.keys(player.tech).filter(k => player.tech[k]).join(',');
+    const research = selectedBuilding && selectedBuilding.researching ? Math.round((selectedBuilding.researching.progress / selectedBuilding.researching.time) * 100) : -1;
+    const oilBucket = Math.floor(player.oil / 25);
+    const builtKeys = BUILD_ORDER.filter(r => hasBuilding(0, r)).join(',');
     const placing = game.placingBuilding || '';
-    const stateKey = `${selType}|${selId}|${queueLen}|${progress}|${oilBucket}|${techKeys}|${placing}`;
+    const stateKey = `${selType}|${selId}|${queueLen}|${progress}|${research}|${oilBucket}|${player.techLevel}|${builtKeys}|${placing}`;
 
     if (menu._lastStateKey === stateKey) return; // No change, skip DOM rebuild
     menu._lastStateKey = stateKey;
@@ -3004,188 +2508,153 @@ function updateBuildMenu() {
     // Clear menu
     menu.innerHTML = '';
 
-    if (selectedBuilding && selectedBuilding.playerId === 0) {
+    const addHeader = (text) => {
+        const el = document.createElement('div');
+        el.className = 'build-section-header';
+        el.innerHTML = `<strong>${text}</strong>`;
+        menu.appendChild(el);
+    };
+
+    const makeButton = (iconUrl, label, cost, title, enabled, onClick) => {
+        const btn = document.createElement('button');
+        btn.className = 'build-btn';
+        btn.innerHTML = `<img src="${iconUrl}" alt=""><span class="build-btn-label">${label}</span><span class="build-btn-cost">${cost}</span>`;
+        btn.title = title;
+        if (!enabled) btn.classList.add('disabled');
+        btn.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        menu.appendChild(btn);
+        return btn;
+    };
+
+    if (selectedBuilding && selectedBuilding.playerId === 0 && !selectedBuilding.isUnderConstruction) {
         const type = BUILDING_TYPES[selectedBuilding.type];
 
-        // Show research options for Research Lab
-        if (selectedBuilding.type === 'researchLab' && type.researches) {
-            const researchInfo = document.createElement('div');
-            researchInfo.className = 'build-section-header';
-            researchInfo.innerHTML = `<strong>Research Technologies</strong>`;
-            menu.appendChild(researchInfo);
-
-            // Research buttons
-            for (const techType of type.researches) {
-                const techDef = BUILDING_TYPES[techType];
-                if (!techDef) continue;
-
-                const btn = document.createElement('button');
-                btn.className = 'build-btn';
-
-                // Check if already researched
-                const isResearched = player.tech[techType];
-                if (isResearched) {
-                    btn.innerHTML = `${techDef.icon} <span>✓</span>`;
-                    btn.title = `${techDef.name} - Already researched`;
-                    btn.style.opacity = '0.5';
+        // Research Lab: tech level upgrades
+        if (type.research) {
+            addHeader('Research');
+            const next = player.techLevel + 1;
+            if (next > MAX_TECH_LEVEL) {
+                const done = document.createElement('div');
+                done.className = 'queue-info';
+                done.innerHTML = 'All technologies researched';
+                menu.appendChild(done);
+            } else {
+                const upgrade = TECH_UPGRADES[next];
+                if (selectedBuilding.researching) {
+                    const pct = Math.round((selectedBuilding.researching.progress / selectedBuilding.researching.time) * 100);
+                    const info = document.createElement('div');
+                    info.className = 'queue-info';
+                    info.innerHTML = `Researching Tech ${selectedBuilding.researching.level}... ${pct}%`;
+                    menu.appendChild(info);
                 } else {
-                    btn.innerHTML = `${techDef.icon}<span>${techDef.cost}</span>`;
-                    btn.title = `${techDef.name} - ${techDef.cost} oil to research`;
-                    if (player.oil < techDef.cost) {
-                        btn.style.opacity = '0.5';
-                    }
+                    makeButton(
+                        IsoSprites.icon('building', 'researchLab', faction),
+                        upgrade.label, upgrade.cost,
+                        `${upgrade.label} - Unlocks: ${upgrade.unlocks}`,
+                        player.oil >= upgrade.cost,
+                        () => {
+                            if (player.oil >= upgrade.cost && !selectedBuilding.researching && player.techLevel + 1 === next) {
+                                SoundManager.play('ui_click');
+                                player.oil -= upgrade.cost;
+                                selectedBuilding.researching = { level: next, progress: 0, time: upgrade.time };
+                                menu._lastStateKey = null;
+                                updateBuildMenu();
+                            }
+                        });
                 }
-
-                btn.addEventListener('mousedown', (e) => {
-                    e.stopPropagation();
-                    if (player.oil >= techDef.cost && !player.tech[techType]) {
-                        SoundManager.play('ui_click');
-                        player.oil -= techDef.cost;
-                        researchTechnology(techType, 0);
-                        menu._lastStateKey = null; // force rebuild
-                        updateBuildMenu();
-                    }
-                });
-                menu.appendChild(btn);
             }
         }
-        // Show production queue if building can produce
+        // Production building: unit buttons
         else if (type.produces.length > 0) {
-            // Queue info
+            addHeader('Train Units');
             const queueInfo = document.createElement('div');
             queueInfo.className = 'queue-info';
-            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong>`;
+            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong> <span style="color:#667;">(Right-click ground: rally point)</span>`;
             menu.appendChild(queueInfo);
 
-            // Production progress bar
             if (selectedBuilding.productionQueue.length > 0) {
-                const current = selectedBuilding.productionQueue[0];
-                const progress = Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100);
                 const progressBar = document.createElement('div');
                 progressBar.className = 'prod-progress-bar';
                 progressBar.style.margin = '4px 8px 8px';
-                progressBar.innerHTML = `<div class="prod-progress-fill" style="width: ${progress}%;"></div>`;
+                progressBar.innerHTML = `<div class="prod-progress-fill" style="width: ${Math.round((selectedBuilding.produceProgress / selectedBuilding.produceTime) * 100)}%;"></div>`;
                 menu.appendChild(progressBar);
             }
 
-            // Unit production buttons
-            for (let i = 0; i < type.produces.length; i++) {
-                const unitType = type.produces[i];
-                const uType = UNIT_TYPES[unitType];
-                const keyNum = i + 1; // 1-N
-                const btn = document.createElement('button');
-                btn.className = 'build-btn';
-                btn.innerHTML = `<div>${uType.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${uType.cost}</span>`;
-
-                // Check harvester requirement: factory must exist
-                const canBuild = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
-                const requirementMet = unitType !== 'harvester' ||
-                                      game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
-                const cannotBuild = !canBuild || !requirementMet;
-
-                btn.title = unitType === 'harvester' && !requirementMet
-                    ? `${uType.name} - Requires Factory`
-                    : `${uType.name} - Press [${keyNum}] or click - ${uType.cost} oil`;
-
-                if (cannotBuild) {
-                    btn.style.opacity = '0.5';
-                }
-
-                btn.addEventListener('mousedown', (e) => {
-                    e.stopPropagation();
-                    // Re-check conditions at click time (not stale closure)
-                    const canNow = player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
-                    const reqNow = unitType !== 'harvester' ||
-                                   game.buildings.some(b => b.playerId === 0 && b.type === 'factory' && !b.isUnderConstruction);
-                    if (canNow && reqNow) {
+            for (const unitRole of type.produces) {
+                const uType = UNIT_TYPES[unitRole];
+                const name = unitDisplayName(unitRole, faction);
+                const techOk = player.techLevel >= uType.tech;
+                const canBuild = techOk && player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
+                const title = techOk
+                    ? `${name} - ${uType.cost} oil`
+                    : `${name} - Requires Tech Level ${uType.tech}`;
+                makeButton(IsoSprites.icon('unit', unitRole, faction), name, techOk ? uType.cost : `T${uType.tech}`, title, canBuild, () => {
+                    const okNow = player.techLevel >= uType.tech && player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
+                    if (okNow) {
                         SoundManager.play('ui_click');
                         player.oil -= uType.cost;
-                        addToProductionQueue(selectedBuilding, unitType);
-                        menu._lastStateKey = null; // force rebuild
+                        addToProductionQueue(selectedBuilding, unitRole);
+                        menu._lastStateKey = null;
                         updateBuildMenu();
                     }
                 });
-                menu.appendChild(btn);
             }
         }
-        // Show other building info
+        // Info-only buildings
         else {
             const infoDiv = document.createElement('div');
             infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
-            let infoHTML = `<strong style="color: #fff;">${type.name}</strong><br><br>`;
-            if (type.powerGen) {
-                infoHTML += `<span style="color: #0f0;">Power:</span> +${type.powerGen}<br>`;
-            }
-            if (type.generates) {
-                infoHTML += `<span style="color: #fa0;">Oil/sec:</span> +${(type.generates / 60).toFixed(2)}<br>`;
-            }
-            if (type.powerUse) {
-                infoHTML += `<span style="color: #88f;">Power Use:</span> -${type.powerUse}<br>`;
-            }
-            if (type.bonuses) {
-                if (type.bonuses.infantryDamage) {
-                    infoHTML += `<span style="color: #0f0;">Infantry Damage:</span> +${Math.round((type.bonuses.infantryDamage - 1) * 100)}%<br>`;
-                }
-                if (type.bonuses.vehicleDamage) {
-                    infoHTML += `<span style="color: #ff0;">Vehicle Damage:</span> +${Math.round((type.bonuses.vehicleDamage - 1) * 100)}%<br>`;
-                }
-            }
+            let infoHTML = `<strong style="color: #fff;">${buildingDisplayName(selectedBuilding.type, faction)}</strong><br>`;
+            if (type.dropOff) infoHTML += `<span style="color:#cfae3a;">Oil drop-off point for tankers</span><br>`;
+            if (type.pumpRate) infoHTML += `<span style="color:#cfae3a;">Pumps ${type.pumpRate}/s from the patch</span><br>`;
+            if (type.repairRate) infoHTML += `<span style="color:#66ffaa;">Repairs nearby vehicles</span><br>`;
+            if (type.damage) infoHTML += `<span style="color:#ff8855;">Damage: ${type.damage}</span><br>`;
             infoDiv.innerHTML = infoHTML;
             menu.appendChild(infoDiv);
         }
 
-        // Add separator
         const separator = document.createElement('div');
         separator.style.cssText = 'height: 1px; background: linear-gradient(90deg, transparent, #2a2a44, transparent); margin: 8px 0;';
         menu.appendChild(separator);
-
-        // Add header for build options
-        const buildInfo = document.createElement('div');
-        buildInfo.className = 'build-section-header';
-        buildInfo.innerHTML = `<strong>Build Structures</strong>`;
-        menu.appendChild(buildInfo);
     }
 
-    // Show building options (always available, whether a building is selected or not)
-    const buildable = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
+    // Structure construction list (always available)
+    addHeader('Build Structures');
 
-    for (let i = 0; i < buildable.length; i++) {
-        const bType = buildable[i];
-        const type = BUILDING_TYPES[bType];
+    for (const role of BUILD_ORDER) {
+        const type = BUILDING_TYPES[role];
         if (!type) continue;
 
-        // Check if tech is available
-        const isTechAvailable = player.tech[bType] !== false;
+        const name = buildingDisplayName(role, faction);
+        const techOk = player.techLevel >= type.tech;
+        const reqsOk = buildingRequirementsMet(0, role);
         const canAfford = player.oil >= type.cost;
-        const cannotBuild = !canAfford || !isTechAvailable;
-        const keyNum = i + 1; // 1-8
+        const enabled = techOk && reqsOk && canAfford;
 
-        const btn = document.createElement('button');
-        btn.className = 'build-btn';
-        btn.innerHTML = `<div>${type.icon}</div><span style="font-size: 10px; font-weight: bold;">[${keyNum}]</span><span style="font-size: 9px;">${type.cost}</span>`;
-        btn.title = isTechAvailable ? `${type.name} - Press [${keyNum}] or click - ${type.cost} oil` : `${type.name} - Requires tech`;
-
-        if (cannotBuild) {
-            btn.style.opacity = '0.5';
+        let title = `${name} - ${type.cost} oil`;
+        if (!techOk) {
+            title = `${name} - Requires Tech Level ${type.tech}`;
+        } else if (!reqsOk) {
+            const missing = (BUILDING_REQUIRES[role] || []).filter(r => !hasBuilding(0, r))
+                .map(r => buildingDisplayName(r, faction)).join(', ');
+            title = `${name} - Requires: ${missing}`;
+        } else if (type.needsOil) {
+            title += ' (place on an oil patch)';
         }
 
-        btn.addEventListener('mousedown', (e) => {
-            e.stopPropagation();
-            // Re-check oil at click time
-            if (player.oil >= type.cost && player.tech[bType] !== false) {
+        makeButton(IsoSprites.icon('building', role, faction), name, type.cost, title, enabled, () => {
+            if (player.oil >= type.cost && player.techLevel >= type.tech && buildingRequirementsMet(0, role)) {
                 SoundManager.play('ui_click');
-                game.placingBuilding = bType;
-                const selBld = game.selection.find(s => BUILDING_TYPES[s.type]);
-                if (selBld && selBld.playerId === 0) {
-                    game.placingBuildingFrom = selBld;
-                } else {
-                    game.placingBuildingFrom = null;
-                }
+                game.placingBuilding = role;
+                game.placingBuildingFrom = null;
             }
         });
-        menu.appendChild(btn);
     }
 }
+
 
 // ============================================
 // HELPER FUNCTIONS
@@ -3193,6 +2662,7 @@ function updateBuildMenu() {
 
 function spawnUnit(type, playerId, x, y) {
     const unitType = UNIT_TYPES[type];
+    if (!unitType) return null;
     const newUnit = {
         type,
         playerId,
@@ -3200,87 +2670,32 @@ function spawnUnit(type, playerId, x, y) {
         hp: unitType.hp,
         angle: 0,
         lastAttack: 0,
-        cargo: 0
+        cargo: 0,
+        kills: 0
     };
     game.units.push(newUnit);
 
-    // Immediately assign harvesters to nearest oil field
-    if (type === 'harvester') {
-        assignHarvesterToNearestOil(newUnit);
+    // Tankers report to the nearest derrick automatically
+    if (type === 'tanker') {
+        newUnit.derrick = findNearestOwnBuilding(newUnit, 'derrick');
     }
-}
-
-function assignHarvesterToNearestOil(harvester) {
-    // Skip if already has a target or has cargo to deliver
-    if (harvester.targetOilX !== undefined || harvester.cargo > 0) {
-        return;
-    }
-
-    let nearestOil = null;
-    let nearestDist = Infinity;
-    let oilCount = 0;
-    const mapSize = getMapSize();
-
-    // Find nearest oil location that is on a passable tile (not surrounded by water/hills)
-    for (let y = 0; y < mapSize; y++) {
-        for (let x = 0; x < mapSize; x++) {
-            if (game.map[y]?.[x]?.oil) {
-                oilCount++;
-
-                // Check if this oil tile is at least somewhat reachable (has at least one adjacent passable tile)
-                let hasAccessibleNeighbor = false;
-                const directions = [
-                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                ];
-
-                for (const dir of directions) {
-                    const nx = x + dir.dx;
-                    const ny = y + dir.dy;
-                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) {
-                        const neighborTile = game.map[ny]?.[nx];
-                        if (neighborTile && neighborTile.type !== 'water' && neighborTile.type !== 'hill') {
-                            hasAccessibleNeighbor = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Only consider oil that has at least one accessible neighbor
-                if (hasAccessibleNeighbor) {
-                    const dist = Math.sqrt((x - harvester.x) ** 2 + (y - harvester.y) ** 2);
-                    if (dist < nearestDist) {
-                        nearestDist = dist;
-                        nearestOil = { x, y };
-                    }
-                }
-            }
-        }
-    }
-
-    // Assign harvester to nearest oil
-    if (nearestOil) {
-        harvester.targetOilX = nearestOil.x;
-        harvester.targetOilY = nearestOil.y;
-        harvester.harvestPath = null;
-    }
+    return newUnit;
 }
 
 function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     const bType = BUILDING_TYPES[type];
     const buildTimes = {
-        // Small buildings: 10 seconds = 600 ticks (60 ticks/sec)
+        // Small structures: ~10 seconds (60 ticks/sec)
         derrick: 600,
-        turret: 600,
-        rifleTurret: 600,
-        missileTurret: 600,
-        // Medium buildings: 15 seconds
+        tower: 600,
+        towerHeavy: 700,
+        // Medium structures: ~15 seconds
         barracks: 900,
         researchLab: 900,
-        powerplant: 900,
-        factory: 900,
-        // Large buildings: 20 seconds
-        academy: 1200,
-        techLab: 1200,
+        repairBay: 900,
+        powerStation: 900,
+        // Large structures: ~20 seconds
+        factory: 1100,
         hq: 1200
     };
 
@@ -3293,7 +2708,7 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
         produceProgress: 0,
         produceTime: 0,
         buildProgress: isUnderConstruction ? 0 : bType.hp,
-        buildTime: buildTimes[type] || 1500,
+        buildTime: buildTimes[type] || 900,
         isUnderConstruction: isUnderConstruction
     };
 
@@ -3303,12 +2718,6 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     }
 
     game.buildings.push(building);
-
-    // Only unlock tech when building is COMPLETE
-    if (!isUnderConstruction) {
-        unlockTech(type, playerId);
-    }
-
     return building;
 }
 
@@ -3320,65 +2729,44 @@ function canBuildAt(buildingType, x, y) {
     // Check map bounds with margin
     if (x < 1 || x >= mapSize - 1 || y < 1 || y >= mapSize - 1) return false;
 
-    // Check terrain - only check center tile and immediate neighbors
-    for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+    const centerTile = game.map[y]?.[x];
+    if (!centerTile) return false;
+
+    // Derricks MUST sit on a live oil patch; nothing else may
+    if (type.needsOil) {
+        if (!centerTile.oil || (centerTile.oilAmount !== undefined && centerTile.oilAmount <= 0)) {
+            return false;
+        }
+    }
+
+    // Check terrain footprint
+    const reach = Math.max(1, Math.floor(type.size / 2));
+    for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
             const checkX = Math.floor(x + dx);
             const checkY = Math.floor(y + dy);
-            if (checkX >= 0 && checkX < mapSize && checkY >= 0 && checkY < mapSize) {
-                const tile = game.map[checkY]?.[checkX];
-                if (!tile || tile.type === 'water' || tile.type === 'hill') {
-                    return false;
-                }
+            if (checkX < 0 || checkX >= mapSize || checkY < 0 || checkY >= mapSize) return false;
+            const tile = game.map[checkY]?.[checkX];
+            if (!tile || tile.type === 'water' || tile.type === 'hill') {
+                return false;
+            }
+            // Don't pave over oil patches with regular buildings
+            if (!type.needsOil && tile.oil && (tile.oilAmount === undefined || tile.oilAmount > 0)) {
+                return false;
             }
         }
     }
 
-    // Check for building collision - just prevent direct overlap (minimum 2 tiles apart)
-    let canPlaceHere = true;
-
+    // Building collision: keep footprints + 1 tile of clearance apart
     for (const building of game.buildings) {
-        const bdx = Math.abs(x - building.x);
-        const bdy = Math.abs(y - building.y);
-
-        // Simple: all buildings need at least 2 tiles gap from any other building
-        if (bdx < 2 && bdy < 2) {
-            canPlaceHere = false;
-            break;
+        const otherType = BUILDING_TYPES[building.type];
+        const gap = Math.ceil((type.size + (otherType ? otherType.size : 2)) / 2) + 1;
+        if (Math.abs(x - building.x) < gap && Math.abs(y - building.y) < gap) {
+            return false;
         }
     }
 
-    return canPlaceHere;
-}
-
-function unlockTech(buildingType, playerId) {
-    const player = game.players[playerId];
-    if (!player || !player.tech) return;
-
-    // Mark building type as researched
-    player.tech[buildingType] = true;
-
-    // Unlock dependent techs
-    for (const [tech, deps] of Object.entries(TECH_TREE)) {
-        if (deps.requires.includes(buildingType)) {
-            player.tech[tech] = true;
-        }
-    }
-}
-
-function researchTechnology(techType, playerId) {
-    const player = game.players[playerId];
-    if (!player || !player.tech) return;
-
-    // Mark technology as researched
-    player.tech[techType] = true;
-
-    // Unlock dependent techs
-    for (const [tech, deps] of Object.entries(TECH_TREE)) {
-        if (deps.requires.includes(techType)) {
-            player.tech[tech] = true;
-        }
-    }
+    return true;
 }
 
 function addToProductionQueue(building, unitType) {
@@ -3387,20 +2775,10 @@ function addToProductionQueue(building, unitType) {
         return false;
     }
 
-    const times = {
-        infantry: 90,
-        scout: 60,
-        rocket: 90,
-        lightTank: 120,
-        mediumTank: 180,
-        heavyTank: 240,
-        harvester: 150,
-        artillery: 200,
-        flak: 140
-    };
+    const uType = UNIT_TYPES[unitType];
     building.productionQueue.push({
         type: unitType,
-        time: times[unitType] || 120
+        time: (uType && uType.buildTime) || 120
     });
 
     return true;
@@ -3408,7 +2786,13 @@ function addToProductionQueue(building, unitType) {
 
 function fireProjectile(source, target, customDamage) {
     const type = UNIT_TYPES[source.type] || BUILDING_TYPES[source.type];
-    const damage = customDamage || type.damage;
+    let damage = customDamage || type.damage;
+
+    // Veterancy: experienced units hit harder
+    const rank = veterancyRank(source.kills);
+    if (rank > 0) {
+        damage = Math.round(damage * (1 + rank * VETERANCY_DAMAGE_BONUS));
+    }
 
     const dx = target.x - source.x;
     const dy = target.y - source.y;
@@ -3418,10 +2802,10 @@ function fireProjectile(source, target, customDamage) {
     // Prevent division by zero if source and target are at the same position
     if (dist === 0) return;
 
-    // Play shooting sound based on unit type
-    if (source.type === 'artillery') {
+    // Play shooting sound based on unit role
+    if (source.type === 'artillery' || source.type === 'towerHeavy') {
         SoundManager.play('shoot_artillery');
-    } else if (source.type === 'heavyTank' || source.type === 'mediumTank' || source.type === 'missileTurret') {
+    } else if (source.type === 'heavy' || source.type === 'tank') {
         SoundManager.play('shoot_heavy');
     } else {
         SoundManager.play('shoot_light');
@@ -3437,11 +2821,10 @@ function fireProjectile(source, target, customDamage) {
     let finalTargetX = target.x;
     let finalTargetY = target.y;
 
-    // If miss: calculate where projectile will go (off-target)
+    // If miss: calculate where projectile will go (off-target, in tiles)
     if (!willHit) {
-        // Random offset away from target (angular deviation)
         const angle = Math.random() * Math.PI * 2;
-        const missOffset = 30 + Math.random() * 40; // 30-70 units away
+        const missOffset = 1 + Math.random() * 1.5;
         finalTargetX = target.x + Math.cos(angle) * missOffset;
         finalTargetY = target.y + Math.sin(angle) * missOffset;
     }
@@ -3464,11 +2847,12 @@ function fireProjectile(source, target, customDamage) {
         life: 100,
         blockadeIndex: blockadeIndex,
         willHit: willHit,
-        maxRange: type.range || 200,
+        maxRange: rangeT(type) + 2,
         startX: source.x,
         startY: source.y,
         playerId: source.playerId,
-        sourceType: source.type
+        sourceType: source.type,
+        source: source
     });
 }
 
@@ -3745,6 +3129,21 @@ function initializeEventHandlers() {
     const isRightClick = e.button === 2 || (e.button === 0 && (e.metaKey || e.ctrlKey));
 
     if (e.button === 0 && !isRightClick) { // Left click (not Command/Ctrl)
+        // Attack-move: A then left-click orders an aggressive march
+        if (game.attackMoveMode) {
+            const world = screenToWorld(x, y);
+            for (const sel of game.selection) {
+                if (!UNIT_TYPES[sel.type] || sel.playerId !== 0 || sel.type === 'tanker') continue;
+                sel.targetX = world.x + (Math.random() - 0.5);
+                sel.targetY = world.y + (Math.random() - 0.5);
+                sel.attackMove = true;
+                sel.attackTarget = null;
+                sel.path = findPath(sel.x, sel.y, sel.targetX, sel.targetY);
+            }
+            game.attackMoveMode = false;
+            SoundManager.play('ui_click');
+            return;
+        }
         if (game.placingBuilding) {
             // Place building
             const world = screenToWorld(x, y);
@@ -3798,16 +3197,28 @@ function initializeEventHandlers() {
             }
         }
     } else if (isRightClick) {
-        // Cancel building placement mode with right-click
+        // Cancel building placement / attack-move mode with right-click
         if (game.placingBuilding) {
             game.placingBuilding = null;
             game.placingBuildingFrom = null;
             return; // Don't process as unit command
         }
+        if (game.attackMoveMode) {
+            game.attackMoveMode = false;
+            return;
+        }
 
         const world = screenToWorld(x, y);
-        const tileX = Math.floor(world.x);
-        const tileY = Math.floor(world.y);
+
+        // Rally point for a selected production building
+        const selBuilding = game.selection.length === 1 ? game.selection[0] : null;
+        if (selBuilding && BUILDING_TYPES[selBuilding.type] && selBuilding.playerId === 0 &&
+            BUILDING_TYPES[selBuilding.type].produces.length > 0) {
+            selBuilding.rallyX = world.x;
+            selBuilding.rallyY = world.y;
+            SoundManager.play('ui_click');
+            return;
+        }
 
         // Check if clicking on enemy - with different distance thresholds
         let enemyDirectClick = null;
@@ -3853,42 +3264,36 @@ function initializeEventHandlers() {
             }
         }
 
-        // Check if clicking on oil - also check neighboring tiles for precision
-        let hasOil = false;
-        let oilTileX = tileX;
-        let oilTileY = tileY;
-        const mapSize = getMapSize();
-        // Check clicked tile and immediate neighbors
-        for (let dy = -1; dy <= 1 && !hasOil; dy++) {
-            for (let dx = -1; dx <= 1 && !hasOil; dx++) {
-                const cx = tileX + dx;
-                const cy = tileY + dy;
-                if (cx >= 0 && cx < mapSize && cy >= 0 && cy < mapSize && game.map[cy]?.[cx]?.oil) {
-                    hasOil = true;
-                    oilTileX = cx;
-                    oilTileY = cy;
-                }
-            }
-        }
+        // Own derrick under the cursor? (tanker assignment)
+        const clickedOwnDerrick = game.buildings.find(b => {
+            if (b.playerId !== 0 || b.type !== 'derrick') return false;
+            const screen = worldToScreen(b.x, b.y);
+            return Math.hypot(screen.x - x, screen.y - y) < 40;
+        });
 
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
-                // For harvesters, prioritize oil over enemy targeting
-                if (sel.type === 'harvester' && hasOil) {
-                    sel.targetOilX = oilTileX;
-                    sel.targetOilY = oilTileY;
-                    sel.targetX = undefined;
-                    sel.targetY = undefined;
-                    sel.attackTarget = null;
-                    sel.path = null;
-                    sel.harvestPath = null;
-                    sel.returning = false;
+                // Tankers: assign to a derrick by right-clicking it
+                if (sel.type === 'tanker') {
+                    if (clickedOwnDerrick) {
+                        sel.derrick = clickedOwnDerrick;
+                        sel.haulPath = null;
+                        sel.delivering = sel.cargo > 0 && sel.cargo >= UNIT_TYPES.tanker.capacity;
+                    } else {
+                        // Manual reposition: clear hauling, move there, resume after
+                        sel.haulPath = null;
+                        sel.targetX = world.x;
+                        sel.targetY = world.y;
+                    }
                     continue;
                 }
+                sel.attackMove = false;
+                sel.resumeX = undefined;
+                sel.resumeY = undefined;
                 if (enemyDirectClick) {
                     // Direct click on enemy - move back slightly while keeping in range
                     const type = UNIT_TYPES[sel.type];
-                    const range = type.range || 100;
+                    const range = rangeT(type) || 2;
                     const backupRange = range * 0.6; // Stay at 60% of max range
 
                     const dx = enemyDirectClick.x - sel.x;
@@ -3906,26 +3311,14 @@ function initializeEventHandlers() {
                     }
 
                     sel.attackTarget = enemyDirectClick;
-                    sel.targetOilX = undefined;
-                    sel.targetOilY = undefined;
                     sel.path = null;
-                    if (sel.type === 'harvester') {
-                        sel.harvestPath = null;
-                        sel.returning = false;
-                    }
                 } else if (enemyNearbyClick) {
                     // Click near enemy - approach and auto-target nearby enemies
                     sel.closeTarget = enemyNearbyClick;
                     sel.targetX = enemyNearbyClick.x;
                     sel.targetY = enemyNearbyClick.y;
                     sel.attackTarget = null;
-                    sel.targetOilX = undefined;
-                    sel.targetOilY = undefined;
                     sel.path = null;
-                    if (sel.type === 'harvester') {
-                        sel.harvestPath = null;
-                        sel.returning = false;
-                    }
                 } else {
                     // Calculate path for movement
                     const path = findPath(sel.x, sel.y, world.x, world.y);
@@ -3941,12 +3334,6 @@ function initializeEventHandlers() {
                         sel.path = null;
                     }
                     sel.attackTarget = null;
-                    sel.targetOilX = undefined;
-                    sel.targetOilY = undefined;
-                    if (sel.type === 'harvester') {
-                        sel.harvestPath = null;
-                        sel.returning = false;
-                    }
                 }
             }
         }
@@ -3957,6 +3344,7 @@ canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     game.mouse.x = e.clientX - rect.left;
     game.mouse.y = e.clientY - rect.top;
+    game.mouse.inside = true;
 
     // Middle mouse drag - pan camera
     if (middleMouseDrag) {
@@ -3994,14 +3382,19 @@ function updateCursorEmoji() {
     const tileY = Math.floor(game.mouse.worldY);
     let newCursor = 'default';
 
-    if (game.selection.length > 0) {
+    if (game.attackMoveMode) {
+        newCursor = `url("${CURSOR_SVG.attack}") 16 16, auto`;
+    } else if (game.selection.length > 0) {
         const sel = game.selection[0];
 
-        // Check if Harvester is selected and mouse is over oil
-        if (sel.type === 'harvester') {
-            const hasOil = tileX >= 0 && tileX < getMapSize() && tileY >= 0 && tileY < getMapSize() &&
-                          game.map[tileY]?.[tileX]?.oil;
-            if (hasOil) {
+        // Tanker selected and mouse over an own derrick -> assign cursor
+        if (sel.type === 'tanker') {
+            const overDerrick = game.buildings.some(b => {
+                if (b.playerId !== 0 || b.type !== 'derrick') return false;
+                const screen = worldToScreen(b.x, b.y);
+                return Math.hypot(screen.x - game.mouse.x, screen.y - game.mouse.y) < 40;
+            });
+            if (overDerrick) {
                 newCursor = `url("${CURSOR_SVG.harvest}") 16 16, auto`;
             }
         } else if (sel.type && UNIT_TYPES[sel.type]) {
@@ -4137,6 +3530,10 @@ canvas.addEventListener('mouseup', (e) => {
     }
 });
 
+canvas.addEventListener('mouseleave', () => {
+    game.mouse.inside = false;
+});
+
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Prevent middle-click autoscroll browser behavior
@@ -4195,76 +3592,68 @@ canvas.addEventListener('wheel', (e) => {
     document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    // Number keys 1-8: Context-dependent
-    if (e.key >= '1' && e.key <= '8' && !(e.metaKey || e.ctrlKey) && game.status === 'PLAYING') {
-        const keyNum = parseInt(e.key);
+    if (game.status !== 'PLAYING' && e.key !== 'p' && e.key !== 'P') return;
 
-        // Check if a building with production is selected
-        const selectedBuilding = game.selection.find(s => BUILDING_TYPES[s.type]);
-
-        if (selectedBuilding && selectedBuilding.playerId === 0 && BUILDING_TYPES[selectedBuilding.type].produces.length > 0) {
-            // Building with production is selected - use numbers for units
-            const produces = BUILDING_TYPES[selectedBuilding.type].produces;
-            const unitIndex = keyNum - 1;
-
-            if (produces[unitIndex]) {
-                const unitType = produces[unitIndex];
-                const uType = UNIT_TYPES[unitType];
-                const player = game.players[0];
-
-                // Check if affordable and queue not full
-                if (player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10) {
-                    player.oil -= uType.cost;
-                    addToProductionQueue(selectedBuilding, unitType);
-                    updateBuildMenu();
-                    e.preventDefault();
-                }
-            }
+    // Control groups: Ctrl/Cmd+1-9 assigns, 1-9 recalls, double-tap centers camera
+    if (e.key >= '1' && e.key <= '9') {
+        const groupKey = `group${e.key}`;
+        if (e.metaKey || e.ctrlKey) {
+            game[groupKey] = [...game.selection.filter(s => UNIT_TYPES[s.type])];
+            e.preventDefault();
         } else {
-            // No building selected or building has no production - use numbers for buildings
-            const buildableList = ['barracks', 'factory', 'derrick', 'turret', 'rifleTurret', 'missileTurret', 'powerplant', 'researchLab'];
-            const buildingIndex = keyNum - 1;
-
-            if (buildableList[buildingIndex]) {
-                const bType = buildableList[buildingIndex];
-                const type = BUILDING_TYPES[bType];
-                const player = game.players[0];
-
-                // Check if building is affordable and tech available
-                const isTechAvailable = player.tech[bType] !== false;
-                if (player.oil >= type.cost && isTechAvailable) {
-                    game.placingBuilding = bType;
-                    // If a building is selected, set it as source
-                    const selectedBuildingForBuild = game.selection.find(s => BUILDING_TYPES[s.type]);
-                    if (selectedBuildingForBuild && selectedBuildingForBuild.playerId === 0) {
-                        game.placingBuildingFrom = selectedBuildingForBuild;
-                    } else {
-                        game.placingBuildingFrom = null;
-                    }
-                    e.preventDefault();
+            const members = (game[groupKey] || []).filter(u => game.units.includes(u) && u.hp > 0);
+            game[groupKey] = members;
+            if (members.length > 0) {
+                game.selection = [...members];
+                SoundManager.play('unit_select');
+                // Double-tap: center camera on the group
+                const now = Date.now();
+                if (game._lastGroupKey === e.key && now - (game._lastGroupTime || 0) < 350) {
+                    const cx = members.reduce((s, u) => s + u.x, 0) / members.length;
+                    const cy = members.reduce((s, u) => s + u.y, 0) / members.length;
+                    game.camera.x = (cx - cy) * (TILE_WIDTH / 2);
+                    game.camera.y = (cx + cy) * (TILE_HEIGHT / 2);
                 }
+                game._lastGroupKey = e.key;
+                game._lastGroupTime = now;
             }
+            e.preventDefault();
         }
     }
-    // Number keys for control groups (Cmd+1-5 on Mac, Ctrl+1-5 elsewhere)
-    else if (e.key >= '1' && e.key <= '5' && (e.metaKey || e.ctrlKey)) {
-        // Assign group
-        game[`group${e.key}`] = [...game.selection];
-        e.preventDefault();
+
+    // A: attack-move mode (then left-click a destination)
+    if ((e.key === 'a' || e.key === 'A') && !(e.metaKey || e.ctrlKey)) {
+        const hasCombatUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0 && s.type !== 'tanker');
+        if (hasCombatUnits) {
+            game.attackMoveMode = true;
+            e.preventDefault();
+        }
     }
 
-    // X for stop (S is used for camera scroll)
-    if (e.key === 'x' || e.key === 'X') {
+    // S or X: stop
+    if (e.key === 's' || e.key === 'S' || e.key === 'x' || e.key === 'X') {
         for (const sel of game.selection) {
             sel.targetX = undefined;
             sel.targetY = undefined;
             sel.attackTarget = null;
             sel.path = null;
             sel.closeTarget = null;
-            if (sel.type === 'harvester') {
-                sel.harvestPath = null;
-                sel.returning = false;
+            sel.attackMove = false;
+            sel.resumeX = undefined;
+            sel.resumeY = undefined;
+            if (sel.type === 'tanker') {
+                sel.haulPath = null;
             }
+        }
+    }
+
+    // H: select the HQ and center the camera on it
+    if (e.key === 'h' || e.key === 'H') {
+        const hq = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
+        if (hq) {
+            game.selection = [hq];
+            game.camera.x = (hq.x - hq.y) * (TILE_WIDTH / 2);
+            game.camera.y = (hq.x + hq.y) * (TILE_HEIGHT / 2);
         }
     }
 
@@ -4277,6 +3666,7 @@ canvas.addEventListener('wheel', (e) => {
     if (e.key === 'Escape') {
         game.placingBuilding = null;
         game.placingBuildingFrom = null;
+        game.attackMoveMode = false;
         game.selection = [];
     }
 
@@ -4343,11 +3733,11 @@ let middleMouseDrag = null; // { startX, startY, cameraStartX, cameraStartY }
 function updateCamera() {
     const speed = 10;
 
-    // Keyboard scrolling
-    if (keys['ArrowUp'] || keys['w'] || keys['W']) game.camera.y -= speed;
-    if (keys['ArrowDown'] || keys['s'] || keys['S']) game.camera.y += speed;
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) game.camera.x -= speed;
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) game.camera.x += speed;
+    // Keyboard scrolling (arrow keys; A/S are unit commands)
+    if (keys['ArrowUp']) game.camera.y -= speed;
+    if (keys['ArrowDown']) game.camera.y += speed;
+    if (keys['ArrowLeft']) game.camera.x -= speed;
+    if (keys['ArrowRight']) game.camera.x += speed;
 
     // Edge scrolling (mouse near canvas edges)
     if (canvas && game.status === 'PLAYING' && !game.paused) {
@@ -4358,8 +3748,8 @@ function updateCamera() {
         const zoom = getZoom();
         const edgeSpeed = EDGE_SCROLL_SPEED / zoom;
 
-        // Only edge scroll if mouse is within the canvas area
-        if (mx >= 0 && mx <= cw && my >= 0 && my <= ch) {
+        // Only edge scroll once the pointer has actually entered the canvas
+        if (game.mouse.inside && mx >= 0 && mx <= cw && my >= 0 && my <= ch) {
             if (mx < EDGE_SCROLL_MARGIN) game.camera.x -= edgeSpeed;
             if (mx > cw - EDGE_SCROLL_MARGIN) game.camera.x += edgeSpeed;
             if (my < EDGE_SCROLL_MARGIN) game.camera.y -= edgeSpeed;
@@ -4433,6 +3823,12 @@ function startGame() {
     gameSettings.difficulty = difficultyEl.value;
     gameSettings.mapSize = mapSizeEl.value;
     gameSettings.startingOil = parseInt(oilEl.value);
+
+    // Faction selection
+    const playerFactionEl = document.getElementById('playerFactionSelect');
+    const enemyFactionEl = document.getElementById('enemyFactionSelect');
+    if (playerFactionEl) gameSettings.playerFaction = playerFactionEl.value;
+    if (enemyFactionEl) gameSettings.enemyFaction = enemyFactionEl.value;
 
     // Set actual map size based on selection
     const mapSizes = {
@@ -4516,36 +3912,23 @@ function resetGame() {
     // Reset camera to center of map
     game.camera.x = 0;
     game.camera.y = (getMapSize() / 2) * TILE_HEIGHT;
+    game.attackMoveMode = false;
+    for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
+
+    // Resolve factions (enemy may be random)
+    const playerFaction = FACTIONS[gameSettings.playerFaction] ? gameSettings.playerFaction : 'survivors';
+    let enemyFaction = gameSettings.enemyFaction;
+    if (!FACTIONS[enemyFaction]) {
+        const pool = FACTION_KEYS.filter(f => f !== playerFaction);
+        enemyFaction = pool[Math.floor(Math.random() * pool.length)];
+    }
+
     game.players[0].oil = gameSettings.startingOil;
-    game.players[0].power = 100;
-    // Initialize all building techs - all available by default except specialized ones
-    game.players[0].tech = {
-        barracks: true,
-        factory: true,
-        derrick: true,
-        turret: true,
-        powerplant: true,
-        academy: true,
-        techLab: true,
-        researchLab: true,
-        rifleTurret: false,
-        missileTurret: false
-    };
+    game.players[0].techLevel = 1;
+    game.players[0].faction = playerFaction;
     game.players[1].oil = gameSettings.startingOil;
-    game.players[1].power = 100;
-    // Initialize all building techs - all available by default except specialized ones
-    game.players[1].tech = {
-        barracks: true,
-        factory: true,
-        derrick: true,
-        turret: true,
-        powerplant: true,
-        academy: true,
-        techLab: true,
-        researchLab: true,
-        rifleTurret: false,
-        missileTurret: false
-    };
+    game.players[1].techLevel = 1;
+    game.players[1].faction = enemyFaction;
 }
 
 function updateGameTimer() {
@@ -4745,14 +4128,24 @@ function initGame() {
     ensurePassableArea(playerBaseX, playerBaseY, 8);
     ensurePassableArea(enemyBaseX, enemyBaseY, 8);
 
-    // Balanced game start: HQ + Harvester only for both players
-    // Player base (bottom-left area)
-    createBuilding('hq', 0, playerBaseX, playerBaseY);
-    spawnUnit('harvester', 0, playerBaseX + 1, playerBaseY + 2);
+    // Guarantee oil fields near both bases (KKnD economy needs them)
+    placeOilField(playerBaseX + 7, playerBaseY - 2, 2);
+    placeOilField(playerBaseX - 3, playerBaseY + 7, 1);
+    placeOilField(enemyBaseX - 7, enemyBaseY + 2, 2);
+    placeOilField(enemyBaseX + 3, enemyBaseY - 7, 1);
 
-    // Enemy base (top-right area)
-    createBuilding('hq', 1, mapSizeVal - 12, mapSizeVal - 12);
-    spawnUnit('harvester', 1, mapSizeVal - 13, mapSizeVal - 14);
+    // KKnD-style start: Outpost + Power Station + a few troopers
+    createBuilding('hq', 0, playerBaseX, playerBaseY);
+    createBuilding('powerStation', 0, playerBaseX + 4, playerBaseY + 4);
+    spawnUnit('trooper', 0, playerBaseX + 2.5, playerBaseY - 1.5);
+    spawnUnit('trooper', 0, playerBaseX - 1.5, playerBaseY + 2.5);
+    spawnUnit('bike', 0, playerBaseX + 3, playerBaseY + 1);
+
+    createBuilding('hq', 1, enemyBaseX, enemyBaseY);
+    createBuilding('powerStation', 1, enemyBaseX - 4, enemyBaseY - 4);
+    spawnUnit('trooper', 1, enemyBaseX - 2.5, enemyBaseY + 1.5);
+    spawnUnit('trooper', 1, enemyBaseX + 1.5, enemyBaseY - 2.5);
+    spawnUnit('bike', 1, enemyBaseX - 3, enemyBaseY - 1);
 
     // Center camera on player base using isometric coordinates
     const playerHQ = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
