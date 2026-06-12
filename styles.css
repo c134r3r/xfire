@@ -340,31 +340,40 @@ body {
     font-weight: 500;
 }
 
-/* SVG Icons in Build Buttons */
-.build-btn div {
-    width: 26px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Sprite icons in build buttons */
+.build-btn img {
+    width: 36px;
+    height: 36px;
+    image-rendering: auto;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+    pointer-events: none;
 }
 
-.build-btn div svg {
-    width: 100%;
-    height: 100%;
-    fill: var(--player-blue);
-    filter: drop-shadow(0 0 3px rgba(68, 153, 255, 0.3));
-    transition: fill 0.15s, filter 0.15s;
+.build-btn .build-btn-label {
+    font-size: 9px;
+    line-height: 1.1;
+    text-align: center;
+    color: var(--text-primary, #ddd);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 2px;
 }
 
-.build-btn:hover div svg {
-    fill: #77bbff;
-    filter: drop-shadow(0 0 6px rgba(68, 153, 255, 0.5));
+.build-btn .build-btn-cost {
+    font-size: 9px;
+    color: #cfae3a;
+    font-weight: 700;
 }
 
-.build-btn:disabled div svg {
-    fill: #444;
-    filter: none;
+.build-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.build-btn.disabled img {
+    filter: grayscale(0.9) brightness(0.6);
 }
 
 /* ============================================

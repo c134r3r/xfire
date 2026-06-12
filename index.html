@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XFire - Skirmish RTS</title>
+    <title>XFire - Krossfire Skirmish</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231a1a2e'/><text x='50' y='70' font-size='60' fill='%23ff6600' text-anchor='middle' font-weight='bold'>X</text></svg>">
     <link rel="stylesheet" href="styles.css">
     <script src="constants.js"></script>
-    <script src="assetLoader.js"></script>
     <script src="spriteGenerator.js"></script>
-    <script src="loadCustomAssets.js"></script>
     <script>
         // Preload background image before initializing game
         window.addEventListener('DOMContentLoaded', () => {
@@ -40,11 +38,11 @@
         <div id="resources">
             <div class="resource">
                 <span class="resource-icon">&#9981;</span>
-                <span>Oil: <strong id="oil">1200</strong></span>
+                <span>Oil: <strong id="oil">3000</strong></span>
             </div>
             <div class="resource">
-                <span class="resource-icon">&#9889;</span>
-                <span>Power: <strong id="power">100</strong></span>
+                <span class="resource-icon">&#128300;</span>
+                <span>Tech: <strong id="techLevel">1</strong></span>
             </div>
         </div>
     </div>
@@ -61,14 +59,14 @@
                 <div id="selectionInfo">No selection</div>
             </div>
             <div class="panel">
-                <h3>Build <span class="hotkey">[B]</span></h3>
+                <h3>Build</h3>
                 <div id="buildMenu"></div>
             </div>
         </div>
     </div>
 
     <div id="footer">
-        <span id="controlsHelp">LMB select | RMB move/attack | Drag box-select | WASD scroll | Wheel zoom | B build | 1-8 hotkeys</span>
+        <span id="controlsHelp">LMB select | RMB move/attack | A attack-move | S stop | H HQ | Ctrl+1-9 / 1-9 groups | Arrows/Edge/Wheel scroll | +/- zoom</span>
         <span id="timerDisplay" style="display: none;">Time: <strong id="gameTimer">0:00</strong></span>
     </div>
 
@@ -111,6 +109,23 @@
             <h1 class="menu-title">Game Settings</h1>
             <div class="settings-panel">
                 <div class="setting-group">
+                    <label>Your Faction:</label>
+                    <select id="playerFactionSelect">
+                        <option value="survivors" selected>Survivors - Steel, oil and gunpowder</option>
+                        <option value="evolved">Evolved - Flesh, bone and mutant fury</option>
+                        <option value="series9">Series 9 - Agricultural robots gone to war</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Enemy Faction:</label>
+                    <select id="enemyFactionSelect">
+                        <option value="random" selected>Random</option>
+                        <option value="survivors">Survivors</option>
+                        <option value="evolved">Evolved</option>
+                        <option value="series9">Series 9</option>
+                    </select>
+                </div>
+                <div class="setting-group">
                     <label>Time Limit:</label>
                     <select id="timeLimitSelect">
                         <option value="unlimited">Unlimited</option>
@@ -139,10 +154,10 @@
                 <div class="setting-group">
                     <label>Starting Oil:</label>
                     <select id="startingOilSelect">
-                        <option value="500">500</option>
-                        <option value="1000">1000</option>
-                        <option value="1200" selected>1200</option>
                         <option value="2000">2000</option>
+                        <option value="3000" selected>3000</option>
+                        <option value="5000">5000</option>
+                        <option value="8000">8000</option>
                     </select>
                 </div>
             </div>

@@ -1,364 +1,299 @@
 // ============================================
-// XFire - Game Constants and Types
+// XFire - Krossfire Skirmish
+// Game Constants: Factions, Units, Buildings
+// Inspired by KKnD2: Krossfire (1998)
 // ============================================
 
-// Game Settings
+// Isometric tile metrics
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
 const MAP_SIZE = 64;
 
-// SVG Icon Helper - creates inline SVG data URLs for crisp icons
-const SVG_ICONS = {
-    // Units
-    infantry: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-1 6v2H9v2h2v6h2v-6h2v-2h-2v-2h-2z"/><path d="M16 12l2-2v4l-2-2zM8 12l-2-2v4l2-2z"/></svg>`,
-    lightTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="12" width="16" height="6" rx="1"/><rect x="6" y="10" width="8" height="4" rx="1"/><rect x="12" y="11" width="8" height="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></svg>`,
-    mediumTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="11" width="18" height="7" rx="1"/><rect x="6" y="8" width="10" height="5" rx="2"/><rect x="14" y="9" width="8" height="2"/><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/></svg>`,
-    heavyTank: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="10" width="20" height="8" rx="1"/><rect x="5" y="6" width="12" height="6" rx="2"/><rect x="15" y="7" width="9" height="3" rx="1"/><circle cx="4" cy="18" r="3"/><circle cx="12" cy="18" r="3"/><circle cx="20" cy="18" r="3"/><rect x="7" y="8" width="4" height="2" fill="#333"/></svg>`,
-    harvester: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="8" width="16" height="10" rx="2"/><rect x="6" y="5" width="12" height="5" rx="1" fill="#fa0"/><path d="M3 14h2v4H3zM19 14h2v4h-2z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><rect x="8" y="10" width="8" height="3" fill="#333" opacity="0.3"/></svg>`,
-    artillery: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="10" cy="16" rx="6" ry="4"/><rect x="8" y="6" width="4" height="10" transform="rotate(-30 10 11)"/><circle cx="10" cy="16" r="3"/><circle cx="6" cy="18" r="2"/><circle cx="14" cy="18" r="2"/></svg>`,
-    flak: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="13" width="14" height="6" rx="1"/><circle cx="12" cy="11" r="4"/><rect x="10" y="3" width="1.5" height="8"/><rect x="12.5" y="3" width="1.5" height="8"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>`,
-    scout: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="14" rx="8" ry="4"/><path d="M12 10c-3 0-6 1-6 4h12c0-3-3-4-6-4z"/><circle cx="12" cy="8" r="3"/><path d="M4 14l-2-4h2zM20 14l2-4h-2z" opacity="0.6"/></svg>`,
-    rocket: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="6" r="2.5"/><rect x="10" y="8" width="4" height="8"/><rect x="14" y="10" width="6" height="3" rx="1"/><path d="M20 10l2-1v4l-2-1z" fill="#f44"/><rect x="9" y="16" width="2" height="4"/><rect x="13" y="16" width="2" height="4"/></svg>`
+// ============================================
+// FACTIONS
+// Three sides, KKnD2-style: human Survivors,
+// mutant Evolved and the Series 9 robots.
+// Unit/building roles are shared across factions
+// (mirrored rosters like in KKnD) but each faction
+// has its own names, looks and color palette.
+// ============================================
+const FACTIONS = {
+    survivors: {
+        name: 'Survivors',
+        tagline: 'Steel, oil and gunpowder',
+        color: '#4488ff',
+        palette: {
+            hull: '#6e7a4e',       // olive drab armor
+            hullDark: '#49532f',
+            hullLight: '#94a06c',
+            metal: '#8d9097',
+            metalDark: '#5a5d63',
+            tread: '#33342e',
+            accent: '#c8a23c',     // brass
+            glow: '#ffd14a',
+            skin: '#d8a878',
+            cloth: '#5b6648',
+            base: '#7c7f72',       // concrete pad
+            baseDark: '#5d6055',
+            roof: '#7d8a5a',
+            window: '#9fd4ff'
+        },
+        unitNames: {
+            trooper: 'Machine Gunner',
+            flamer: 'Flamer',
+            rocketeer: 'Bazooka Trooper',
+            bike: 'Dirt Bike',
+            buggy: 'ATV',
+            tank: 'Anaconda Tank',
+            heavy: 'Juggernaut',
+            artillery: 'Barrage Craft',
+            tanker: 'Oil Tanker'
+        },
+        buildingNames: {
+            hq: 'Outpost',
+            powerStation: 'Power Station',
+            derrick: 'Oil Derrick',
+            barracks: 'Barracks',
+            factory: 'Machine Shop',
+            researchLab: 'Research Lab',
+            repairBay: 'Repair Bay',
+            tower: 'Guard Tower',
+            towerHeavy: 'Cannon Tower'
+        }
+    },
+    evolved: {
+        name: 'Evolved',
+        tagline: 'Flesh, bone and mutant fury',
+        color: '#cc3333',
+        palette: {
+            hull: '#9a5a38',       // hide / chitin
+            hullDark: '#6b3a22',
+            hullLight: '#c08355',
+            metal: '#7a4a3a',
+            metalDark: '#52301f',
+            tread: '#46291a',
+            accent: '#d8cfae',     // bone
+            glow: '#7ddf64',       // toxic green
+            skin: '#b98a64',
+            cloth: '#7a3326',
+            base: '#7a5d43',       // packed earth
+            baseDark: '#5b432e',
+            roof: '#8e5a36',
+            window: '#7ddf64'
+        },
+        unitNames: {
+            trooper: 'Berserker',
+            flamer: 'Pyromaniac',
+            rocketeer: 'Homing Bazookoid',
+            bike: 'Dire Wolf',
+            buggy: 'Giant Beetle',
+            tank: 'Scorpion',
+            heavy: 'War Mastodon',
+            artillery: 'Missile Crab',
+            tanker: 'Tanker Beetle'
+        },
+        buildingNames: {
+            hq: 'Clan Hall',
+            powerStation: 'Bio Refinery',
+            derrick: 'Pump Beast',
+            barracks: 'Breeding Den',
+            factory: 'Beast Enclosure',
+            researchLab: 'Alchemy Hall',
+            repairBay: 'Healing Pools',
+            tower: 'Spike Tower',
+            towerHeavy: 'Acid Hurler'
+        }
+    },
+    series9: {
+        name: 'Series 9',
+        tagline: 'Agricultural robots gone to war',
+        color: '#33bb77',
+        palette: {
+            hull: '#5a6470',       // gunmetal
+            hullDark: '#3a4149',
+            hullLight: '#828d9a',
+            metal: '#6f7a85',
+            metalDark: '#454d56',
+            tread: '#2c3036',
+            accent: '#caa64b',
+            glow: '#4dffa6',       // emerald energy
+            skin: '#9aa4ae',
+            cloth: '#3a4149',
+            base: '#5e6670',       // alloy plate
+            baseDark: '#454c54',
+            roof: '#67737f',
+            window: '#4dffa6'
+        },
+        unitNames: {
+            trooper: 'Seeder',
+            flamer: 'Weed Killer',
+            rocketeer: 'Sterilizer',
+            bike: 'Probe',
+            buggy: 'Enforcer',
+            tank: 'Sentinel',
+            heavy: 'Annihilator',
+            artillery: 'Tremor',
+            tanker: 'Transporter'
+        },
+        buildingNames: {
+            hq: 'Mainframe',
+            powerStation: 'Fusion Plant',
+            derrick: 'Auto Extractor',
+            barracks: 'Droid Works',
+            factory: 'Machine Forge',
+            researchLab: 'Data Core',
+            repairBay: 'Maintenance Dock',
+            tower: 'Pulse Turret',
+            towerHeavy: 'Plasma Tower'
+        }
+    }
 };
 
-// Unit Types Definition
+const FACTION_KEYS = Object.keys(FACTIONS);
+
+// ============================================
+// UNIT ROLES (shared stats, faction-specific skins)
+// tech: required tech level (researched at the lab)
+// ============================================
 const UNIT_TYPES = {
-    infantry: {
-        name: 'Infantry',
-        icon: SVG_ICONS.infantry,
-        cost: 80,
-        hp: 40,
-        speed: 0.12,
-        range: 40,
-        damage: 10,
-        attackSpeed: 600,
-        sight: 100,
-        size: 8,
-        category: 'infantry'
+    trooper: {
+        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.10,
+        range: 45, damage: 9, attackSpeed: 600, sight: 110, size: 9,
+        category: 'infantry', buildTime: 90
     },
-    lightTank: {
-        name: 'Light Tank',
-        icon: SVG_ICONS.lightTank,
-        cost: 250,
-        hp: 150,
-        speed: 0.18,
-        range: 50,
-        damage: 20,
-        attackSpeed: 800,
-        sight: 120,
-        size: 14,
-        category: 'armor'
+    flamer: {
+        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.09,
+        range: 38, damage: 24, attackSpeed: 900, sight: 100, size: 10,
+        category: 'infantry', versus: 'infantry', buildTime: 110
     },
-    mediumTank: {
-        name: 'Battle Tank',
-        icon: SVG_ICONS.mediumTank,
-        cost: 350,
-        hp: 280,
-        speed: 0.13,
-        range: 60,
-        damage: 35,
-        attackSpeed: 1200,
-        sight: 110,
-        size: 16,
-        category: 'armor'
+    rocketeer: {
+        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.09,
+        range: 72, damage: 32, attackSpeed: 1500, sight: 120, size: 10,
+        category: 'infantry', versus: 'armor', buildTime: 130
     },
-    heavyTank: {
-        name: 'Heavy Tank',
-        icon: SVG_ICONS.heavyTank,
-        cost: 500,
-        hp: 450,
-        speed: 0.08,
-        range: 65,
-        damage: 55,
-        attackSpeed: 1500,
-        sight: 100,
-        size: 18,
-        category: 'armor'
+    bike: {
+        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.27,
+        range: 45, damage: 10, attackSpeed: 480, sight: 190, size: 11,
+        category: 'armor', buildTime: 90
     },
-    harvester: {
-        name: 'Harvester',
-        icon: SVG_ICONS.harvester,
-        cost: 400,
-        hp: 200,
-        speed: 0.16,
-        range: 0,
-        damage: 0,
-        attackSpeed: 0,
-        sight: 100,
-        size: 18,
-        capacity: 500,
-        category: 'armor'
+    buggy: {
+        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.18,
+        range: 55, damage: 16, attackSpeed: 650, sight: 140, size: 13,
+        category: 'armor', buildTime: 130
+    },
+    tank: {
+        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.12,
+        range: 65, damage: 40, attackSpeed: 1300, sight: 125, size: 15,
+        category: 'armor', buildTime: 190
+    },
+    heavy: {
+        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.075,
+        range: 72, damage: 62, attackSpeed: 1600, sight: 115, size: 18,
+        category: 'armor', buildTime: 270
     },
     artillery: {
-        name: 'Artillery',
-        icon: SVG_ICONS.artillery,
-        cost: 500,
-        hp: 120,
-        speed: 0.07,
-        range: 140,
-        damage: 60,
-        attackSpeed: 5000,
-        sight: 200,
-        size: 14,
-        category: 'armor'
+        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.07,
+        range: 150, damage: 75, attackSpeed: 4500, sight: 175, size: 14,
+        category: 'armor', buildTime: 230
     },
-    flak: {
-        name: 'Flak Cannon',
-        icon: SVG_ICONS.flak,
-        cost: 300,
-        hp: 100,
-        speed: 0.14,
-        range: 75,
-        damage: 25,
-        attackSpeed: 600,
-        sight: 130,
-        size: 12,
-        category: 'armor'
-    },
-    scout: {
-        name: 'Scout',
-        icon: SVG_ICONS.scout,
-        cost: 120,
-        hp: 25,
-        speed: 0.25,
-        range: 50,
-        damage: 8,
-        attackSpeed: 400,
-        sight: 180,
-        size: 10,
-        category: 'infantry'
-    },
-    rocket: {
-        name: 'Rocket Soldier',
-        icon: SVG_ICONS.rocket,
-        cost: 200,
-        hp: 70,
-        speed: 0.10,
-        range: 60,
-        damage: 35,
-        attackSpeed: 1000,
-        sight: 110,
-        size: 12,
-        category: 'infantry'
+    tanker: {
+        name: 'Tanker', tech: 1, cost: 350, hp: 260, speed: 0.14,
+        range: 0, damage: 0, attackSpeed: 0, sight: 100, size: 16,
+        capacity: 500, category: 'armor', buildTime: 150
     }
 };
 
-// SVG Building Icons
-const SVG_BUILDING_ICONS = {
-    hq: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><path d="M12 2l9 8H3l9-8z"/><rect x="6" y="14" width="3" height="4" fill="#88ccff"/><rect x="15" y="14" width="3" height="4" fill="#88ccff"/><rect x="10" y="16" width="4" height="6"/><circle cx="18" cy="6" r="2" fill="#ff0"/><line x1="18" y1="2" x2="18" y2="4" stroke="currentColor" stroke-width="1"/></svg>`,
-    barracks: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="14" rx="1"/><path d="M2 8l10-6 10 6"/><rect x="5" y="12" width="2" height="3"/><rect x="9" y="12" width="2" height="3"/><rect x="13" y="12" width="2" height="3"/><rect x="17" y="12" width="2" height="3"/><rect x="8" y="17" width="8" height="5"/></svg>`,
-    factory: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="10" width="20" height="12" rx="1"/><rect x="4" y="4" width="4" height="8"/><rect x="10" y="6" width="4" height="6"/><rect x="16" y="2" width="4" height="10"/><circle cx="18" cy="4" r="1.5" fill="#888"/><rect x="6" y="14" width="5" height="4"/><rect x="13" y="14" width="5" height="4"/></svg>`,
-    derrick: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l-6 10h12L12 2z"/><rect x="10" y="12" width="4" height="10"/><ellipse cx="12" cy="22" rx="6" ry="2"/><circle cx="12" cy="8" r="2" fill="#fa0"/><line x1="8" y1="6" x2="16" y2="6" stroke="currentColor" stroke-width="1"/></svg>`,
-    turret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="18" rx="8" ry="4"/><rect x="8" y="12" width="8" height="8" rx="2"/><circle cx="12" cy="10" r="5"/><rect x="2" y="9" width="10" height="3" rx="1"/><circle cx="12" cy="10" r="2"/></svg>`,
-    rifleTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="18" rx="7" ry="3"/><rect x="9" y="13" width="6" height="6" rx="1"/><circle cx="12" cy="11" r="4"/><rect x="3" y="9.5" width="9" height="1.5"/><rect x="3" y="11.5" width="9" height="1.5"/><circle cx="12" cy="11" r="1.5" fill="#f44"/></svg>`,
-    missileTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="19" rx="8" ry="3"/><rect x="7" y="12" width="10" height="8" rx="2"/><circle cx="12" cy="10" r="5"/><rect x="4" y="6" width="8" height="3" rx="1" transform="rotate(-20 8 7.5)"/><rect x="12" y="6" width="8" height="3" rx="1" transform="rotate(20 16 7.5)"/><circle cx="4" cy="5" r="1.5" fill="#f60"/><circle cx="20" cy="5" r="1.5" fill="#f60"/></svg>`,
-    researchLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="8" width="14" height="4"/><circle cx="8" cy="6" r="2" fill="#0f0"/><circle cx="12" cy="5" r="2" fill="#f0f"/><circle cx="16" cy="6" r="2" fill="#ff0"/><rect x="7" y="14" width="4" height="4" fill="#88ccff"/><rect x="13" y="14" width="4" height="4" fill="#88ccff"/></svg>`,
-    powerplant: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="10" width="16" height="12" rx="1"/><rect x="6" y="6" width="5" height="6"/><rect x="13" y="4" width="5" height="8"/><path d="M11 14l2-4 2 4-2 4z" fill="#ff0"/><rect x="8" y="16" width="8" height="2" fill="#0f0"/></svg>`,
-    academy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="12" width="16" height="10" rx="1"/><path d="M12 4l10 8H2l10-8z"/><rect x="6" y="8" width="2" height="6"/><rect x="16" y="8" width="2" height="6"/><rect x="9" y="15" width="6" height="7"/><circle cx="12" cy="10" r="2" fill="#88f"/></svg>`,
-    techLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="6" width="14" height="6" rx="1"/><circle cx="8" cy="9" r="2"/><circle cx="16" cy="9" r="2"/><path d="M8 9h8" stroke="#0ff" stroke-width="1"/><rect x="6" y="14" width="5" height="4"/><rect x="13" y="14" width="5" height="4"/><circle cx="12" cy="16" r="3" fill="#0ff" opacity="0.5"/></svg>`
-};
-
-// Building Types Definition
+// ============================================
+// BUILDING ROLES
+// KKnD economy: derricks sit on oil patches and pump
+// into local storage; tankers haul the oil to the
+// power station where it is converted to funds.
+// ============================================
 const BUILDING_TYPES = {
     hq: {
-        name: 'HQ',
-        icon: SVG_BUILDING_ICONS.hq,
-        cost: 0,
-        hp: 1000,
-        size: 3,
-        produces: [],
-        sight: 130
+        name: 'HQ', tech: 1, cost: 0, hp: 1600, size: 3, sight: 150,
+        produces: []
     },
-    barracks: {
-        name: 'Barracks',
-        icon: SVG_BUILDING_ICONS.barracks,
-        cost: 400,
-        hp: 400,
-        size: 2,
-        produces: ['infantry', 'scout', 'rocket'],
-        sight: 100,
-        powerUse: 10
-    },
-    factory: {
-        name: 'Factory',
-        icon: SVG_BUILDING_ICONS.factory,
-        cost: 600,
-        hp: 600,
-        size: 3,
-        produces: ['lightTank', 'mediumTank', 'heavyTank', 'harvester', 'artillery', 'flak'],
-        sight: 100,
-        powerUse: 20
+    powerStation: {
+        name: 'Power Station', tech: 1, cost: 500, hp: 650, size: 3, sight: 110,
+        produces: [], dropOff: true
     },
     derrick: {
-        name: 'Derrick',
-        icon: SVG_BUILDING_ICONS.derrick,
-        cost: 200,
-        hp: 200,
-        size: 1,
-        produces: [],
-        generates: 10,
-        sight: 100,
-        powerUse: 5
+        name: 'Derrick', tech: 1, cost: 300, hp: 380, size: 2, sight: 100,
+        produces: [], needsOil: true, pumpRate: 25, storageMax: 1500
     },
-    turret: {
-        name: 'Turret',
-        icon: SVG_BUILDING_ICONS.turret,
-        cost: 350,
-        hp: 300,
-        size: 1,
-        produces: [],
-        range: 125,
-        damage: 20,
-        attackSpeed: 800,
-        sight: 200,
-        powerUse: 8
+    barracks: {
+        name: 'Barracks', tech: 1, cost: 400, hp: 520, size: 2, sight: 110,
+        produces: ['trooper', 'flamer', 'rocketeer']
     },
-    rifleTurret: {
-        name: 'Rifle Turret',
-        icon: SVG_BUILDING_ICONS.rifleTurret,
-        cost: 300,
-        hp: 250,
-        size: 1,
-        produces: [],
-        range: 140,
-        damage: 35,
-        attackSpeed: 600,
-        sight: 220,
-        versus: 'infantry',
-        powerUse: 10
-    },
-    missileTurret: {
-        name: 'Missile Turret',
-        icon: SVG_BUILDING_ICONS.missileTurret,
-        cost: 450,
-        hp: 200,
-        size: 1,
-        produces: [],
-        range: 160,
-        damage: 50,
-        attackSpeed: 1200,
-        sight: 250,
-        versus: 'armor',
-        powerUse: 15
+    factory: {
+        name: 'Factory', tech: 1, cost: 700, hp: 750, size: 3, sight: 110,
+        produces: ['bike', 'buggy', 'tanker', 'tank', 'artillery', 'heavy']
     },
     researchLab: {
-        name: 'Research Lab',
-        icon: SVG_BUILDING_ICONS.researchLab,
-        cost: 500,
-        hp: 350,
-        size: 2,
-        produces: [],
-        sight: 150,
-        researches: ['rifleTurret', 'missileTurret'],
-        powerUse: 15
+        name: 'Research Lab', tech: 1, cost: 600, hp: 420, size: 2, sight: 110,
+        produces: [], research: true
     },
-    powerplant: {
-        name: 'Power Plant',
-        icon: SVG_BUILDING_ICONS.powerplant,
-        cost: 300,
-        hp: 250,
-        size: 2,
-        produces: [],
-        powerGen: 50,
-        sight: 100
+    repairBay: {
+        name: 'Repair Bay', tech: 2, cost: 500, hp: 480, size: 2, sight: 110,
+        produces: [], repairRate: 18, repairRadius: 4.5
     },
-    academy: {
-        name: 'Academy',
-        icon: SVG_BUILDING_ICONS.academy,
-        cost: 450,
-        hp: 350,
-        size: 2,
-        produces: [],
-        sight: 150,
-        bonuses: { infantryDamage: 1.15, infantryHP: 1.1 }
+    tower: {
+        name: 'Tower', tech: 1, cost: 400, hp: 420, size: 1, sight: 200,
+        produces: [], range: 120, damage: 18, attackSpeed: 650
     },
-    techLab: {
-        name: 'Tech Lab',
-        icon: SVG_BUILDING_ICONS.techLab,
-        cost: 550,
-        hp: 400,
-        size: 2,
-        produces: [],
-        sight: 150,
-        bonuses: { vehicleDamage: 1.15, vehicleHP: 1.1 }
+    towerHeavy: {
+        name: 'Heavy Tower', tech: 2, cost: 680, hp: 520, size: 1, sight: 230,
+        produces: [], range: 150, damage: 48, attackSpeed: 1400, versus: 'armor'
     }
 };
 
-// Enemy Building SVG Icons - Red-toned versions
-const SVG_ENEMY_BUILDING_ICONS = {
-    hq: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><path d="M12 2l9 8H3l9-8z"/><rect x="6" y="14" width="3" height="4" fill="#f88"/><rect x="15" y="14" width="3" height="4" fill="#f88"/><rect x="10" y="16" width="4" height="6"/></svg>`,
-    barracks: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="2" y="8" width="20" height="14" rx="1"/><path d="M2 8l10-6 10 6"/><rect x="8" y="17" width="8" height="5"/></svg>`,
-    factory: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="2" y="10" width="20" height="12" rx="1"/><rect x="4" y="4" width="4" height="8"/><rect x="16" y="2" width="4" height="10"/></svg>`,
-    derrick: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><path d="M12 2l-6 10h12L12 2z"/><rect x="10" y="12" width="4" height="10"/><ellipse cx="12" cy="22" rx="6" ry="2"/></svg>`,
-    turret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="18" rx="8" ry="4"/><circle cx="12" cy="10" r="5"/><rect x="2" y="9" width="10" height="3" rx="1"/></svg>`,
-    rifleTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="18" rx="7" ry="3"/><circle cx="12" cy="11" r="4"/><rect x="3" y="10" width="9" height="2"/></svg>`,
-    missileTurret: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><ellipse cx="12" cy="19" rx="8" ry="3"/><circle cx="12" cy="10" r="5"/><circle cx="6" cy="5" r="2" fill="#f60"/><circle cx="18" cy="5" r="2" fill="#f60"/></svg>`,
-    researchLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="8" width="14" height="4"/></svg>`,
-    powerplant: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="4" y="10" width="16" height="12" rx="1"/><rect x="6" y="6" width="5" height="6"/><rect x="13" y="4" width="5" height="8"/><path d="M11 14l2-4 2 4-2 4z" fill="#f80"/></svg>`,
-    academy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="4" y="12" width="16" height="10" rx="1"/><path d="M12 4l10 8H2l10-8z"/></svg>`,
-    techLab: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#c44"><rect x="3" y="10" width="18" height="12" rx="1"/><rect x="5" y="6" width="14" height="6" rx="1"/></svg>`
+// Sidebar build order and prerequisites (KKnD-ish tech chain)
+const BUILD_ORDER = ['powerStation', 'derrick', 'barracks', 'factory', 'researchLab', 'repairBay', 'tower', 'towerHeavy'];
+
+const BUILDING_REQUIRES = {
+    powerStation: [],
+    derrick: ['powerStation'],
+    barracks: ['powerStation'],
+    factory: ['barracks'],
+    researchLab: ['factory'],
+    repairBay: ['factory'],
+    tower: ['barracks'],
+    towerHeavy: ['researchLab']
 };
 
-// Legacy emoji icons (kept for backward compatibility if needed)
-const ENEMY_BUILDING_ICONS = SVG_ENEMY_BUILDING_ICONS;
+// Tech level upgrades, researched at the Research Lab
+const TECH_UPGRADES = {
+    2: { cost: 700, time: 900, label: 'Tech Level 2', unlocks: 'Flamer, Rocketeer, Battle Tank, Repair Bay, Heavy Tower' },
+    3: { cost: 1400, time: 1400, label: 'Tech Level 3', unlocks: 'Heavy Assault, Artillery' }
+};
+const MAX_TECH_LEVEL = 3;
 
-// Function to get building icon based on player
-function getBuildingIcon(buildingType, isEnemy = false) {
-    if (isEnemy && ENEMY_BUILDING_ICONS[buildingType]) {
-        return ENEMY_BUILDING_ICONS[buildingType];
-    }
-    return BUILDING_TYPES[buildingType]?.icon || '□';
+// Veterancy (KKnD2-style experience): kills needed per rank,
+// each rank adds a damage bonus.
+const VETERANCY_KILLS = [3, 7, 14];
+const VETERANCY_DAMAGE_BONUS = 0.15;
+
+// ============================================
+// Helpers
+// ============================================
+function getFaction(playerId) {
+    const p = (typeof game !== 'undefined') ? game.players[playerId] : null;
+    return (p && p.faction) || 'survivors';
 }
 
-// Tech Tree Dependencies
-const TECH_TREE = {
-    barracks: { requires: [], unlocks: ['academy'] },
-    factory: { requires: [], unlocks: ['techLab'] },
-    academy: { requires: ['barracks'], unlocks: [] },
-    techLab: { requires: ['factory'], unlocks: [] },
-    researchLab: { requires: [], unlocks: ['rifleTurret', 'missileTurret'] },
-    rifleTurret: { requires: ['researchLab'], unlocks: [] },
-    missileTurret: { requires: ['researchLab'], unlocks: [] }
-};
+function unitDisplayName(role, factionKey) {
+    return FACTIONS[factionKey]?.unitNames[role] || UNIT_TYPES[role]?.name || role;
+}
 
-// Initialize Game State
-function initializeGameState() {
-    return {
-        running: true,
-        tick: 0,
-        camera: { x: MAP_SIZE * TILE_WIDTH / 4, y: 0 },
-        mouse: { x: 0, y: 0, worldX: 0, worldY: 0 },
-        selection: [],
-        selectionBox: null,
-        placingBuilding: null,
-        players: [
-            {
-                id: 0,
-                color: '#4488ff',
-                oil: 1200,
-                power: 100,
-                team: 'player',
-                tech: { barracks: true, factory: false, academy: false, researchLab: false, rifleTurret: false, missileTurret: false }
-            },
-            {
-                id: 1,
-                color: '#ff4444',
-                oil: 1200,
-                power: 100,
-                team: 'enemy',
-                tech: { barracks: true, factory: false, academy: false, researchLab: false, rifleTurret: false, missileTurret: false }
-            }
-        ],
-        units: [],
-        buildings: [],
-        projectiles: [],
-        particles: [],
-        map: [],
-        fogOfWar: [],
-        group1: [],
-        group2: [],
-        group3: [],
-        group4: [],
-        group5: []
-    };
+function buildingDisplayName(role, factionKey) {
+    return FACTIONS[factionKey]?.buildingNames[role] || BUILDING_TYPES[role]?.name || role;
+}
+
+function veterancyRank(kills) {
+    let rank = 0;
+    for (const k of VETERANCY_KILLS) {
+        if ((kills || 0) >= k) rank++;
+    }
+    return rank;
 }
