@@ -68,7 +68,27 @@ const SoundManager = {
             case 'unit_select':
                 this._playSelect(vol * 0.25);
                 break;
+            case 'alert':
+                this._playAlert(vol * 0.7);
+                break;
         }
+    },
+
+    _playAlert(vol) {
+        const ctx = this.ctx;
+        // Two urgent descending beeps
+        [0, 0.18].forEach((t, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(i === 0 ? 880 : 660, ctx.currentTime + t);
+            gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime + t);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.15);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + t);
+            osc.stop(ctx.currentTime + t + 0.15);
+        });
     },
 
     _playShoot(freq, duration, vol) {
@@ -310,6 +330,7 @@ const game = {
 function generateMap() {
     game.map = [];
     game.fogOfWar = [];
+    game.oilTiles = [];
     const mapSize = getMapSize();
 
     // Initialize with grass
@@ -375,8 +396,8 @@ function generateMap() {
         }
     }
 
-    // Add oil fields - small clusters of patches, scaled with map size
-    const fieldCount = Math.floor((5 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    // Add oil fields - plenty of small clusters, scaled with map size
+    const fieldCount = Math.floor((9 + Math.floor(Math.random() * 4)) * sizeMultiplier);
     for (let i = 0; i < fieldCount; i++) {
         const x = 6 + Math.floor(Math.random() * (mapSize - 12));
         const y = 6 + Math.floor(Math.random() * (mapSize - 12));
@@ -397,6 +418,7 @@ function placeOilField(x, y, extra = 1) {
         if (tile.type === 'grass' && !tile.oil) {
             tile.oil = true;
             tile.oilAmount = 25000 + Math.floor(Math.random() * 25000);
+            game.oilTiles.push({ x: px, y: py });
         }
     }
 }
@@ -499,34 +521,105 @@ function tileToWorld(tx, ty) {
 // RENDERING
 // ============================================
 
+// ============================================
+// TERRAIN CACHE
+// The whole map is rendered once into an offscreen
+// canvas (at zoom 1) and blitted each frame. Only
+// oil-patch bubbles are animated on top.
+// ============================================
+let terrainCache = null;
+
+function buildTerrainCache() {
+    const mapSize = getMapSize();
+    const c = document.createElement('canvas');
+    c.width = mapSize * TILE_WIDTH + TILE_WIDTH;
+    c.height = mapSize * TILE_HEIGHT + TILE_HEIGHT;
+    const tctx = c.getContext('2d');
+    terrainCache = {
+        canvas: c,
+        ctx: tctx,
+        originX: -(mapSize * TILE_WIDTH / 2) - TILE_WIDTH / 2,
+        originY: -TILE_HEIGHT / 2
+    };
+    tctx.fillStyle = '#1a1a2e';
+    tctx.fillRect(0, 0, c.width, c.height);
+    for (let y = 0; y < mapSize; y++) {
+        for (let x = 0; x < mapSize; x++) {
+            drawTileToCache(x, y);
+        }
+    }
+}
+
+function tileCachePos(tx, ty) {
+    return {
+        x: (tx - ty) * (TILE_WIDTH / 2) - terrainCache.originX,
+        y: (tx + ty) * (TILE_HEIGHT / 2) - terrainCache.originY
+    };
+}
+
+// Repaint a tile and its neighbors in the cache (e.g. when a patch runs dry)
+function redrawTerrainTile(tx, ty) {
+    if (!terrainCache) return;
+    const mapSize = getMapSize();
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const x = tx + dx, y = ty + dy;
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize) {
+                drawTileToCache(x, y);
+            }
+        }
+    }
+}
+
+function drawTerrain() {
+    if (!terrainCache) return;
+    const zoom = getZoom();
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+
+    // View rectangle in cache pixel coordinates (zoom 1 iso space)
+    let sx = (game.camera.x - cw / (2 * zoom)) - terrainCache.originX;
+    let sy = (game.camera.y - ch / (2 * zoom)) - terrainCache.originY;
+    let sw = cw / zoom;
+    let sh = ch / zoom;
+    let dx = 0, dy = 0;
+    if (sx < 0) { dx = -sx * zoom; sw += sx; sx = 0; }
+    if (sy < 0) { dy = -sy * zoom; sh += sy; sy = 0; }
+    sw = Math.min(sw, terrainCache.canvas.width - sx);
+    sh = Math.min(sh, terrainCache.canvas.height - sy);
+    if (sw > 0 && sh > 0) {
+        ctx.drawImage(terrainCache.canvas, sx, sy, sw, sh, dx, dy, sw * zoom, sh * zoom);
+    }
+}
+
+// Animated oil bubbles on live patches (drawn over the static cache)
+function drawOilAnimations() {
+    if (!game.oilTiles) return;
+    const zoom = getZoom();
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    for (const t of game.oilTiles) {
+        const tile = game.map[t.y]?.[t.x];
+        if (!tile || !tile.oil || (tile.oilAmount !== undefined && tile.oilAmount <= 0)) continue;
+        const screen = worldToScreen(t.x, t.y);
+        if (screen.x < -50 || screen.x > cw + 50 || screen.y < -50 || screen.y > ch + 50) continue;
+
+        const bubblePhase = (Date.now() / 900 + t.x * 1.7 + t.y) % 3;
+        if (bubblePhase < 1) {
+            ctx.fillStyle = 'rgba(110,120,90,0.5)';
+            ctx.beginPath();
+            ctx.arc(screen.x + 3 * zoom, screen.y - bubblePhase * 3 * zoom, (1.8 - bubblePhase) * zoom, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
 function render() {
     // Clear
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
-    // Determine visible tiles - larger buffer for isometric edges
-    const startTile = screenToWorld(0, 0);
-    const endTile = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
-
-    // Also check corner points for better isometric coverage
-    const topRight = screenToWorld(canvas.offsetWidth, 0);
-    const bottomLeft = screenToWorld(0, canvas.offsetHeight);
-
-    // Calculate bounds from all corner points for full isometric coverage
-    const allX = [startTile.x, endTile.x, topRight.x, bottomLeft.x];
-    const allY = [startTile.y, endTile.y, topRight.y, bottomLeft.y];
-
-    const minX = Math.max(0, Math.floor(Math.min(...allX)) - 4);
-    const maxX = Math.min(getMapSize(), Math.ceil(Math.max(...allX)) + 4);
-    const minY = Math.max(0, Math.floor(Math.min(...allY)) - 4);
-    const maxY = Math.min(getMapSize(), Math.ceil(Math.max(...allY)) + 4);
-
-    // Draw tiles
-    for (let y = minY; y < maxY; y++) {
-        for (let x = minX; x < maxX; x++) {
-            drawTile(x, y);
-        }
-    }
+    // Terrain (cached) + animated oil patches
+    drawTerrain();
+    drawOilAnimations();
 
     // Draw buildings and units together, sorted by isometric depth (x + y)
     const entities = [...game.buildings, ...game.units].sort((a, b) => (a.x + a.y) - (b.x + b.y));
@@ -537,6 +630,9 @@ function render() {
             drawUnit(entity);
         }
     }
+
+    // Move/attack order feedback markers
+    drawOrderMarkers();
 
     // Draw projectiles
     for (const proj of game.projectiles) {
@@ -581,6 +677,29 @@ function render() {
     renderMinimap();
 }
 
+// Pulsing rings confirming move (green) and attack (red) orders
+function drawOrderMarkers() {
+    if (!game.orderMarkers) return;
+    for (const m of game.orderMarkers) {
+        const screen = worldToScreen(m.x, m.y);
+        const t = 1 - m.life; // 0 -> 1
+        const zoom = getZoom();
+        const r = (4 + t * 14) * zoom;
+        ctx.globalAlpha = m.life * 0.9;
+        ctx.strokeStyle = m.kind === 'attack' ? '#ff5533' : '#33ff55';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y, r, r * 0.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function addOrderMarker(x, y, kind) {
+    if (!game.orderMarkers) game.orderMarkers = [];
+    game.orderMarkers.push({ x, y, kind, life: 1 });
+}
+
 function drawBuildingPreview(buildingType, tx, ty, isValid) {
     const type = BUILDING_TYPES[buildingType];
     if (!type) return;
@@ -612,12 +731,13 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     // Ghost sprite of the building
     const faction = getFaction(0);
     const sprite = IsoSprites.buildingSprite(buildingType, faction, 0);
+    const bscale = zoom * 0.8;
     ctx.globalAlpha = isValid ? 0.65 : 0.35;
     ctx.drawImage(sprite,
-        screen.x - sprite.anchorX * zoom,
-        screen.y - sprite.anchorY * zoom,
-        sprite.width * zoom,
-        sprite.height * zoom);
+        screen.x - sprite.anchorX * bscale,
+        screen.y - sprite.anchorY * bscale,
+        sprite.width * bscale,
+        sprite.height * bscale);
     ctx.globalAlpha = 1;
 
     // Range indicator for towers
@@ -646,16 +766,15 @@ function tileRandom(tx, ty, seed = 0) {
     return n - Math.floor(n);
 }
 
-function drawTile(tx, ty) {
+// Render one tile into the terrain cache (fixed zoom 1)
+function drawTileToCache(tx, ty) {
     const tile = game.map[ty]?.[tx];
-    if (!tile) return;
+    if (!tile || !terrainCache) return;
 
-    const screen = worldToScreen(tx, ty);
-    const zoom = getZoom();
-
-    // Scaled tile dimensions
-    const tileW = TILE_WIDTH * zoom;
-    const tileH = TILE_HEIGHT * zoom;
+    const c = terrainCache.ctx;
+    const pos = tileCachePos(tx, ty);
+    const tileW = TILE_WIDTH;
+    const tileH = TILE_HEIGHT;
 
     // Post-apocalyptic wasteland palette
     const baseColors = {
@@ -685,186 +804,140 @@ function drawTile(tx, ty) {
         b *= 0.85;
     }
 
-    const color = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
-
     // Draw isometric tile base
-    ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y - tileH / 2);
-    ctx.lineTo(screen.x + tileW / 2, screen.y);
-    ctx.lineTo(screen.x, screen.y + tileH / 2);
-    ctx.lineTo(screen.x - tileW / 2, screen.y);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
+    c.beginPath();
+    c.moveTo(pos.x, pos.y - tileH / 2);
+    c.lineTo(pos.x + tileW / 2, pos.y);
+    c.lineTo(pos.x, pos.y + tileH / 2);
+    c.lineTo(pos.x - tileW / 2, pos.y);
+    c.closePath();
+    c.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
+    c.fill();
 
-    // Draw tile edge shadows for 3D depth effect
-    ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y + tileH / 2);
-    ctx.lineTo(screen.x - tileW / 2, screen.y);
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // Edge shadows for depth
+    c.beginPath();
+    c.moveTo(pos.x, pos.y + tileH / 2);
+    c.lineTo(pos.x - tileW / 2, pos.y);
+    c.strokeStyle = 'rgba(0,0,0,0.3)';
+    c.lineWidth = 1;
+    c.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(screen.x, screen.y + tileH / 2);
-    ctx.lineTo(screen.x + tileW / 2, screen.y);
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.stroke();
+    c.beginPath();
+    c.moveTo(pos.x, pos.y + tileH / 2);
+    c.lineTo(pos.x + tileW / 2, pos.y);
+    c.strokeStyle = 'rgba(0,0,0,0.15)';
+    c.stroke();
 
-    // Draw subtle details based on terrain type
-    if (zoom > 0.6) { // Only draw details when zoomed in enough
-        drawTileDetails(tx, ty, tile.type, screen, zoom);
-    }
+    drawTileDetailsToCache(c, tx, ty, tile.type, pos);
 
-    // Draw oil patch (always visible) - dark bubbling pool, KKnD style
+    // Static oil pool (bubbles are animated separately)
     if (tile.oil) {
         const depleted = tile.oilAmount !== undefined && tile.oilAmount <= 0;
         const poolR = depleted ? 8 : 14;
 
-        // Stained ground ring
-        ctx.fillStyle = 'rgba(40,36,22,0.45)';
-        ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y + 1 * zoom, (poolR + 6) * zoom, (poolR + 6) * 0.55 * zoom, 0, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = 'rgba(40,36,22,0.45)';
+        c.beginPath();
+        c.ellipse(pos.x, pos.y + 1, poolR + 6, (poolR + 6) * 0.55, 0, 0, Math.PI * 2);
+        c.fill();
 
-        // Oil pool
-        ctx.fillStyle = depleted ? 'rgba(30,28,20,0.7)' : 'rgba(16,18,10,0.92)';
-        ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y + 1 * zoom, poolR * zoom, poolR * 0.55 * zoom, 0, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = depleted ? 'rgba(30,28,20,0.7)' : 'rgba(16,18,10,0.92)';
+        c.beginPath();
+        c.ellipse(pos.x, pos.y + 1, poolR, poolR * 0.55, 0, 0, Math.PI * 2);
+        c.fill();
 
         if (!depleted) {
-            // Greenish sheen
-            ctx.fillStyle = 'rgba(70,90,60,0.45)';
-            ctx.beginPath();
-            ctx.ellipse(screen.x - 3 * zoom, screen.y - 1 * zoom, 6 * zoom, 3 * zoom, -0.3, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Bubbles
-            const bubblePhase = (Date.now() / 900 + tx * 1.7 + ty) % 3;
-            if (bubblePhase < 1) {
-                ctx.fillStyle = 'rgba(110,120,90,0.5)';
-                ctx.beginPath();
-                ctx.arc(screen.x + 3 * zoom, screen.y - bubblePhase * 3 * zoom, (1.8 - bubblePhase) * zoom, 0, Math.PI * 2);
-                ctx.fill();
-            }
+            c.fillStyle = 'rgba(70,90,60,0.45)';
+            c.beginPath();
+            c.ellipse(pos.x - 3, pos.y - 1, 6, 3, -0.3, 0, Math.PI * 2);
+            c.fill();
         }
     }
 }
 
-function drawTileDetails(tx, ty, tileType, screen, zoom) {
+function drawTileDetailsToCache(c, tx, ty, tileType, pos) {
     const detailCount = 3 + Math.floor(tileRandom(tx, ty, 1) * 3);
 
     switch (tileType) {
         case 'grass':
-            // Draw dry scrub tufts
-            ctx.strokeStyle = 'rgba(88,78,44,0.6)';
-            ctx.lineWidth = 1;
+            // Dry scrub tufts
+            c.strokeStyle = 'rgba(88,78,44,0.6)';
+            c.lineWidth = 1;
             for (let i = 0; i < detailCount; i++) {
-                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 20 * zoom;
-                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 10 * zoom;
-                const height = (3 + tileRandom(tx, ty, i * 3) * 4) * zoom;
-                const bend = (tileRandom(tx, ty, i * 4) - 0.5) * 3 * zoom;
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 20;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 10;
+                const height = 3 + tileRandom(tx, ty, i * 3) * 4;
+                const bend = (tileRandom(tx, ty, i * 4) - 0.5) * 3;
 
-                ctx.beginPath();
-                ctx.moveTo(screen.x + ox, screen.y + oy);
-                ctx.quadraticCurveTo(
-                    screen.x + ox + bend, screen.y + oy - height / 2,
-                    screen.x + ox + bend * 1.5, screen.y + oy - height
+                c.beginPath();
+                c.moveTo(pos.x + ox, pos.y + oy);
+                c.quadraticCurveTo(
+                    pos.x + ox + bend, pos.y + oy - height / 2,
+                    pos.x + ox + bend * 1.5, pos.y + oy - height
                 );
-                ctx.stroke();
+                c.stroke();
             }
             break;
 
         case 'sand':
-            // Draw small pebbles/dots
-            ctx.fillStyle = 'rgba(140,110,70,0.5)';
+            c.fillStyle = 'rgba(140,110,70,0.5)';
             for (let i = 0; i < detailCount; i++) {
-                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 24 * zoom;
-                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 12 * zoom;
-                const size = (1 + tileRandom(tx, ty, i * 3)) * zoom;
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 24;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 12;
+                const size = 1 + tileRandom(tx, ty, i * 3);
 
-                ctx.beginPath();
-                ctx.arc(screen.x + ox, screen.y + oy, size, 0, Math.PI * 2);
-                ctx.fill();
+                c.beginPath();
+                c.arc(pos.x + ox, pos.y + oy, size, 0, Math.PI * 2);
+                c.fill();
             }
             break;
 
         case 'rock':
-            // Draw cracks and small stones
-            ctx.strokeStyle = 'rgba(40,40,40,0.4)';
-            ctx.lineWidth = 1;
+            c.strokeStyle = 'rgba(40,40,40,0.4)';
+            c.lineWidth = 1;
             for (let i = 0; i < 2; i++) {
-                const ox = (tileRandom(tx, ty, i * 5) - 0.5) * 20 * zoom;
-                const oy = (tileRandom(tx, ty, i * 5 + 1) - 0.5) * 10 * zoom;
-                const len = (5 + tileRandom(tx, ty, i * 5 + 2) * 8) * zoom;
+                const ox = (tileRandom(tx, ty, i * 5) - 0.5) * 20;
+                const oy = (tileRandom(tx, ty, i * 5 + 1) - 0.5) * 10;
+                const len = 5 + tileRandom(tx, ty, i * 5 + 2) * 8;
                 const angle = tileRandom(tx, ty, i * 5 + 3) * Math.PI;
 
-                ctx.beginPath();
-                ctx.moveTo(screen.x + ox, screen.y + oy);
-                ctx.lineTo(
-                    screen.x + ox + Math.cos(angle) * len,
-                    screen.y + oy + Math.sin(angle) * len * 0.5
-                );
-                ctx.stroke();
-            }
-
-            // Small highlight stones
-            ctx.fillStyle = 'rgba(120,120,120,0.5)';
-            for (let i = 0; i < 2; i++) {
-                const ox = (tileRandom(tx, ty, i * 7) - 0.5) * 18 * zoom;
-                const oy = (tileRandom(tx, ty, i * 7 + 1) - 0.5) * 9 * zoom;
-                ctx.beginPath();
-                ctx.arc(screen.x + ox, screen.y + oy, 1.5 * zoom, 0, Math.PI * 2);
-                ctx.fill();
+                c.beginPath();
+                c.moveTo(pos.x + ox, pos.y + oy);
+                c.lineTo(pos.x + ox + Math.cos(angle) * len, pos.y + oy + Math.sin(angle) * len * 0.5);
+                c.stroke();
             }
             break;
 
         case 'water':
-            // Animated wave lines
-            const wavePhase = (Date.now() / 800 + tx * 0.5 + ty * 0.3) % (Math.PI * 2);
-            ctx.strokeStyle = 'rgba(150,200,255,0.4)';
-            ctx.lineWidth = 1;
-
+            // Static wave lines (baked)
+            c.strokeStyle = 'rgba(150,200,255,0.35)';
+            c.lineWidth = 1;
             for (let i = 0; i < 2; i++) {
-                const oy = (i - 0.5) * 8 * zoom;
-                ctx.beginPath();
-                ctx.moveTo(screen.x - 12 * zoom, screen.y + oy);
-                ctx.quadraticCurveTo(
-                    screen.x, screen.y + oy + Math.sin(wavePhase + i) * 2 * zoom,
-                    screen.x + 12 * zoom, screen.y + oy
-                );
-                ctx.stroke();
-            }
-
-            // Water sparkle
-            if (tileRandom(tx, ty, 99) > 0.7) {
-                const sparklePhase = (Date.now() / 500 + tx + ty) % 1;
-                if (sparklePhase < 0.3) {
-                    ctx.fillStyle = `rgba(255,255,255,${0.5 - sparklePhase})`;
-                    ctx.beginPath();
-                    ctx.arc(
-                        screen.x + (tileRandom(tx, ty, 100) - 0.5) * 16 * zoom,
-                        screen.y + (tileRandom(tx, ty, 101) - 0.5) * 8 * zoom,
-                        1.5 * zoom, 0, Math.PI * 2
-                    );
-                    ctx.fill();
-                }
+                const oy = (i - 0.5) * 8;
+                const phase = tileRandom(tx, ty, 50 + i) * 4 - 2;
+                c.beginPath();
+                c.moveTo(pos.x - 12, pos.y + oy);
+                c.quadraticCurveTo(pos.x, pos.y + oy + phase, pos.x + 12, pos.y + oy);
+                c.stroke();
             }
             break;
 
         case 'hill':
-            // Draw rocky texture
-            ctx.fillStyle = 'rgba(80,50,25,0.4)';
+            // Rocky outcrop boulders
+            c.fillStyle = 'rgba(80,58,32,0.5)';
             for (let i = 0; i < detailCount; i++) {
-                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 22 * zoom;
-                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 11 * zoom;
-                const w = (2 + tileRandom(tx, ty, i * 3) * 3) * zoom;
-                const h = (1 + tileRandom(tx, ty, i * 3 + 1) * 2) * zoom;
+                const ox = (tileRandom(tx, ty, i * 2) - 0.5) * 22;
+                const oy = (tileRandom(tx, ty, i * 2 + 1) - 0.5) * 11;
+                const w = 2 + tileRandom(tx, ty, i * 3) * 4;
+                const h = 1 + tileRandom(tx, ty, i * 3 + 1) * 2.5;
 
-                ctx.beginPath();
-                ctx.ellipse(screen.x + ox, screen.y + oy, w, h, 0, 0, Math.PI * 2);
-                ctx.fill();
+                c.beginPath();
+                c.ellipse(pos.x + ox, pos.y + oy - h, w, h, 0, 0, Math.PI * 2);
+                c.fill();
+                c.fillStyle = 'rgba(140,112,76,0.4)';
+                c.beginPath();
+                c.ellipse(pos.x + ox - w * 0.25, pos.y + oy - h * 1.4, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+                c.fill();
+                c.fillStyle = 'rgba(80,58,32,0.5)';
             }
             break;
     }
@@ -883,10 +956,11 @@ function drawBuilding(building) {
     }
 
     const sprite = IsoSprites.buildingSprite(building.type, faction, frame);
-    const dx = screen.x - sprite.anchorX * zoom;
-    const dy = screen.y - sprite.anchorY * zoom;
-    const dw = sprite.width * zoom;
-    const dh = sprite.height * zoom;
+    const bscale = zoom * 0.8; // buildings drawn slightly smaller than their footprint
+    const dx = screen.x - sprite.anchorX * bscale;
+    const dy = screen.y - sprite.anchorY * bscale;
+    const dw = sprite.width * bscale;
+    const dh = sprite.height * bscale;
 
     if (building.isUnderConstruction) {
         const progress = building.buildProgress / building.buildTime;
@@ -946,13 +1020,25 @@ function drawBuilding(building) {
         ctx.stroke();
     }
 
-    // Derrick oil storage bar
-    if (building.type === 'derrick') {
-        const stored = building.storage || 0;
+    // Derrick: remaining patch reserves
+    if (building.type === 'derrick' && building.oilStart) {
+        const left = Math.max(0, (building.oilLeft || 0) / building.oilStart);
         ctx.fillStyle = '#222';
         ctx.fillRect(screen.x - 16, screen.y + 6, 32, 3);
-        ctx.fillStyle = '#cfae3a';
-        ctx.fillRect(screen.x - 16, screen.y + 6, 32 * Math.min(1, stored / type.storageMax), 3);
+        ctx.fillStyle = left > 0 ? '#cfae3a' : '#553f20';
+        ctx.fillRect(screen.x - 16, screen.y + 6, 32 * left, 3);
+    }
+
+    // Range ring for selected defensive towers
+    if (isSelected && type.range) {
+        const rT = rangeT(type);
+        ctx.strokeStyle = 'rgba(255,140,80,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y, rT * (TILE_WIDTH / 2) * zoom, rT * (TILE_HEIGHT / 2) * zoom, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
     }
 
     // Production / research progress
@@ -1028,6 +1114,18 @@ function drawUnit(unit) {
         ctx.strokeRect(screen.x - barWidth / 2, barY, barWidth, 3);
     }
 
+    // Range ring for selected siege units
+    if (isSelected && unit.type === 'artillery') {
+        const rT = rangeT(type);
+        ctx.strokeStyle = 'rgba(255,140,80,0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y, rT * (TILE_WIDTH / 2) * zoom, rT * (TILE_HEIGHT / 2) * zoom, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
     // Veterancy chevrons
     const rank = veterancyRank(unit.kills);
     if (rank > 0) {
@@ -1045,13 +1143,6 @@ function drawUnit(unit) {
         }
     }
 
-    // Tanker cargo indicator
-    if (unit.type === 'tanker' && unit.cargo > 0) {
-        ctx.fillStyle = '#222';
-        ctx.fillRect(screen.x - 11, screen.y + 8 * zoom, 22, 3);
-        ctx.fillStyle = '#cfae3a';
-        ctx.fillRect(screen.x - 11, screen.y + 8 * zoom, 22 * (unit.cargo / type.capacity), 3);
-    }
 }
 
 function drawProjectile(proj) {
@@ -1330,6 +1421,17 @@ function renderMinimap() {
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
 
+    // Under-attack ping (pulsing ring, 4 seconds)
+    if (game.lastAttackAlert && Date.now() - game.lastAttackAlert.time < 4000) {
+        const age = (Date.now() - game.lastAttackAlert.time) / 1000;
+        const pulse = (age * 2) % 1;
+        minimapCtx.strokeStyle = `rgba(255,60,40,${1 - pulse})`;
+        minimapCtx.lineWidth = 2;
+        minimapCtx.beginPath();
+        minimapCtx.arc(game.lastAttackAlert.x * scale, game.lastAttackAlert.y * scale, 3 + pulse * 8, 0, Math.PI * 2);
+        minimapCtx.stroke();
+    }
+
     // Draw camera viewport
     const viewStart = screenToWorld(0, 0);
     const viewEnd = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
@@ -1358,6 +1460,14 @@ function update(dt) {
     updateAI();
     updateResources();
     updateUI();
+
+    // Fade out order feedback markers
+    if (game.orderMarkers) {
+        for (let i = game.orderMarkers.length - 1; i >= 0; i--) {
+            game.orderMarkers[i].life -= dt * 1.6;
+            if (game.orderMarkers[i].life <= 0) game.orderMarkers.splice(i, 1);
+        }
+    }
 }
 
 // A* Pathfinding implementation
@@ -1488,12 +1598,6 @@ function updateUnits(dt) {
             SoundManager.play('explosion_small');
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
-            continue;
-        }
-
-        // Tanker logic (hauls oil from derricks to the power station)
-        if (unit.type === 'tanker') {
-            updateTanker(unit, type, dt);
             continue;
         }
 
@@ -1758,136 +1862,6 @@ function updateUnits(dt) {
 function rangeT(type) { return (type.range || 0) / 24; }
 function sightT(type) { return (type.sight || 100) / 24; }
 
-function moveTankerAlongPath(unit, type, dt) {
-    if (unit.haulPath && unit.haulPath.length > 0) {
-        const target = unit.haulPath[0];
-        const dx = target.x - unit.x;
-        const dy = target.y - unit.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < 0.5) {
-            unit.haulPath.shift();
-        } else {
-            const speed = type.speed * dt * 60;
-            unit.x += (dx / dist) * speed;
-            unit.y += (dy / dist) * speed;
-            unit.angle = Math.atan2(dy, dx);
-
-            // Dust trail
-            if (Math.random() < 0.2) {
-                game.particles.push({
-                    x: unit.x + (Math.random() - 0.5) * 0.4,
-                    y: unit.y + (Math.random() - 0.5) * 0.4,
-                    z: 0,
-                    vx: (Math.random() - 0.5) * 0.1,
-                    vy: (Math.random() - 0.5) * 0.1,
-                    vz: Math.random() * 0.08,
-                    color: '#8a7a5a',
-                    size: Math.random() * 2 + 1.5,
-                    life: 0.4
-                });
-            }
-        }
-        return true; // moving
-    }
-    return false; // not moving
-}
-
-function findNearestOwnBuilding(unit, role) {
-    let best = null;
-    let bestDist = Infinity;
-    for (const b of game.buildings) {
-        if (b.playerId !== unit.playerId || b.type !== role || b.isUnderConstruction) continue;
-        const dist = Math.hypot(b.x - unit.x, b.y - unit.y);
-        if (dist < bestDist) {
-            bestDist = dist;
-            best = b;
-        }
-    }
-    return best;
-}
-
-// KKnD oil run: dock at the derrick, load stored oil,
-// haul it to the power station, convert to funds.
-function updateTanker(unit, type, dt) {
-    const player = game.players[unit.playerId];
-
-    // Validate assigned derrick
-    if (unit.derrick && (unit.derrick.hp <= 0 || !game.buildings.includes(unit.derrick))) {
-        unit.derrick = null;
-        unit.haulPath = null;
-    }
-    if (!unit.derrick) {
-        unit.derrick = findNearestOwnBuilding(unit, 'derrick');
-        if (unit.derrick) unit.haulPath = null;
-    }
-
-    const station = findNearestOwnBuilding(unit, 'powerStation');
-
-    function travelTo(target) {
-        if (!unit.haulPath || unit.haulPath.length === 0 ||
-            unit.haulTargetX !== target.x || unit.haulTargetY !== target.y) {
-            unit.haulPath = findPath(unit.x, unit.y, target.x, target.y);
-            unit.haulTargetX = target.x;
-            unit.haulTargetY = target.y;
-        }
-        if (!moveTankerAlongPath(unit, type, dt)) {
-            // Fallback: direct movement
-            const dx = target.x - unit.x;
-            const dy = target.y - unit.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 0.5) {
-                const speed = type.speed * dt * 60;
-                unit.x += (dx / dist) * speed;
-                unit.y += (dy / dist) * speed;
-                unit.angle = Math.atan2(dy, dx);
-            }
-        }
-        return Math.hypot(target.x - unit.x, target.y - unit.y);
-    }
-
-    // PHASE: deliver cargo to the power station
-    if (unit.cargo >= type.capacity || (unit.delivering && unit.cargo > 0)) {
-        unit.delivering = true;
-        if (!station) return; // wait until a power station exists
-        const dist = travelTo(station);
-        if (dist < 2.6) {
-            // Unload
-            const amount = Math.min(unit.cargo, 4 * dt * 60);
-            unit.cargo -= amount;
-            player.oil = Math.min(50000, player.oil + amount);
-            if (unit.cargo <= 0) {
-                unit.cargo = 0;
-                unit.delivering = false;
-                unit.haulPath = null;
-            }
-        }
-        return;
-    }
-    unit.delivering = false;
-
-    // PHASE: go to the derrick and load
-    if (unit.derrick) {
-        const dist = travelTo(unit.derrick);
-        if (dist < 2.2) {
-            // Dock and load from derrick storage
-            const want = type.capacity - unit.cargo;
-            const amount = Math.min(want, unit.derrick.storage || 0, 2 * dt * 60);
-            if (amount > 0) {
-                unit.derrick.storage -= amount;
-                unit.cargo += amount;
-            }
-            // Leave once full, or once we have a decent load and the well ran dry
-            if (unit.cargo >= type.capacity ||
-                (unit.cargo > 0 && (unit.derrick.storage || 0) <= 0 && unit.derrick.oilLeft === 0)) {
-                unit.delivering = true;
-                unit.haulPath = null;
-            }
-        }
-    }
-    // No derrick at all: idle in place
-}
-
 function updateBuildings(dt) {
     for (let i = game.buildings.length - 1; i >= 0; i--) {
         const building = game.buildings[i];
@@ -1903,12 +1877,6 @@ function updateBuildings(dt) {
                 // Set activation time for turrets (3 second delay)
                 if (type.damage) {
                     building.activationTime = game.tick + 180; // ~3 seconds at 60 FPS
-                }
-                // A fresh derrick comes with a free oil tanker (KKnD style)
-                if (building.type === 'derrick') {
-                    const pos = findValidSpawnPosition(Math.floor(building.x) + 2, Math.floor(building.y) + 2, 6);
-                    const tanker = spawnUnit('tanker', building.playerId, pos.x + 0.5, pos.y + 0.5);
-                    if (tanker) tanker.derrick = building;
                 }
             } else {
                 // Construction in progress - keep hp at 1
@@ -2024,7 +1992,7 @@ function updateBuildings(dt) {
 
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 // Send to rally point if set
-                if (newUnit && building.rallyX !== undefined && newUnit.type !== 'tanker') {
+                if (newUnit && building.rallyX !== undefined) {
                     newUnit.targetX = building.rallyX + (Math.random() - 0.5) * 2;
                     newUnit.targetY = building.rallyY + (Math.random() - 0.5) * 2;
                 }
@@ -2085,6 +2053,14 @@ function updateProjectiles(dt) {
                     }
 
                     proj.target.hp -= finalDamage;
+                    // Base-under-attack alert (minimap ping + throttled sound + Space jumps there)
+                    if (proj.target.playerId === 0) {
+                        game.lastAttackAlert = { x: proj.target.x, y: proj.target.y, time: Date.now() };
+                        if (!game._lastAlertSound || Date.now() - game._lastAlertSound > 12000) {
+                            game._lastAlertSound = Date.now();
+                            SoundManager.play('alert');
+                        }
+                    }
                     // Veterancy: credit the kill to the shooter
                     if (proj.target.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
                         game.units.includes(proj.source)) {
@@ -2231,6 +2207,7 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     };
 
     // ---- ECONOMY: power station first, then derricks on oil patches ----
+    const maxDerricks = { easy: 2, normal: 3, hard: 5 }[gameSettings.difficulty] || 3;
     if (stations < 1) { tryBuild('powerStation', aiHQ); return; }
     if (derricks < 2) tryBuild('derrick', aiHQ);
 
@@ -2251,7 +2228,7 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     }
 
     // ---- EXPANSION & DEFENSE ----
-    if (derricks < 4 && ai.oil > 800) tryBuild('derrick', aiHQ);
+    if (derricks < maxDerricks && ai.oil > 600) tryBuild('derrick', aiHQ);
     if (stations < 2 && derricks >= 3 && ai.oil > 1200) tryBuild('powerStation', aiHQ);
 
     const maxTowers = { easy: 2, normal: 4, hard: 6 }[gameSettings.difficulty] || 4;
@@ -2265,17 +2242,11 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     const queueUnit = (building, role) => {
         const uType = UNIT_TYPES[role];
         if (!uType || ai.oil < uType.cost || ai.techLevel < uType.tech) return false;
-        if (building.productionQueue.length >= 4) return false;
+        if (building.productionQueue.length >= 2) return false;
         ai.oil -= uType.cost;
         addToProductionQueue(building, role);
         return true;
     };
-
-    // Replace lost tankers (one per derrick)
-    const tankers = aiUnits.filter(u => u.type === 'tanker').length;
-    if (tankers < derricks && factories.length > 0) {
-        queueUnit(factories[0], 'tanker');
-    }
 
     // Infantry mix
     for (const b of barracks) {
@@ -2296,8 +2267,8 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     }
 
     // ---- ATTACK WAVES ----
-    const combatUnits = aiUnits.filter(u => u.type !== 'tanker');
-    const attackThreshold = { easy: 14, normal: 10, hard: 7 }[gameSettings.difficulty] || 10;
+    const combatUnits = aiUnits;
+    const attackThreshold = { easy: 16, normal: 12, hard: 8 }[gameSettings.difficulty] || 12;
     const gameTime = game.tick / 60;
     if (combatUnits.length >= attackThreshold || (gameTime > 480 && combatUnits.length >= 5)) {
         attackPlayerBase(playerBuildings, playerUnits, aiUnits);
@@ -2310,9 +2281,6 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
     const rallyTarget = playerHQ || playerBuildings[0] || playerUnits[0];
 
     for (const unit of aiUnits) {
-        // Tankers keep hauling oil
-        if (unit.type === 'tanker') continue;
-
         if (unit.attackTarget && unit.attackTarget.hp > 0) {
             // Already has a living target, skip
             continue;
@@ -2359,25 +2327,37 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
 }
 
 function updateResources() {
-    // Derricks pump oil from their patch into local storage;
-    // tankers haul it to the power station (handled in updateTanker).
+    // Derricks pump funds directly from their oil patch.
+    // Each finished power station boosts every derrick's output.
+    const stationCounts = game.players.map(p =>
+        game.buildings.filter(b => b.playerId === p.id && b.type === 'powerStation' && !b.isUnderConstruction).length);
+
     for (const building of game.buildings) {
         if (building.type === 'derrick' && !building.isUnderConstruction) {
             const type = BUILDING_TYPES.derrick;
-            if (building.storage === undefined) building.storage = 0;
+            const player = game.players[building.playerId];
 
             // Bind the derrick to its oil tile once
             if (building.oilLeft === undefined) {
                 const tile = game.map[Math.floor(building.y)]?.[Math.floor(building.x)];
                 building.oilTile = tile && tile.oil ? tile : null;
                 building.oilLeft = building.oilTile ? (building.oilTile.oilAmount ?? 30000) : 0;
+                building.oilStart = Math.max(1, building.oilLeft);
             }
 
-            if (building.oilLeft > 0 && building.storage < type.storageMax) {
-                const pumped = Math.min(type.pumpRate / 60, building.oilLeft, type.storageMax - building.storage);
-                building.storage += pumped;
+            if (building.oilLeft > 0) {
+                const psType = BUILDING_TYPES.powerStation;
+                const boost = 1 + Math.min(stationCounts[building.playerId], psType.maxBoostCount) * psType.incomeBoost;
+                const pumped = Math.min((type.pumpRate * boost) / 60, building.oilLeft);
                 building.oilLeft -= pumped;
-                if (building.oilTile) building.oilTile.oilAmount = Math.max(0, building.oilLeft);
+                player.oil = Math.min(50000, player.oil + pumped);
+                if (building.oilTile) {
+                    building.oilTile.oilAmount = Math.max(0, building.oilLeft);
+                    // Patch ran dry: update the cached terrain
+                    if (building.oilLeft <= 0) {
+                        redrawTerrainTile(Math.floor(building.x), Math.floor(building.y));
+                    }
+                }
             }
         }
     }
@@ -2441,13 +2421,14 @@ function updateUI() {
             if (rank > 0) {
                 infoText += `<br><span style="color:#ffd14a;">${'^'.repeat(rank)} Veteran (+${rank * 15}% damage)</span>`;
             }
-            if (sel.cargo !== undefined && type.capacity) {
-                infoText += `<br><span style="color:#cfae3a;">Oil: ${Math.floor(sel.cargo)}/${type.capacity}</span>`;
-            }
         } else {
             if (sel.type === 'derrick') {
+                const psType = BUILDING_TYPES.powerStation;
+                const stations = game.buildings.filter(b => b.playerId === sel.playerId && b.type === 'powerStation' && !b.isUnderConstruction).length;
+                const boost = 1 + Math.min(stations, psType.maxBoostCount) * psType.incomeBoost;
+                const rate = (sel.oilLeft > 0) ? (BUILDING_TYPES.derrick.pumpRate * boost).toFixed(1) : '0';
                 const left = sel.oilLeft !== undefined ? Math.floor(sel.oilLeft) : '?';
-                infoText += `<br><span style="color:#cfae3a;">Stored: ${Math.floor(sel.storage || 0)}</span>`;
+                infoText += `<br><span style="color:#cfae3a;">Income: +${rate} oil/s</span>`;
                 infoText += `<br><span style="color:#8888aa;font-size:11px;">Reserves: ${left}</span>`;
             }
             if (sel.researching) {
@@ -2588,9 +2569,10 @@ function updateBuildMenu() {
                 const name = unitDisplayName(unitRole, faction);
                 const techOk = player.techLevel >= uType.tech;
                 const canBuild = techOk && player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
+                const stats = `DMG ${uType.damage} | RNG ${(uType.range / 24).toFixed(1)} | SPD ${(uType.speed * 60).toFixed(1)} | HP ${uType.hp}`;
                 const title = techOk
-                    ? `${name} - ${uType.cost} oil`
-                    : `${name} - Requires Tech Level ${uType.tech}`;
+                    ? `${name} - ${uType.cost} oil\n${stats}`
+                    : `${name} - Requires Tech Level ${uType.tech}\n${stats}`;
                 makeButton(IsoSprites.icon('unit', unitRole, faction), name, techOk ? uType.cost : `T${uType.tech}`, title, canBuild, () => {
                     const okNow = player.techLevel >= uType.tech && player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
                     if (okNow) {
@@ -2608,8 +2590,8 @@ function updateBuildMenu() {
             const infoDiv = document.createElement('div');
             infoDiv.style.cssText = 'padding: 10px; font-size: 12px; color: #ccc;';
             let infoHTML = `<strong style="color: #fff;">${buildingDisplayName(selectedBuilding.type, faction)}</strong><br>`;
-            if (type.dropOff) infoHTML += `<span style="color:#cfae3a;">Oil drop-off point for tankers</span><br>`;
-            if (type.pumpRate) infoHTML += `<span style="color:#cfae3a;">Pumps ${type.pumpRate}/s from the patch</span><br>`;
+            if (type.incomeBoost) infoHTML += `<span style="color:#cfae3a;">+${Math.round(type.incomeBoost * 100)}% derrick output (max ${type.maxBoostCount})</span><br>`;
+            if (type.pumpRate) infoHTML += `<span style="color:#cfae3a;">Pumps ${type.pumpRate} oil/s straight to your funds</span><br>`;
             if (type.repairRate) infoHTML += `<span style="color:#66ffaa;">Repairs nearby vehicles</span><br>`;
             if (type.damage) infoHTML += `<span style="color:#ff8855;">Damage: ${type.damage}</span><br>`;
             infoDiv.innerHTML = infoHTML;
@@ -2670,15 +2652,9 @@ function spawnUnit(type, playerId, x, y) {
         hp: unitType.hp,
         angle: 0,
         lastAttack: 0,
-        cargo: 0,
         kills: 0
     };
     game.units.push(newUnit);
-
-    // Tankers report to the nearest derrick automatically
-    if (type === 'tanker') {
-        newUnit.derrick = findNearestOwnBuilding(newUnit, 'derrick');
-    }
     return newUnit;
 }
 
@@ -3133,7 +3109,7 @@ function initializeEventHandlers() {
         if (game.attackMoveMode) {
             const world = screenToWorld(x, y);
             for (const sel of game.selection) {
-                if (!UNIT_TYPES[sel.type] || sel.playerId !== 0 || sel.type === 'tanker') continue;
+                if (!UNIT_TYPES[sel.type] || sel.playerId !== 0) continue;
                 sel.targetX = world.x + (Math.random() - 0.5);
                 sel.targetY = world.y + (Math.random() - 0.5);
                 sel.attackMove = true;
@@ -3141,6 +3117,7 @@ function initializeEventHandlers() {
                 sel.path = findPath(sel.x, sel.y, sel.targetX, sel.targetY);
             }
             game.attackMoveMode = false;
+            addOrderMarker(world.x, world.y, 'attack');
             SoundManager.play('ui_click');
             return;
         }
@@ -3264,29 +3241,14 @@ function initializeEventHandlers() {
             }
         }
 
-        // Own derrick under the cursor? (tanker assignment)
-        const clickedOwnDerrick = game.buildings.find(b => {
-            if (b.playerId !== 0 || b.type !== 'derrick') return false;
-            const screen = worldToScreen(b.x, b.y);
-            return Math.hypot(screen.x - x, screen.y - y) < 40;
-        });
+        // Visual confirmation of the order
+        const anyOwnUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
+        if (anyOwnUnits) {
+            addOrderMarker(world.x, world.y, 'move');
+        }
 
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
-                // Tankers: assign to a derrick by right-clicking it
-                if (sel.type === 'tanker') {
-                    if (clickedOwnDerrick) {
-                        sel.derrick = clickedOwnDerrick;
-                        sel.haulPath = null;
-                        sel.delivering = sel.cargo > 0 && sel.cargo >= UNIT_TYPES.tanker.capacity;
-                    } else {
-                        // Manual reposition: clear hauling, move there, resume after
-                        sel.haulPath = null;
-                        sel.targetX = world.x;
-                        sel.targetY = world.y;
-                    }
-                    continue;
-                }
                 sel.attackMove = false;
                 sel.resumeX = undefined;
                 sel.resumeY = undefined;
@@ -3387,17 +3349,7 @@ function updateCursorEmoji() {
     } else if (game.selection.length > 0) {
         const sel = game.selection[0];
 
-        // Tanker selected and mouse over an own derrick -> assign cursor
-        if (sel.type === 'tanker') {
-            const overDerrick = game.buildings.some(b => {
-                if (b.playerId !== 0 || b.type !== 'derrick') return false;
-                const screen = worldToScreen(b.x, b.y);
-                return Math.hypot(screen.x - game.mouse.x, screen.y - game.mouse.y) < 40;
-            });
-            if (overDerrick) {
-                newCursor = `url("${CURSOR_SVG.harvest}") 16 16, auto`;
-            }
-        } else if (sel.type && UNIT_TYPES[sel.type]) {
+        if (sel.type && UNIT_TYPES[sel.type]) {
             // Check if any combat unit is selected and mouse is over enemy
             const isEnemy = game.units.find(u => {
                 if (u.playerId === 0) return false;
@@ -3623,7 +3575,7 @@ canvas.addEventListener('wheel', (e) => {
 
     // A: attack-move mode (then left-click a destination)
     if ((e.key === 'a' || e.key === 'A') && !(e.metaKey || e.ctrlKey)) {
-        const hasCombatUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0 && s.type !== 'tanker');
+        const hasCombatUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
         if (hasCombatUnits) {
             game.attackMoveMode = true;
             e.preventDefault();
@@ -3641,10 +3593,14 @@ canvas.addEventListener('wheel', (e) => {
             sel.attackMove = false;
             sel.resumeX = undefined;
             sel.resumeY = undefined;
-            if (sel.type === 'tanker') {
-                sel.haulPath = null;
-            }
         }
+    }
+
+    // Space: jump to the last base-under-attack location
+    if (e.key === ' ' && game.lastAttackAlert) {
+        game.camera.x = (game.lastAttackAlert.x - game.lastAttackAlert.y) * (TILE_WIDTH / 2);
+        game.camera.y = (game.lastAttackAlert.x + game.lastAttackAlert.y) * (TILE_HEIGHT / 2);
+        e.preventDefault();
     }
 
     // H: select the HQ and center the camera on it
@@ -3913,6 +3869,9 @@ function resetGame() {
     game.camera.x = 0;
     game.camera.y = (getMapSize() / 2) * TILE_HEIGHT;
     game.attackMoveMode = false;
+    game.orderMarkers = [];
+    game.lastAttackAlert = null;
+    terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
 
     // Resolve factions (enemy may be random)
@@ -4128,11 +4087,16 @@ function initGame() {
     ensurePassableArea(playerBaseX, playerBaseY, 8);
     ensurePassableArea(enemyBaseX, enemyBaseY, 8);
 
-    // Guarantee oil fields near both bases (KKnD economy needs them)
+    // Guarantee plenty of oil fields near both bases
     placeOilField(playerBaseX + 7, playerBaseY - 2, 2);
-    placeOilField(playerBaseX - 3, playerBaseY + 7, 1);
+    placeOilField(playerBaseX - 3, playerBaseY + 7, 2);
+    placeOilField(playerBaseX + 9, playerBaseY + 6, 1);
     placeOilField(enemyBaseX - 7, enemyBaseY + 2, 2);
-    placeOilField(enemyBaseX + 3, enemyBaseY - 7, 1);
+    placeOilField(enemyBaseX + 3, enemyBaseY - 7, 2);
+    placeOilField(enemyBaseX - 9, enemyBaseY - 6, 1);
+
+    // Map is final now - render the static terrain cache
+    buildTerrainCache();
 
     // KKnD-style start: Outpost + Power Station + a few troopers
     createBuilding('hq', 0, playerBaseX, playerBaseY);

@@ -28,16 +28,14 @@ Three mirrored sides, KKnD-style — same roles, different flavor:
 | Battle tank | Anaconda Tank   | Scorpion         | Sentinel       |
 | Heavy       | Juggernaut      | War Mastodon     | Annihilator    |
 | Artillery   | Barrage Craft   | Missile Crab     | Tremor         |
-| Hauler      | Oil Tanker      | Tanker Beetle    | Transporter    |
 
-## Economy (KKnD rules)
+## Economy
 
-1. Build a **Power Station** (oil drop-off).
-2. Build **Oil Derricks on the dark oil patches** scattered across the map —
-   each finished derrick comes with a free tanker.
-3. The derrick pumps oil into local storage; the tanker hauls it to the
-   power station, where it converts to funds. Patches deplete eventually —
-   expand to new fields.
+1. Build a **Power Station** — each one boosts the output of all your
+   derricks by 25% (up to two count).
+2. Build **Oil Derricks on the dark oil patches** scattered across the map.
+   Each derrick pumps funds directly into your treasury until its patch
+   runs dry — keep expanding to new fields.
 
 ## Tech tree
 
@@ -53,10 +51,11 @@ per rank.
 | ---------------------- | ------------------------------------------ |
 | Left click / drag      | Select / box-select                        |
 | Double-click           | Select all units of the same type          |
-| Right click            | Move / attack / assign tanker / rally      |
+| Right click            | Move / attack / set rally point            |
 | **A** + left click     | Attack-move                                |
 | **S** or **X**         | Stop                                       |
 | **H**                  | Select & center HQ                         |
+| **Space**              | Jump to the last attack on your base       |
 | **1-9**                | Recall control group (double-tap: center)  |
 | **Ctrl/Cmd + 1-9**     | Assign control group                       |
 | Arrows / screen edge   | Scroll the map                             |

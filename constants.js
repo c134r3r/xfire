@@ -46,8 +46,7 @@ const FACTIONS = {
             buggy: 'ATV',
             tank: 'Anaconda Tank',
             heavy: 'Juggernaut',
-            artillery: 'Barrage Craft',
-            tanker: 'Oil Tanker'
+            artillery: 'Barrage Craft'
         },
         buildingNames: {
             hq: 'Outpost',
@@ -89,8 +88,7 @@ const FACTIONS = {
             buggy: 'Giant Beetle',
             tank: 'Scorpion',
             heavy: 'War Mastodon',
-            artillery: 'Missile Crab',
-            tanker: 'Tanker Beetle'
+            artillery: 'Missile Crab'
         },
         buildingNames: {
             hq: 'Clan Hall',
@@ -132,8 +130,7 @@ const FACTIONS = {
             buggy: 'Enforcer',
             tank: 'Sentinel',
             heavy: 'Annihilator',
-            artillery: 'Tremor',
-            tanker: 'Transporter'
+            artillery: 'Tremor'
         },
         buildingNames: {
             hq: 'Mainframe',
@@ -157,57 +154,57 @@ const FACTION_KEYS = Object.keys(FACTIONS);
 // ============================================
 const UNIT_TYPES = {
     trooper: {
-        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.10,
-        range: 45, damage: 9, attackSpeed: 600, sight: 110, size: 9,
-        category: 'infantry', buildTime: 90
+        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.018,
+        range: 50, damage: 9, attackSpeed: 600, sight: 120, size: 9,
+        category: 'infantry', buildTime: 240
     },
     flamer: {
-        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.09,
-        range: 38, damage: 24, attackSpeed: 900, sight: 100, size: 10,
-        category: 'infantry', versus: 'infantry', buildTime: 110
+        // short-ranged but brutal against infantry
+        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.016,
+        range: 32, damage: 26, attackSpeed: 900, sight: 110, size: 10,
+        category: 'infantry', versus: 'infantry', buildTime: 300
     },
     rocketeer: {
-        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.09,
-        range: 72, damage: 32, attackSpeed: 1500, sight: 120, size: 10,
-        category: 'infantry', versus: 'armor', buildTime: 130
+        // slow projectile cadence, long reach, melts armor
+        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.015,
+        range: 85, damage: 34, attackSpeed: 1600, sight: 130, size: 10,
+        category: 'infantry', versus: 'armor', buildTime: 330
     },
     bike: {
-        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.27,
-        range: 45, damage: 10, attackSpeed: 480, sight: 190, size: 11,
-        category: 'armor', buildTime: 90
+        // fastest unit in the game: scouting and harassment
+        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.055,
+        range: 45, damage: 9, attackSpeed: 450, sight: 200, size: 11,
+        category: 'armor', buildTime: 300
     },
     buggy: {
-        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.18,
-        range: 55, damage: 16, attackSpeed: 650, sight: 140, size: 13,
-        category: 'armor', buildTime: 130
+        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.038,
+        range: 60, damage: 16, attackSpeed: 650, sight: 150, size: 13,
+        category: 'armor', buildTime: 420
     },
     tank: {
-        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.12,
-        range: 65, damage: 40, attackSpeed: 1300, sight: 125, size: 15,
-        category: 'armor', buildTime: 190
+        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.028,
+        range: 85, damage: 42, attackSpeed: 1400, sight: 140, size: 15,
+        category: 'armor', buildTime: 600
     },
     heavy: {
-        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.075,
-        range: 72, damage: 62, attackSpeed: 1600, sight: 115, size: 18,
-        category: 'armor', buildTime: 270
+        // outranges everything except artillery and heavy towers
+        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.018,
+        range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
+        category: 'armor', buildTime: 900
     },
     artillery: {
-        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.07,
-        range: 150, damage: 75, attackSpeed: 4500, sight: 175, size: 14,
-        category: 'armor', buildTime: 230
-    },
-    tanker: {
-        name: 'Tanker', tech: 1, cost: 350, hp: 260, speed: 0.14,
-        range: 0, damage: 0, attackSpeed: 0, sight: 100, size: 16,
-        capacity: 500, category: 'armor', buildTime: 150
+        // siege weapon: huge range, fragile, very slow rate of fire
+        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.015,
+        range: 175, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
+        category: 'armor', buildTime: 780
     }
 };
 
 // ============================================
 // BUILDING ROLES
-// KKnD economy: derricks sit on oil patches and pump
-// into local storage; tankers haul the oil to the
-// power station where it is converted to funds.
+// Economy: derricks sit on oil patches and pump
+// funds directly; power stations refine the crude
+// and boost the output of every derrick.
 // ============================================
 const BUILDING_TYPES = {
     hq: {
@@ -215,12 +212,14 @@ const BUILDING_TYPES = {
         produces: []
     },
     powerStation: {
+        // refines crude on-site: each one boosts all derrick output
         name: 'Power Station', tech: 1, cost: 500, hp: 650, size: 3, sight: 110,
-        produces: [], dropOff: true
+        produces: [], incomeBoost: 0.25, maxBoostCount: 2
     },
     derrick: {
+        // must sit on an oil patch; pumps funds directly until the patch runs dry
         name: 'Derrick', tech: 1, cost: 300, hp: 380, size: 2, sight: 100,
-        produces: [], needsOil: true, pumpRate: 25, storageMax: 1500
+        produces: [], needsOil: true, pumpRate: 14
     },
     barracks: {
         name: 'Barracks', tech: 1, cost: 400, hp: 520, size: 2, sight: 110,
@@ -228,7 +227,7 @@ const BUILDING_TYPES = {
     },
     factory: {
         name: 'Factory', tech: 1, cost: 700, hp: 750, size: 3, sight: 110,
-        produces: ['bike', 'buggy', 'tanker', 'tank', 'artillery', 'heavy']
+        produces: ['bike', 'buggy', 'tank', 'artillery', 'heavy']
     },
     researchLab: {
         name: 'Research Lab', tech: 1, cost: 600, hp: 420, size: 2, sight: 110,
@@ -239,12 +238,14 @@ const BUILDING_TYPES = {
         produces: [], repairRate: 18, repairRadius: 4.5
     },
     tower: {
+        // rapid anti-infantry fire, decent reach
         name: 'Tower', tech: 1, cost: 400, hp: 420, size: 1, sight: 200,
-        produces: [], range: 120, damage: 18, attackSpeed: 650
+        produces: [], range: 130, damage: 18, attackSpeed: 650
     },
     towerHeavy: {
+        // anti-armor cannon, outranges battle tanks
         name: 'Heavy Tower', tech: 2, cost: 680, hp: 520, size: 1, sight: 230,
-        produces: [], range: 150, damage: 48, attackSpeed: 1400, versus: 'armor'
+        produces: [], range: 160, damage: 48, attackSpeed: 1400, versus: 'armor'
     }
 };
 

@@ -540,46 +540,6 @@ const IsoSprites = (() => {
             }
         },
 
-        tanker(s, yaw, pal, faction) {
-            s.shadow(0, 0, 12, 0.34, 1.15);
-            if (faction === 'evolved') {
-                // Tanker Beetle with a swollen oil sac
-                legs(s, yaw, 3, 9, 10, pal.hullDark);
-                const b = fwd(yaw, -4);
-                s.blob(b.x, b.y, 5, 11, 16, tint(pal.hull, -4), { edge: true });
-                const c = s.p(b.x, b.y, 10);
-                const grad = s.ctx.createRadialGradient(c.x, c.y, 1, c.x, c.y, 14);
-                grad.addColorStop(0, withAlpha(pal.glow, 0.5));
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
-                s.ctx.fillStyle = grad;
-                s.ctx.beginPath();
-                s.ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
-                s.ctx.fill();
-                const h = fwd(yaw, 10);
-                s.blob(h.x, h.y, 5, 4, 6, pal.hull);
-                s.glowDot(h.x + 1, h.y - 1, 9, 1.2, pal.glow);
-            } else if (faction === 'series9') {
-                // Transporter: hover flatbed with glowing container
-                s.box(0, 0, 4, 26, 13, 4, yaw, pal.hull, { edge: true });
-                const b = fwd(yaw, -4);
-                s.box(b.x, b.y, 8, 15, 10, 9, yaw, tint(pal.hull, -8), { edge: true });
-                const f = fwd(yaw, 10);
-                s.box(f.x, f.y, 8, 6, 9, 5, yaw, tint(pal.hull, 8));
-                s.glowDot(b.x, b.y, 18, 1.8, pal.glow);
-            } else {
-                // Oil Tanker truck: cab + horizontal tank
-                wheels(s, yaw, [[9, 7], [9, -7], [-3, 7], [-3, -7], [-10, 7], [-10, -7]], 2.8, pal.tread);
-                const f = fwd(yaw, 10);
-                s.box(f.x, f.y, 4, 8, 11, 8, yaw, pal.hull, { edge: true });
-                const b = fwd(yaw, -4);
-                s.box(b.x, b.y, 4, 18, 11, 9, yaw, pal.metal, { edge: true });
-                s.box(b.x, b.y, 13, 16, 8, 2, yaw, tint(pal.metal, 10));
-                // hazard stripe along the tank flank
-                s.box(b.x, b.y, 8, 18.4, 11.4, 1.2, yaw, pal.metal, { topShade: -10 });
-                const s1 = fwd(yaw, -12), s2 = fwd(yaw, 4);
-                s.rod(s1.x - Math.sin(yaw) * 5.9, s1.y + Math.cos(yaw) * 5.9, 8.6, s2.x - Math.sin(yaw) * 5.9, s2.y + Math.cos(yaw) * 5.9, 8.6, 1.6, pal.accent);
-            }
-        }
     };
 
     // ============================================
