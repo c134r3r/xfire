@@ -499,9 +499,18 @@ function tileToWorld(tx, ty) {
 // RENDERING
 // ============================================
 
+// Fog-of-war visibility helpers (player perspective).
+// 0 = never seen (full shroud), 1 = explored but not in sight, 2 = visible.
+function tileFog(tx, ty) {
+    const row = game.fogOfWar[Math.floor(ty)];
+    return row ? row[Math.floor(tx)] : 0;
+}
+function isVisible(tx, ty) { return tileFog(tx, ty) === 2; }
+
 function render() {
-    // Clear
-    ctx.fillStyle = '#1a1a2e';
+    // Clear. Off-map area reads as shroud, so paint it black rather than the
+    // page background showing through past the world edge.
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
     // Determine visible tiles - larger buffer for isometric edges
@@ -528,13 +537,22 @@ function render() {
         }
     }
 
-    // Draw buildings and units together, sorted by isometric depth (x + y)
+    // Draw buildings and units together, sorted by isometric depth (x + y).
+    // Enemy entities are hidden unless they sit on a currently-visible tile.
     const entities = [...game.buildings, ...game.units].sort((a, b) => (a.x + a.y) - (b.x + b.y));
     for (const entity of entities) {
+        if (entity.playerId !== 0 && !isVisible(entity.x, entity.y)) continue;
         if (BUILDING_TYPES[entity.type] && game.buildings.includes(entity)) {
             drawBuilding(entity);
         } else {
             drawUnit(entity);
+        }
+    }
+
+    // Shroud pass: darken explored-but-unseen tiles and black out the unknown.
+    for (let y = minY; y < maxY; y++) {
+        for (let x = minX; x < maxX; x++) {
+            drawFogTile(x, y);
         }
     }
 
@@ -609,15 +627,16 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Ghost sprite of the building
+    // Ghost sprite of the building (matches the placed building's draw scale)
     const faction = getFaction(0);
     const sprite = IsoSprites.buildingSprite(buildingType, faction, 0);
+    const drawZoom = zoom * BUILDING_DRAW_SCALE;
     ctx.globalAlpha = isValid ? 0.65 : 0.35;
     ctx.drawImage(sprite,
-        screen.x - sprite.anchorX * zoom,
-        screen.y - sprite.anchorY * zoom,
-        sprite.width * zoom,
-        sprite.height * zoom);
+        screen.x - sprite.anchorX * drawZoom,
+        screen.y - sprite.anchorY * drawZoom,
+        sprite.width * drawZoom,
+        sprite.height * drawZoom);
     ctx.globalAlpha = 1;
 
     // Range indicator for towers
@@ -638,6 +657,28 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
         const msg = type.needsOil ? 'MUST BE PLACED ON AN OIL PATCH' : 'CANNOT BUILD HERE';
         ctx.fillText(msg, screen.x, screen.y + 30 * zoom);
     }
+}
+
+// Draw the fog-of-war shroud over a single tile. Unexplored tiles are filled
+// solid black; explored-but-unseen tiles get a translucent dark veil so the
+// remembered terrain stays faintly visible.
+function drawFogTile(tx, ty) {
+    const fog = tileFog(tx, ty);
+    if (fog === 2) return; // currently visible — no shroud
+
+    const screen = worldToScreen(tx, ty);
+    const zoom = getZoom();
+    const tileW = TILE_WIDTH * zoom;
+    const tileH = TILE_HEIGHT * zoom;
+
+    ctx.fillStyle = fog === 1 ? 'rgba(0,0,0,0.55)' : '#000';
+    ctx.beginPath();
+    ctx.moveTo(screen.x, screen.y - tileH / 2);
+    ctx.lineTo(screen.x + tileW / 2, screen.y);
+    ctx.lineTo(screen.x, screen.y + tileH / 2);
+    ctx.lineTo(screen.x - tileW / 2, screen.y);
+    ctx.closePath();
+    ctx.fill();
 }
 
 // Pseudo-random based on coordinates (consistent per tile)
@@ -870,6 +911,11 @@ function drawTileDetails(tx, ty, tileType, screen, zoom) {
     }
 }
 
+// Buildings are drawn a little smaller than their generated sprite so they
+// read closer to the KKnD reference scale and sit better against the units.
+// Scaling about the sprite anchor keeps them planted on the same ground tile.
+const BUILDING_DRAW_SCALE = 0.72;
+
 function drawBuilding(building) {
     const type = BUILDING_TYPES[building.type];
     const screen = worldToScreen(building.x, building.y);
@@ -883,10 +929,11 @@ function drawBuilding(building) {
     }
 
     const sprite = IsoSprites.buildingSprite(building.type, faction, frame);
-    const dx = screen.x - sprite.anchorX * zoom;
-    const dy = screen.y - sprite.anchorY * zoom;
-    const dw = sprite.width * zoom;
-    const dh = sprite.height * zoom;
+    const drawZoom = zoom * BUILDING_DRAW_SCALE;
+    const dx = screen.x - sprite.anchorX * drawZoom;
+    const dy = screen.y - sprite.anchorY * drawZoom;
+    const dw = sprite.width * drawZoom;
+    const dh = sprite.height * drawZoom;
 
     if (building.isUnderConstruction) {
         const progress = building.buildProgress / building.buildTime;
@@ -1293,13 +1340,17 @@ function renderMinimap() {
     minimapCtx.fillStyle = '#111';
     minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
 
-    // Draw terrain (without fog of war - full visibility on minimap)
+    // Draw terrain, respecting the fog of war (unexplored stays dark, and
+    // explored-but-unseen tiles are dimmed).
     const mapSize = getMapSize();
     for (let y = 0; y < mapSize; y++) {
         if (!game.map[y]) continue;
         for (let x = 0; x < mapSize; x++) {
             const tile = game.map[y][x];
             if (!tile) continue;
+
+            const fog = game.fogOfWar[y]?.[x] ?? 0;
+            if (fog === 0) continue; // unexplored — leave the dark backdrop
 
             let color = '#85714e';
             if (tile.type === 'water') color = '#3a5c66';
@@ -1310,22 +1361,30 @@ function renderMinimap() {
             minimapCtx.fillStyle = color;
             minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
 
-            // Show all oil deposits on minimap
+            // Oil deposits, once the patch has been scouted
             if (tile.oil) {
                 minimapCtx.fillStyle = (tile.oilAmount !== undefined && tile.oilAmount <= 0) ? '#332f1f' : '#cfae3a';
                 minimapCtx.fillRect(x * scale, y * scale, scale, scale);
             }
+
+            // Veil the explored-but-unseen tiles
+            if (fog === 1) {
+                minimapCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                minimapCtx.fillRect(x * scale, y * scale, scale + 1, scale + 1);
+            }
         }
     }
 
-    // Draw buildings
+    // Draw buildings (own always; enemy only while in sight)
     for (const b of game.buildings) {
+        if (b.playerId !== 0 && !isVisible(b.x, b.y)) continue;
         minimapCtx.fillStyle = b.playerId === 0 ? game.players[b.playerId].color : '#ff4444';
         minimapCtx.fillRect(b.x * scale - 2, b.y * scale - 2, 4, 4);
     }
 
-    // Draw units
+    // Draw units (own always; enemy only while in sight)
     for (const u of game.units) {
+        if (u.playerId !== 0 && !isVisible(u.x, u.y)) continue;
         minimapCtx.fillStyle = u.playerId === 0 ? game.players[u.playerId].color : '#ff4444';
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
@@ -1356,6 +1415,9 @@ function update(dt) {
     updateParticles(dt);
     updateDamageNumbers(dt);
     updateAI();
+    // Recompute line-of-sight a few times per second (cheap enough, and
+    // units don't move far between updates).
+    if (game.tick % 10 === 0) updateFogOfWar();
     updateResources();
     updateUI();
 }
@@ -4156,6 +4218,10 @@ function initGame() {
         game.camera.x = isoX;
         game.camera.y = isoY;
     }
+
+    // Seed the fog of war so the player's starting area is revealed
+    // before the first frame is drawn.
+    updateFogOfWar();
 }
 
 // ============================================
