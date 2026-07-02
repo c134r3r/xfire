@@ -108,6 +108,30 @@ const IsoSprites = (() => {
             this.poly(rot.map(([x, y]) => [x, y, z + h]),
                 tint(color, opts.topShade !== undefined ? opts.topShade : 20),
                 opts.edge ? tint(color, -45) : null);
+
+            // Roof panel seams + rivets for a machined look
+            if (opts.panel) {
+                const c = this.ctx;
+                const mid01 = [(rot[0][0] + rot[1][0]) / 2, (rot[0][1] + rot[1][1]) / 2];
+                const mid23 = [(rot[2][0] + rot[3][0]) / 2, (rot[2][1] + rot[3][1]) / 2];
+                const a1 = this.p(mid01[0], mid01[1], z + h);
+                const a2 = this.p(mid23[0], mid23[1], z + h);
+                c.strokeStyle = withAlpha(tint(color, -32), 0.55);
+                c.lineWidth = 1;
+                c.beginPath();
+                c.moveTo(a1.x, a1.y);
+                c.lineTo(a2.x, a2.y);
+                c.stroke();
+                c.fillStyle = withAlpha(tint(color, -40), 0.7);
+                for (const [px, py] of rot) {
+                    const ix = cx + (px - cx) * 0.72;
+                    const iy = cy + (py - cy) * 0.72;
+                    const s = this.p(ix, iy, z + h);
+                    c.beginPath();
+                    c.arc(s.x, s.y, 1, 0, Math.PI * 2);
+                    c.fill();
+                }
+            }
         }
 
         // Vertical cylinder
@@ -198,9 +222,10 @@ const IsoSprites = (() => {
             }
         }
 
-        // Glowing dot
+        // Glowing dot (r scaled by the surface's pulse factor for blinking lights)
         glowDot(x, y, z, r, color) {
             const c = this.ctx;
+            r *= this.pulse || 1;
             const s = this.p(x, y, z);
             c.save();
             c.shadowColor = color;
@@ -552,6 +577,8 @@ const IsoSprites = (() => {
         // bevel on the south-facing edges
         s.poly([[a, -a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [a + 2, -a - 2, -1.5]], tint(pal.baseDark, -8));
         s.poly([[-a, a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [-a - 2, a + 2, -1.5]], tint(pal.baseDark, -18));
+        // Soft contact shadow so structures sit into the plate
+        s.disc(0, 0, 0.5, a * 0.72, 'rgba(0,0,0,0.15)');
         if (faction === 'evolved') {
             // organic splatter
             for (let i = 0; i < 5; i++) {
@@ -600,8 +627,8 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.25, a * 0.1, 36, 2, pal.glow);
                 teamFlag(s, -a * 0.55, -a * 0.55, 18, teamColor);
             } else if (faction === 'series9') {
-                s.box(0, 0, 0, a * 1.3, a * 1.3, 13, 0, pal.hull, { edge: true });
-                s.box(0, 0, 13, a * 1.0, a * 1.0, 13, 0, tint(pal.hull, 6), { edge: true });
+                s.box(0, 0, 0, a * 1.3, a * 1.3, 13, 0, pal.hull, { edge: true, panel: true });
+                s.box(0, 0, 13, a * 1.0, a * 1.0, 13, 0, tint(pal.hull, 6), { edge: true, panel: true });
                 s.box(0, 0, 26, a * 0.68, a * 0.68, 13, 0, tint(pal.hull, 12), { edge: true });
                 // glow seams
                 for (const z of [13, 26]) {
@@ -619,8 +646,11 @@ const IsoSprites = (() => {
                 teamFlag(s, -a * 0.55, -a * 0.55, 14, teamColor);
             } else {
                 // Survivors Outpost: bunker complex
-                s.box(0, 0, 0, a * 1.25, a * 1.05, 22, 0, pal.hull, { edge: true });
-                s.box(-a * 0.15, -a * 0.15, 22, a * 0.75, a * 0.6, 16, 0, tint(pal.hull, 8), { edge: true });
+                s.box(0, 0, 0, a * 1.25, a * 1.05, 22, 0, pal.hull, { edge: true, panel: true });
+                s.box(-a * 0.15, -a * 0.15, 22, a * 0.75, a * 0.6, 16, 0, tint(pal.hull, 8), { edge: true, panel: true });
+                // roof vents
+                s.box(a * 0.32, a * 0.1, 22, 7, 5, 4, 0, pal.metalDark, { edge: true });
+                s.box(a * 0.2, a * 0.25, 22, 5, 5, 3, 0, pal.metal);
                 // windows
                 for (let i = -1; i <= 1; i++) {
                     s.poly([[a * 0.63, i * 12 - 4, 10], [a * 0.63, i * 12 + 4, 10], [a * 0.63, i * 12 + 4, 16], [a * 0.63, i * 12 - 4, 16]], pal.window);
@@ -663,7 +693,7 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.15, -a * 0.15, 26, 4.5, pal.glow);
                 s.rod(-a * 0.15, -a * 0.15, 10, -a * 0.15, -a * 0.15, 20, 3, pal.metalDark);
             } else {
-                s.box(-a * 0.25, -a * 0.2, 0, a * 0.75, a * 0.75, 16, 0, pal.hull, { edge: true });
+                s.box(-a * 0.25, -a * 0.2, 0, a * 0.75, a * 0.75, 16, 0, pal.hull, { edge: true, panel: true });
                 // twin oil silos
                 s.cyl(a * 0.35, -a * 0.4, 0, 9, 26, pal.metal, { edge: true });
                 s.cyl(a * 0.05, -a * 0.55, 0, 7, 20, pal.metal, { edge: true });
@@ -744,7 +774,7 @@ const IsoSprites = (() => {
                 }
             } else {
                 // long hut with pitched roof
-                s.box(0, 0, 0, a * 1.1, a * 0.62, 13, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.1, a * 0.62, 13, 0, pal.hull, { edge: true, panel: true });
                 s.poly([[-a * 0.58, -a * 0.34, 13], [a * 0.58, -a * 0.34, 13], [a * 0.58, 0, 22], [-a * 0.58, 0, 22]], tint(pal.roof, 10));
                 s.poly([[-a * 0.58, a * 0.34, 13], [a * 0.58, a * 0.34, 13], [a * 0.58, 0, 22], [-a * 0.58, 0, 22]], tint(pal.roof, -14));
                 // door + sandbags
@@ -775,7 +805,7 @@ const IsoSprites = (() => {
                 s.spike(a * 0.3, a * 0.5, 8, 2.2, 8, 3, 6, pal.accent);
                 s.spike(a * 0.5, a * 0.3, 8, 0.6, 8, 3, 6, pal.accent);
             } else if (faction === 'series9') {
-                s.box(0, 0, 0, a * 1.15, a * 1.0, 18, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.15, a * 1.0, 18, 0, pal.hull, { edge: true, panel: true });
                 s.poly([[-a * 0.6, -a * 0.52, 18], [a * 0.6, -a * 0.52, 18], [a * 0.6, a * 0.1, 30], [-a * 0.6, a * 0.1, 30]], tint(pal.hull, 10));
                 // glowing slit door
                 s.poly([[2, a * 0.52, 0], [30, a * 0.52, 0], [30, a * 0.52, 14], [2, a * 0.52, 14]], '#101418');
@@ -784,7 +814,10 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.42, -a * 0.3, 33, 2, pal.glow);
             } else {
                 // industrial hall with sawtooth roof and gate
-                s.box(0, 0, 0, a * 1.2, a * 0.95, 17, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.2, a * 0.95, 17, 0, pal.hull, { edge: true, panel: true });
+                // supply crates by the gate
+                s.box(-a * 0.35, a * 0.62, 0, 7, 7, 6, 0.3, pal.accent, { edge: true });
+                s.box(-a * 0.22, a * 0.66, 0, 6, 6, 5, -0.2, tint(pal.hull, 12), { edge: true });
                 for (let i = -1; i <= 1; i++) {
                     s.poly([[i * a * 0.4 - a * 0.18, -a * 0.48, 17], [i * a * 0.4 + a * 0.18, -a * 0.48, 17],
                             [i * a * 0.4 + a * 0.18, a * 0.48, 17], [i * a * 0.4 - a * 0.18, a * 0.48, 17]], tint(pal.roof, -4));
@@ -827,7 +860,7 @@ const IsoSprites = (() => {
                 }
                 s.glowDot(0, 0, 42, 3, pal.glow);
             } else {
-                s.box(0, 0, 0, a * 0.95, a * 0.8, 12, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 0.95, a * 0.8, 12, 0, pal.hull, { edge: true, panel: true });
                 s.blob(-a * 0.08, -a * 0.08, 12, a * 0.3, 16, pal.metal, { edge: true });
                 s.rod(a * 0.35, a * 0.25, 12, a * 0.35, a * 0.25, 34, 1.8, pal.metalDark);
                 s.disc(a * 0.35, a * 0.25, 31, 4.5, pal.metal, { stretchY: 2, edge: pal.metalDark });
@@ -953,7 +986,7 @@ const IsoSprites = (() => {
                     s.rod(Math.cos(ang) * 5, Math.sin(ang) * 5, 26, Math.cos(ang) * 10, Math.sin(ang) * 10, 40, 2, pal.metalDark);
                 }
             } else {
-                s.box(0, 0, 0, a * 0.85, a * 0.85, 14, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 0.85, a * 0.85, 14, 0, pal.hull, { edge: true, panel: true });
                 s.cyl(0, 0, 14, a * 0.3, 10, tint(pal.hull, 8), { edge: true });
                 for (const side of [3, -3]) {
                     const m = fwd(yaw, 19, side);
@@ -999,6 +1032,8 @@ const IsoSprites = (() => {
         s.ctx.restore();
         const pal = FACTIONS[faction].palette;
         const teamColor = FACTIONS[faction].color;
+        // Frame 1 renders slightly brighter glow lights -> blinking animation
+        s.pulse = frame === 1 ? 1.35 : 1;
         const builder = BUILDING_BUILDERS[role];
         if (builder) builder(s, ft, pal, faction, frame, teamColor);
         cache.set(key, s.canvas);

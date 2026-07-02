@@ -154,47 +154,47 @@ const FACTION_KEYS = Object.keys(FACTIONS);
 // ============================================
 const UNIT_TYPES = {
     trooper: {
-        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.018,
+        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.015,
         range: 50, damage: 9, attackSpeed: 600, sight: 120, size: 9,
         category: 'infantry', buildTime: 240
     },
     flamer: {
         // short-ranged but brutal against infantry
-        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.016,
+        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.013,
         range: 32, damage: 26, attackSpeed: 900, sight: 110, size: 10,
         category: 'infantry', versus: 'infantry', splash: 0.8, buildTime: 300
     },
     rocketeer: {
         // slow projectile cadence, long reach, melts armor
-        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.015,
+        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.013,
         range: 85, damage: 34, attackSpeed: 1600, sight: 130, size: 10,
         category: 'infantry', versus: 'armor', buildTime: 330
     },
     bike: {
         // fastest unit in the game: scouting and harassment
-        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.055,
+        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.045,
         range: 45, damage: 9, attackSpeed: 450, sight: 200, size: 11,
         category: 'armor', buildTime: 300
     },
     buggy: {
-        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.038,
+        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.032,
         range: 60, damage: 16, attackSpeed: 650, sight: 150, size: 13,
         category: 'armor', buildTime: 420
     },
     tank: {
-        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.028,
+        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.023,
         range: 85, damage: 42, attackSpeed: 1400, sight: 140, size: 15,
         category: 'armor', buildTime: 600
     },
     heavy: {
         // outranges everything except artillery and heavy towers
-        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.018,
+        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.015,
         range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
         category: 'armor', splash: 0.9, buildTime: 900
     },
     artillery: {
         // siege weapon: huge range, fragile, very slow rate of fire
-        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.015,
+        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.012,
         range: 175, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
         category: 'armor', splash: 1.7, buildTime: 780
     }
@@ -309,3 +309,14 @@ const BUNKER_REWARDS = [
     { kind: 'units', weight: 0.35 },        // stranded reinforcements
     { kind: 'veterancy', weight: 0.25 }     // combat data: nearby units rank up
 ];
+
+// Weapon class per role: drives projectile visuals and firing sounds.
+// mg = ballistic tracer, flame = fire stream, rocket = missile,
+// cannon = shell, arty = arcing siege shell.
+const WEAPON_CLASS = {
+    trooper: 'mg', bike: 'mg', buggy: 'mg', tower: 'mg',
+    flamer: 'flame',
+    rocketeer: 'rocket',
+    tank: 'cannon', heavy: 'cannon', towerHeavy: 'cannon',
+    artillery: 'arty'
+};

@@ -71,6 +71,15 @@ const SoundManager = {
             case 'alert':
                 this._playAlert(vol * 0.7);
                 break;
+            case 'shoot_flame':
+                this._playFlame(vol * 0.5);
+                break;
+            case 'shoot_rocket':
+                this._playRocket(vol * 0.5);
+                break;
+            case 'shoot_zap':
+                this._playZap(vol * 0.45);
+                break;
             case 'ack_move':
                 // soft confirmation blip for movement orders
                 this._tone(520, 0.05, 'sine', vol * 0.22);
@@ -115,6 +124,63 @@ const SoundManager = {
                 [392, 330, 262, 196].forEach((f, i) => this._tone(f, i === 3 ? 0.5 : 0.18, 'sine', vol * 0.35, i * 0.2));
                 break;
         }
+    },
+
+    // Flame thrower: soft filtered-noise whoosh
+    _playFlame(vol) {
+        const ctx = this.ctx;
+        const dur = 0.35;
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.sin((i / data.length) * Math.PI);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(750, ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + dur);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+    },
+
+    // Rocket launch: noise burst + rising whistle
+    _playRocket(vol) {
+        const ctx = this.ctx;
+        this._playExplosion(0.12, vol * 0.5);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(950, ctx.currentTime + 0.22);
+        gain.gain.setValueAtTime(vol * 0.35, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+    },
+
+    // Series 9 energy weapons: descending zap
+    _playZap(vol) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1500, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(210, ctx.currentTime + 0.13);
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.14);
     },
 
     // Single enveloped tone, optionally delayed (building block for jingles)
@@ -1114,10 +1180,12 @@ function drawBuilding(building) {
     const zoom = getZoom();
     const faction = getFaction(building.playerId);
 
-    // Animation frame (derricks pump while they have oil left)
+    // Animation frame: pumping derricks + blinking lights on everything else
     let frame = 0;
-    if (building.type === 'derrick' && !building.isUnderConstruction && building.oilLeft !== 0) {
+    if (!building.isUnderConstruction) {
         frame = Math.floor(game.tick / 40) % 2;
+        // A dried-up derrick stops pumping
+        if (building.type === 'derrick' && building.oilLeft === 0) frame = 0;
     }
 
     const sprite = IsoSprites.buildingSprite(building.type, faction, frame);
@@ -1312,145 +1380,163 @@ function drawUnit(unit) {
 
 function drawProjectile(proj) {
     const screen = worldToScreen(proj.x, proj.y);
+    const zoom = getZoom();
 
-    // Determine colors based on player
-    let projectileColor, trailColor, glowColor;
+    // Faction flavor: Survivors ballistic, Evolved organic, Series 9 energy
+    const faction = proj.faction || 'survivors';
+    const glow = faction === 'series9' ? '#4dffa6' : (faction === 'evolved' ? '#9dff7a' : '#ffcc66');
 
-    if (proj.playerId === 0) {
-        // Player projectiles - Blue theme
-        projectileColor = '#66ccff';
-        trailColor = '#4488ff';
-        glowColor = '#2266ff';
-    } else {
-        // Enemy projectiles - Red/Orange theme
-        projectileColor = '#ffaa44';
-        trailColor = '#ff6622';
-        glowColor = '#ff4400';
-    }
+    switch (proj.weapon) {
 
-    // Check projectile type
-    const isInfantry = proj.sourceType === 'trooper' || proj.sourceType === 'flamer' ||
-                       proj.sourceType === 'rocketeer' || proj.sourceType === 'bike' ||
-                       proj.sourceType === 'tower';
-    const isArtillery = proj.sourceType === 'artillery';
-
-    if (isInfantry) {
-        // Infantry projectiles - small tracer rounds with glow
-        const trailLength = 8;
-
-        // Draw glowing trail
-        const gradient = ctx.createLinearGradient(
-            screen.x, screen.y,
-            screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength
-        );
-        gradient.addColorStop(0, trailColor);
-        gradient.addColorStop(1, 'transparent');
-
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y);
-        ctx.lineTo(screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength);
-        ctx.stroke();
-
-        // Bright head
-        ctx.fillStyle = projectileColor;
-        ctx.shadowColor = projectileColor;
-        ctx.shadowBlur = 4;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-    } else if (isArtillery) {
-        // Artillery projectiles - arcing shells with smoke trail
-        const progress = 1 - (proj.life / 100);
-        const arcHeight = 25;
-        const arcY = -Math.sin(progress * Math.PI) * arcHeight;
-
-        // Draw smoke trail segments
-        for (let i = 5; i >= 0; i--) {
-            const alpha = (5 - i) / 8;
-            const trailX = screen.x - proj.vx * i * 1.5;
-            const trailY = screen.y - proj.vy * i * 1.5 + arcY * (1 - i * 0.1);
-
-            ctx.globalAlpha = alpha * 0.6;
-            ctx.fillStyle = '#888888';
-            ctx.beginPath();
-            ctx.arc(trailX, trailY, 2 + i * 0.3, 0, Math.PI * 2);
-            ctx.fill();
+        case 'flame': {
+            // Flickering flame gout growing along its path
+            const cool = faction === 'series9'; // Weed Killer sprays green chems
+            const colors = cool
+                ? ['#c4ffda', '#7dffb0', '#3fd98a']
+                : ['#ffe9b0', '#ffaa33', '#ff6611'];
+            for (let i = 0; i < 3; i++) {
+                const jx = (Math.random() - 0.5) * 6 * zoom;
+                const jy = (Math.random() - 0.5) * 4 * zoom;
+                ctx.globalAlpha = 0.75 - i * 0.2;
+                ctx.fillStyle = colors[i];
+                ctx.beginPath();
+                ctx.arc(screen.x + jx - proj.vx * i * 8, screen.y + jy - proj.vy * i * 8,
+                    (4.5 - i) * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            break;
         }
-        ctx.globalAlpha = 1;
 
-        // Draw projectile with intense glow
-        ctx.fillStyle = projectileColor;
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y + arcY, 3, 0, Math.PI * 2);
-        ctx.fill();
+        case 'rocket': {
+            // Missile: dark body, bright exhaust, trailing smoke puffs
+            const ang = Math.atan2(proj.vy, proj.vx);
+            for (let i = 1; i <= 3; i++) {
+                ctx.globalAlpha = 0.35 - i * 0.09;
+                ctx.fillStyle = '#999999';
+                ctx.beginPath();
+                ctx.arc(screen.x - proj.vx * i * 22, screen.y - proj.vy * i * 22,
+                    (2 + i) * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = faction === 'evolved' ? '#c9b896' : '#556';
+            ctx.lineWidth = 3.5 * zoom;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(screen.x, screen.y);
+            ctx.lineTo(screen.x - Math.cos(ang) * 8 * zoom, screen.y - Math.sin(ang) * 8 * zoom);
+            ctx.stroke();
+            ctx.fillStyle = glow;
+            ctx.shadowColor = glow;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(screen.x - Math.cos(ang) * 9 * zoom, screen.y - Math.sin(ang) * 9 * zoom,
+                2.2 * zoom, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            break;
+        }
 
-        // Inner bright core
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y + arcY, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        case 'cannon': {
+            if (faction === 'series9') {
+                // Plasma lance: long glowing bolt
+                const trail = 16;
+                const grad = ctx.createLinearGradient(
+                    screen.x, screen.y,
+                    screen.x - proj.vx * trail, screen.y - proj.vy * trail);
+                grad.addColorStop(0, '#eafff4');
+                grad.addColorStop(0.4, glow);
+                grad.addColorStop(1, 'transparent');
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 3.5 * zoom;
+                ctx.lineCap = 'round';
+                ctx.shadowColor = glow;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.moveTo(screen.x, screen.y);
+                ctx.lineTo(screen.x - proj.vx * trail, screen.y - proj.vy * trail);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            } else {
+                // Solid shell with a short motion blur
+                ctx.strokeStyle = 'rgba(70,70,60,0.5)';
+                ctx.lineWidth = 3 * zoom;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(screen.x, screen.y);
+                ctx.lineTo(screen.x - proj.vx * 10, screen.y - proj.vy * 10);
+                ctx.stroke();
+                ctx.fillStyle = faction === 'evolved' ? '#d8cfae' : '#c8c8b8';
+                ctx.beginPath();
+                ctx.arc(screen.x, screen.y, 2.6 * zoom, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screen.x - 0.8, screen.y - 0.8, 1 * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            break;
+        }
 
-    } else {
-        // Tank/Building projectiles - energy bolts with long glowing trails
-        const trailLength = 12;
+        case 'arty': {
+            // Arcing siege shell with smoke trail
+            const progress = 1 - (proj.life / 100);
+            const arcY = -Math.sin(Math.min(1, progress * 2.5) * Math.PI) * 28 * zoom;
 
-        // Outer glow trail
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 8;
+            for (let i = 5; i >= 0; i--) {
+                ctx.globalAlpha = (5 - i) / 10;
+                ctx.fillStyle = faction === 'evolved' ? '#8a9a6a' : '#888888';
+                ctx.beginPath();
+                ctx.arc(screen.x - proj.vx * i * 14, screen.y - proj.vy * i * 14 + arcY,
+                    (2 + i * 0.4) * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
 
-        const gradient = ctx.createLinearGradient(
-            screen.x, screen.y,
-            screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength
-        );
-        gradient.addColorStop(0, trailColor);
-        gradient.addColorStop(0.5, glowColor + '88');
-        gradient.addColorStop(1, 'transparent');
+            const shellCol = faction === 'series9' ? glow : (faction === 'evolved' ? '#b8e070' : '#ffaa44');
+            ctx.fillStyle = shellCol;
+            ctx.shadowColor = shellCol;
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y + arcY, 3.4 * zoom, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y + arcY, 1.5 * zoom, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            break;
+        }
 
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y);
-        ctx.lineTo(screen.x - proj.vx * trailLength, screen.y - proj.vy * trailLength);
-        ctx.stroke();
-
-        // Inner bright trail
-        const innerGradient = ctx.createLinearGradient(
-            screen.x, screen.y,
-            screen.x - proj.vx * trailLength * 0.6, screen.y - proj.vy * trailLength * 0.6
-        );
-        innerGradient.addColorStop(0, projectileColor);
-        innerGradient.addColorStop(1, 'transparent');
-
-        ctx.strokeStyle = innerGradient;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y);
-        ctx.lineTo(screen.x - proj.vx * trailLength * 0.6, screen.y - proj.vy * trailLength * 0.6);
-        ctx.stroke();
-
-        // Projectile head with glow
-        ctx.fillStyle = projectileColor;
-        ctx.shadowColor = projectileColor;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // White hot center
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        default: {
+            // mg: tracer round; needles for Evolved, energy dash for Series 9
+            const trail = 8;
+            let color;
+            if (faction === 'series9') {
+                color = glow;
+                ctx.shadowColor = glow;
+                ctx.shadowBlur = 6;
+            } else if (faction === 'evolved') {
+                color = '#e8dfc0'; // bone needle
+            } else {
+                color = '#ffe9a0'; // brass tracer
+            }
+            const grad = ctx.createLinearGradient(
+                screen.x, screen.y,
+                screen.x - proj.vx * trail, screen.y - proj.vy * trail);
+            grad.addColorStop(0, color);
+            grad.addColorStop(1, 'transparent');
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = (faction === 'evolved' ? 2.4 : 1.8) * zoom;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(screen.x, screen.y);
+            ctx.lineTo(screen.x - proj.vx * trail, screen.y - proj.vy * trail);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            break;
+        }
     }
 }
 
@@ -3187,13 +3273,39 @@ function fireProjectile(source, target, customDamage) {
     // Prevent division by zero if source and target are at the same position
     if (dist === 0) return;
 
-    // Play shooting sound based on unit role
-    if (source.type === 'artillery' || source.type === 'towerHeavy') {
+    // Weapon class + faction drive the shot's look and sound
+    const weapon = WEAPON_CLASS[source.type] || 'mg';
+    const faction = getFaction(source.playerId);
+
+    if (weapon === 'arty') {
         SoundManager.play('shoot_artillery');
-    } else if (source.type === 'heavy' || source.type === 'tank') {
-        SoundManager.play('shoot_heavy');
+    } else if (weapon === 'cannon') {
+        SoundManager.play(faction === 'series9' ? 'shoot_zap' : 'shoot_heavy');
+    } else if (weapon === 'rocket') {
+        SoundManager.play('shoot_rocket');
+    } else if (weapon === 'flame') {
+        SoundManager.play('shoot_flame');
     } else {
-        SoundManager.play('shoot_light');
+        SoundManager.play(faction === 'series9' ? 'shoot_zap' : 'shoot_light');
+    }
+
+    // Muzzle flash for the big guns
+    if (weapon === 'cannon' || weapon === 'arty') {
+        const mAng = Math.atan2(dy, dx);
+        for (let i = 0; i < 4; i++) {
+            game.particles.push({
+                x: source.x + Math.cos(mAng) * 0.5,
+                y: source.y + Math.sin(mAng) * 0.5,
+                z: 8,
+                vx: Math.cos(mAng + (Math.random() - 0.5) * 0.7) * 0.35,
+                vy: Math.sin(mAng + (Math.random() - 0.5) * 0.7) * 0.35,
+                vz: 0.12,
+                color: i === 0 ? '#ffffff' : '#ffbb44',
+                size: 3 - i * 0.5,
+                life: 0.28,
+                type: 'flash'
+            });
+        }
     }
 
     // Check if path is blocked by hills
@@ -3230,6 +3342,8 @@ function fireProjectile(source, target, customDamage) {
         damage,
         versus: type.versus || null,
         splash: type.splash || 0,
+        weapon: weapon,
+        faction: faction,
         life: 100,
         blockadeIndex: blockadeIndex,
         willHit: willHit,

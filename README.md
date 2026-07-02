@@ -55,6 +55,15 @@ Three mirrored sides, KKnD-style — same roles, different flavor:
   locked buttons, on-screen banners with minimap pings, and one-time
   onboarding tips for the oil economy and tech bunkers.
 
+## Weapons
+
+Every weapon class has its own projectile look and firing sound: MG
+tracers, flame gouts, rockets with smoke trails, cannon shells with
+muzzle flash, and arcing artillery shells - with faction flavor on top
+(Survivors ballistic brass, Evolved bone needles and acid-green fire,
+Series 9 glowing energy lances and zap sounds). Defense towers use the
+same system.
+
 ## Tech tree
 
 Power Station → Derrick / Barracks → Machine Shop → Research Lab.
