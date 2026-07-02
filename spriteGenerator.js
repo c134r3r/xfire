@@ -547,11 +547,11 @@ const IsoSprites = (() => {
     // ============================================
 
     function basePlate(s, ft, pal, faction) {
-        const a = ft * 30; // slightly inside the exact tile diamond
+        const a = ft * 21; // small apron that hugs the structure, well inside the footprint
         s.poly([[a, a, 0], [a, -a, 0], [-a, -a, 0], [-a, a, 0]], pal.base, tint(pal.baseDark, -15));
         // bevel on the south-facing edges
-        s.poly([[a, -a, 0], [a, a, 0], [a + 3, a + 3, -2], [a + 3, -a - 3, -2]], tint(pal.baseDark, -8));
-        s.poly([[-a, a, 0], [a, a, 0], [a + 3, a + 3, -2], [-a - 3, a + 3, -2]], tint(pal.baseDark, -18));
+        s.poly([[a, -a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [a + 2, -a - 2, -1.5]], tint(pal.baseDark, -8));
+        s.poly([[-a, a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [-a - 2, a + 2, -1.5]], tint(pal.baseDark, -18));
         if (faction === 'evolved') {
             // organic splatter
             for (let i = 0; i < 5; i++) {
@@ -968,8 +968,8 @@ const IsoSprites = (() => {
         const s = new Surface(w, h, w / 2, h - ft * 16 - 14);
         // baked drop shadow toward the south-east
         s.ctx.save();
-        s.ctx.translate(6, 4);
-        s.disc(0, 0, ft * 26, 'rgba(0,0,0,0.28)');
+        s.ctx.translate(4, 3);
+        s.disc(0, 0, ft * 17, 'rgba(0,0,0,0.28)');
         s.ctx.restore();
         const pal = FACTIONS[faction].palette;
         const teamColor = FACTIONS[faction].color;

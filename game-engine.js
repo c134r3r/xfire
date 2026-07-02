@@ -2161,10 +2161,8 @@ function findFreeOilPatch(nearX, nearY, maxDist = 30) {
         for (let x = 0; x < mapSize; x++) {
             const tile = game.map[y]?.[x];
             if (!tile || !tile.oil || (tile.oilAmount !== undefined && tile.oilAmount <= 0)) continue;
-            // already taken by a derrick?
-            const taken = game.buildings.some(b => b.type === 'derrick' &&
-                Math.abs(b.x - x) < 2 && Math.abs(b.y - y) < 2);
-            if (taken) continue;
+            // must satisfy normal placement rules (no overlaps)
+            if (!canBuildAt('derrick', x, y)) continue;
             const dist = Math.hypot(x - nearX, y - nearY);
             if (dist < bestDist && dist <= maxDist) {
                 bestDist = dist;
@@ -2198,7 +2196,7 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
         if (type.needsOil) {
             pos = findFreeOilPatch(near.x, near.y, 35);
         } else {
-            pos = findBuildPosition(near.x, near.y, 1);
+            pos = findBuildPosition(near.x, near.y, role);
         }
         if (!pos) return false;
         createBuilding(role, 1, pos.x, pos.y, true);
@@ -3042,21 +3040,13 @@ function drawDamageNumbers() {
     ctx.globalAlpha = 1;
 }
 
-function findBuildPosition(nearX, nearY, playerId) {
-    // Search up to 6 tiles away from the base
-    for (let r = 1; r <= 6; r++) {
-        for (let angle = 0; angle < Math.PI * 2; angle += 0.5) {
+function findBuildPosition(nearX, nearY, role) {
+    // Search outward from the base, using the same placement rules as the player
+    for (let r = 2; r <= 10; r++) {
+        for (let angle = 0; angle < Math.PI * 2; angle += 0.4) {
             const x = Math.floor(nearX + Math.cos(angle) * r);
             const y = Math.floor(nearY + Math.sin(angle) * r);
-
-            if (x < 0 || x >= getMapSize() || y < 0 || y >= getMapSize()) continue;
-            if (game.map[y][x].type === 'water' || game.map[y][x].type === 'rock' || game.map[y][x].type === 'hill') continue;
-
-            const blocked = game.buildings.some(b => {
-                return Math.abs(b.x - x) < 2 && Math.abs(b.y - y) < 2;
-            });
-
-            if (!blocked) return { x, y };
+            if (canBuildAt(role, x, y)) return { x, y };
         }
     }
     return null;
