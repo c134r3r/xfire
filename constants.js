@@ -162,7 +162,7 @@ const UNIT_TYPES = {
         // short-ranged but brutal against infantry
         name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.016,
         range: 32, damage: 26, attackSpeed: 900, sight: 110, size: 10,
-        category: 'infantry', versus: 'infantry', buildTime: 300
+        category: 'infantry', versus: 'infantry', splash: 0.8, buildTime: 300
     },
     rocketeer: {
         // slow projectile cadence, long reach, melts armor
@@ -190,13 +190,13 @@ const UNIT_TYPES = {
         // outranges everything except artillery and heavy towers
         name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.018,
         range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
-        category: 'armor', buildTime: 900
+        category: 'armor', splash: 0.9, buildTime: 900
     },
     artillery: {
         // siege weapon: huge range, fragile, very slow rate of fire
         name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.015,
         range: 175, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
-        category: 'armor', buildTime: 780
+        category: 'armor', splash: 1.7, buildTime: 780
     }
 };
 
@@ -245,7 +245,7 @@ const BUILDING_TYPES = {
     towerHeavy: {
         // anti-armor cannon, outranges battle tanks
         name: 'Heavy Tower', tech: 2, cost: 680, hp: 520, size: 1, sight: 230,
-        produces: [], range: 160, damage: 48, attackSpeed: 1400, versus: 'armor'
+        produces: [], range: 160, damage: 48, attackSpeed: 1400, versus: 'armor', splash: 1.0
     }
 };
 
@@ -298,3 +298,14 @@ function veterancyRank(kills) {
     }
     return rank;
 }
+
+// ============================================
+// TECH BUNKERS (KKnD signature): neutral bunkers
+// scattered across the wasteland. First side to
+// reach one claims a random reward.
+// ============================================
+const BUNKER_REWARDS = [
+    { kind: 'oil', weight: 0.40 },          // salvaged oil cache
+    { kind: 'units', weight: 0.35 },        // stranded reinforcements
+    { kind: 'veterancy', weight: 0.25 }     // combat data: nearby units rank up
+];

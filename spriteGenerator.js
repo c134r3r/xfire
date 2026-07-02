@@ -906,6 +906,32 @@ const IsoSprites = (() => {
             }
         },
 
+        // Neutral tech bunker (not faction-owned): frame 0 = sealed, 1 = looted
+        bunker(s, ft, pal, faction, frame, teamColor) {
+            const con = '#8a8578', conDark = '#5f5b50';
+            const a = ft * 21;
+            s.poly([[a, a, 0], [a, -a, 0], [-a, -a, 0], [-a, a, 0]], con, tint(conDark, -15));
+            // half-buried concrete dome
+            s.blob(0, -2, 0, a * 0.55, 22, tint(con, -4), { edge: true });
+            // reinforced entrance facing the camera
+            s.poly([[4, a * 0.5, 0], [18, a * 0.5, 0], [18, a * 0.5, 11], [4, a * 0.5, 11]], frame === 0 ? '#2c2a24' : '#0e0d0a');
+            s.rod(3, a * 0.52, 11.5, 19, a * 0.52, 11.5, 2.2, conDark);
+            // sandbag ring remnants
+            for (let i = 0; i < 5; i++) {
+                const ang = 0.6 + i * 1.1;
+                s.disc(Math.cos(ang) * a * 0.75, Math.sin(ang) * a * 0.75, 0.5, 3, tint(con, -14));
+            }
+            if (frame === 0) {
+                // sealed: antenna with a beckoning beacon
+                s.rod(-6, -8, 20, -6, -8, 36, 1.6, conDark);
+                s.glowDot(-6, -8, 37, 2.4, '#66e0ff');
+                s.glowDot(9, a * 0.45, 6, 1.2, '#66e0ff');
+            } else {
+                // looted: broken antenna, dark and abandoned
+                s.rod(-6, -8, 20, -1, -4, 26, 1.6, conDark);
+            }
+        },
+
         towerHeavy(s, ft, pal, faction, frame, teamColor) {
             basePlate(s, ft, pal, faction);
             const a = ft * 30;

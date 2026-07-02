@@ -37,6 +37,20 @@ Three mirrored sides, KKnD-style — same roles, different flavor:
    Each derrick pumps funds directly into your treasury until its patch
    runs dry — keep expanding to new fields.
 
+## Map events
+
+- **Tech bunkers** (KKnD-style): neutral bunkers glow across the wasteland.
+  The first side to reach one claims a random reward — an oil cache,
+  stranded reinforcement units, or combat data that promotes nearby units.
+  The AI races you for them.
+- **Scavengers**: mutant raider packs periodically emerge from the map
+  edges and attack whoever is in their way.
+- **Attack warnings**: incoming enemy waves and raids are announced with
+  a banner; hits on your base ping the minimap (press **Space** to jump there).
+- Artillery, heavy assaults, flamers and heavy towers deal **splash
+  damage** — spread your troops. Rank-3 veterans slowly self-repair,
+  and burning buildings smoke when heavily damaged.
+
 ## Tech tree
 
 Power Station → Derrick / Barracks → Machine Shop → Research Lab.

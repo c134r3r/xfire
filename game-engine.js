@@ -307,6 +307,14 @@ const game = {
             oil: 3000,
             techLevel: 1,
             team: 'enemy'
+        },
+        {
+            id: 2,
+            color: '#cfae3a',
+            faction: 'evolved',
+            oil: 0,
+            techLevel: 1,
+            team: 'neutral'
         }
     ],
     units: [],
@@ -617,9 +625,20 @@ function render() {
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
+    // Screen shake: nudge the camera for this frame only
+    let shakeX = 0, shakeY = 0;
+    if (game.shake > 0.3 && game.status === 'PLAYING') {
+        shakeX = (Math.random() - 0.5) * game.shake;
+        shakeY = (Math.random() - 0.5) * game.shake;
+        game.camera.x += shakeX;
+        game.camera.y += shakeY;
+    }
+    game.shake = (game.shake || 0) * 0.88;
+
     // Terrain (cached) + animated oil patches
     drawTerrain();
     drawOilAnimations();
+    drawBunkers();
 
     // Draw buildings and units together, sorted by isometric depth (x + y)
     const entities = [...game.buildings, ...game.units].sort((a, b) => (a.x + a.y) - (b.x + b.y));
@@ -673,8 +692,67 @@ function render() {
         drawBuildingPreview(game.placingBuilding, tx, ty, isValid);
     }
 
+    // Event banner (attack waves, bunker rewards, scavengers)
+    drawBanner();
+
+    // Undo the shake offset
+    game.camera.x -= shakeX;
+    game.camera.y -= shakeY;
+
     // Draw minimap
     renderMinimap();
+}
+
+function setBanner(text, seconds = 4, color = '#ffcc44') {
+    game.banner = { text, color, until: Date.now() + seconds * 1000 };
+}
+
+function drawBanner() {
+    if (!game.banner || Date.now() > game.banner.until) return;
+    const left = game.banner.until - Date.now();
+    const alpha = Math.min(1, left / 800);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 16px Rajdhani, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(game.banner.text).width + 40;
+    const cx = canvas.offsetWidth / 2;
+    ctx.fillStyle = 'rgba(10,10,18,0.75)';
+    ctx.fillRect(cx - w / 2, 14, w, 30);
+    ctx.strokeStyle = game.banner.color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - w / 2, 14, w, 30);
+    ctx.fillStyle = game.banner.color;
+    ctx.fillText(game.banner.text, cx, 29);
+    ctx.restore();
+}
+
+// Neutral tech bunkers (drawn between terrain and entities)
+function drawBunkers() {
+    if (!game.bunkers) return;
+    const zoom = getZoom();
+    for (const b of game.bunkers) {
+        const screen = worldToScreen(b.x, b.y);
+        if (screen.x < -120 || screen.x > canvas.offsetWidth + 120 ||
+            screen.y < -140 || screen.y > canvas.offsetHeight + 80) continue;
+        const sprite = IsoSprites.buildingSprite('bunker', 'survivors', b.claimed ? 1 : 0);
+        const bscale = zoom * 0.65;
+        ctx.drawImage(sprite,
+            screen.x - sprite.anchorX * bscale,
+            screen.y - sprite.anchorY * bscale,
+            sprite.width * bscale,
+            sprite.height * bscale);
+        // Beckoning pulse while unclaimed
+        if (!b.claimed) {
+            const pulse = (Date.now() / 1200 + b.x) % 1;
+            ctx.strokeStyle = `rgba(102,224,255,${0.7 * (1 - pulse)})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(screen.x, screen.y, (8 + pulse * 22) * zoom, (4 + pulse * 11) * zoom, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
 }
 
 // Pulsing rings confirming move (green) and attack (red) orders
@@ -1421,6 +1499,15 @@ function renderMinimap() {
         minimapCtx.fillRect(u.x * scale - 1, u.y * scale - 1, 2, 2);
     }
 
+    // Unclaimed tech bunkers
+    if (game.bunkers) {
+        for (const b of game.bunkers) {
+            if (b.claimed) continue;
+            minimapCtx.fillStyle = '#66e0ff';
+            minimapCtx.fillRect(b.x * scale - 2, b.y * scale - 2, 4, 4);
+        }
+    }
+
     // Under-attack ping (pulsing ring, 4 seconds)
     if (game.lastAttackAlert && Date.now() - game.lastAttackAlert.time < 4000) {
         const age = (Date.now() - game.lastAttackAlert.time) / 1000;
@@ -1459,6 +1546,8 @@ function update(dt) {
     updateDamageNumbers(dt);
     updateAI();
     updateResources();
+    updateBunkers();
+    updateScavengers();
     updateUI();
 
     // Fade out order feedback markers
@@ -1817,6 +1906,11 @@ function updateUnits(dt) {
             unit.y = validPos.y + 0.5;
         }
 
+        // Elite veterans (rank 3) slowly patch themselves up
+        if (veterancyRank(unit.kills) >= 3 && unit.hp < type.hp && game.tick % 60 === 0) {
+            unit.hp = Math.min(type.hp, unit.hp + 3);
+        }
+
         // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
         if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0) {
             const sightRange = sightT(type);
@@ -1921,6 +2015,23 @@ function updateBuildings(dt) {
                     building.lastAttack = game.tick;
                 }
             }
+        }
+
+        // Heavily damaged buildings burn
+        if (!building.isUnderConstruction && building.hp < type.hp * 0.4 && Math.random() < 0.12) {
+            const fire = Math.random() < 0.4;
+            game.particles.push({
+                x: building.x + (Math.random() - 0.5) * type.size * 0.7,
+                y: building.y + (Math.random() - 0.5) * type.size * 0.7,
+                z: 8 + Math.random() * 10,
+                vx: (Math.random() - 0.5) * 0.05,
+                vy: (Math.random() - 0.5) * 0.05,
+                vz: 0.18 + Math.random() * 0.12,
+                color: fire ? '#ff7722' : '#3d3d3d',
+                size: fire ? 3 : 5 + Math.random() * 4,
+                life: fire ? 0.6 : 1.2,
+                type: fire ? 'explosion' : 'smoke'
+            });
         }
 
         // Tech research (Research Lab)
@@ -2066,6 +2177,25 @@ function updateProjectiles(dt) {
                         game.units.includes(proj.source)) {
                         proj.source.kills = (proj.source.kills || 0) + 1;
                     }
+                    // Area damage: hurt everything hostile around the impact
+                    if (proj.splash > 0) {
+                        const victims = [...game.units, ...game.buildings];
+                        for (const v of victims) {
+                            if (v === proj.target || v.playerId === proj.playerId || v.hp <= 0) continue;
+                            const sdist = Math.hypot(v.x - proj.x, v.y - proj.y);
+                            if (sdist <= proj.splash) {
+                                const sdmg = Math.round(finalDamage * 0.5 * (1 - sdist / (proj.splash * 2)));
+                                if (sdmg > 0) {
+                                    v.hp -= sdmg;
+                                    if (v.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
+                                        game.units.includes(proj.source)) {
+                                        proj.source.kills = (proj.source.kills || 0) + 1;
+                                    }
+                                }
+                            }
+                        }
+                        createExplosion(proj.x, proj.y, false);
+                    }
                     // Create impact effect on hit
                     createImpact(proj.x, proj.y);
                     // Show damage number (critical if versus bonus was applied)
@@ -2147,9 +2277,11 @@ function updateAI() {
 
     executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuildings);
 
-    // Small oil drip based on difficulty (keeps the AI in the game)
+    // Small oil drip based on difficulty, slowly escalating so
+    // long games build toward bigger late-game clashes
     const difficultyOilBonus = { easy: 4, normal: 10, hard: 20 };
-    ai.oil += difficultyOilBonus[gameSettings.difficulty] || 10;
+    const escalation = 1 + Math.min(1.2, (game.tick / 60) / 700);
+    ai.oil += (difficultyOilBonus[gameSettings.difficulty] || 10) * escalation;
 }
 
 // Find a free oil patch near a position (for AI derrick placement)
@@ -2264,11 +2396,27 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
         else queueUnit(f, 'bike');
     }
 
+    // ---- BUNKER HUNTING: send a fast unit to grab free tech bunkers ----
+    const openBunker = (game.bunkers || []).find(b => !b.claimed);
+    if (openBunker) {
+        const runner = aiUnits.find(u => (u.type === 'bike' || u.type === 'buggy') &&
+            !u.attackTarget && u.targetX === undefined);
+        if (runner) {
+            runner.targetX = openBunker.x;
+            runner.targetY = openBunker.y;
+        }
+    }
+
     // ---- ATTACK WAVES ----
     const combatUnits = aiUnits;
     const attackThreshold = { easy: 16, normal: 12, hard: 8 }[gameSettings.difficulty] || 12;
     const gameTime = game.tick / 60;
     if (combatUnits.length >= attackThreshold || (gameTime > 480 && combatUnits.length >= 5)) {
+        // Warn the player when a fresh wave rolls out (throttled)
+        if (!game._lastWaveBanner || Date.now() - game._lastWaveBanner > 45000) {
+            game._lastWaveBanner = Date.now();
+            setBanner('WARNING: Enemy attack wave incoming!', 4, '#ff5533');
+        }
         attackPlayerBase(playerBuildings, playerUnits, aiUnits);
     }
 }
@@ -2322,6 +2470,123 @@ function attackPlayerBase(playerBuildings, playerUnits, aiUnits) {
             }
         }
     }
+}
+
+// ============================================
+// TECH BUNKERS & SCAVENGERS (map events)
+// ============================================
+
+function placeBunkers() {
+    game.bunkers = [];
+    const mapSize = getMapSize();
+    const count = 3 + Math.floor(mapSize / 32);
+    let attempts = 0;
+    while (game.bunkers.length < count && attempts < 400) {
+        attempts++;
+        const x = 8 + Math.floor(Math.random() * (mapSize - 16));
+        const y = 8 + Math.floor(Math.random() * (mapSize - 16));
+        const tile = game.map[y]?.[x];
+        if (!tile || tile.type !== 'grass' || tile.oil) continue;
+        // keep away from both HQs and other bunkers
+        const nearBase = game.buildings.some(b => b.type === 'hq' && Math.hypot(b.x - x, b.y - y) < 14);
+        const nearBunker = game.bunkers.some(b => Math.hypot(b.x - x, b.y - y) < 10);
+        if (nearBase || nearBunker) continue;
+        game.bunkers.push({ x: x + 0.5, y: y + 0.5, claimed: false });
+    }
+}
+
+function updateBunkers() {
+    if (!game.bunkers || game.tick % 12 !== 0) return;
+    for (const bunker of game.bunkers) {
+        if (bunker.claimed) continue;
+        // First combat unit to reach the bunker claims it (scavengers can't)
+        const claimer = game.units.find(u => u.playerId !== 2 &&
+            Math.hypot(u.x - bunker.x, u.y - bunker.y) < 2);
+        if (!claimer) continue;
+
+        bunker.claimed = true;
+        const player = game.players[claimer.playerId];
+        const roll = Math.random();
+        let rewardText = '';
+
+        if (roll < 0.4) {
+            const amount = 600 + Math.floor(Math.random() * 400);
+            player.oil = Math.min(50000, player.oil + amount);
+            rewardText = `Bunker secured: +${amount} oil salvaged`;
+        } else if (roll < 0.75) {
+            const pool = ['trooper', 'trooper', 'buggy', 'tank'];
+            const n = 2 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < n; i++) {
+                const role = pool[Math.floor(Math.random() * pool.length)];
+                const pos = findValidSpawnPosition(Math.floor(bunker.x) + (i % 2) * 2 - 1, Math.floor(bunker.y) + 2, 5);
+                spawnUnit(role, claimer.playerId, pos.x + 0.5, pos.y + 0.5);
+            }
+            rewardText = `Bunker secured: ${n} stranded units join you`;
+        } else {
+            let boosted = 0;
+            for (const u of game.units) {
+                if (u.playerId !== claimer.playerId) continue;
+                if (Math.hypot(u.x - bunker.x, u.y - bunker.y) < 7) {
+                    u.kills = (u.kills || 0) + VETERANCY_KILLS[0];
+                    boosted++;
+                }
+            }
+            rewardText = `Bunker secured: combat data hardens ${boosted} nearby unit${boosted === 1 ? '' : 's'}`;
+        }
+
+        // Celebration effects
+        for (let i = 0; i < 14; i++) {
+            const ang = (i / 14) * Math.PI * 2;
+            game.particles.push({
+                x: bunker.x, y: bunker.y, z: 2,
+                vx: Math.cos(ang) * 0.25, vy: Math.sin(ang) * 0.25, vz: 0.35,
+                color: '#66e0ff', size: 2.5, life: 0.9, type: 'spark'
+            });
+        }
+        if (claimer.playerId === 0) {
+            setBanner(rewardText, 5, '#66e0ff');
+            SoundManager.play('ui_build');
+        } else {
+            setBanner('The enemy secured a tech bunker!', 4, '#ff7755');
+        }
+    }
+}
+
+// Roaming scavenger packs keep the wasteland dangerous
+function updateScavengers() {
+    if (game.tick < 5400) return;          // 90s grace period
+    if (game.tick % 120 !== 0) return;
+    const neutrals = game.units.filter(u => u.playerId === 2);
+    if (neutrals.length > 5) return;
+    const chance = { easy: 0.012, normal: 0.022, hard: 0.034 }[gameSettings.difficulty] || 0.022;
+    if (Math.random() > chance) return;
+
+    const mapSize = getMapSize();
+    // spawn at a random map edge
+    const edge = Math.floor(Math.random() * 4);
+    let sx = 2 + Math.floor(Math.random() * (mapSize - 4));
+    let sy = 2 + Math.floor(Math.random() * (mapSize - 4));
+    if (edge === 0) sy = 2; else if (edge === 1) sy = mapSize - 3;
+    else if (edge === 2) sx = 2; else sx = mapSize - 3;
+    const start = findValidSpawnPosition(sx, sy, 6);
+
+    // raid target: a random building of either side
+    const targets = game.buildings.filter(b => b.playerId !== 2);
+    if (targets.length === 0) return;
+    const target = targets[Math.floor(Math.random() * targets.length)];
+
+    const pack = ['bike', 'trooper', 'trooper', 'buggy'];
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+        const role = pack[Math.floor(Math.random() * pack.length)];
+        const u = spawnUnit(role, 2, start.x + 0.5 + (i % 3), start.y + 0.5 + Math.floor(i / 3));
+        if (u) {
+            u.targetX = target.x + (Math.random() - 0.5) * 4;
+            u.targetY = target.y + (Math.random() - 0.5) * 4;
+            u.attackMove = true;
+        }
+    }
+    setBanner('Scavengers spotted in the wasteland!', 4, '#cfae3a');
 }
 
 function updateResources() {
@@ -2731,6 +2996,12 @@ function canBuildAt(buildingType, x, y) {
         }
     }
 
+    // Keep clear of tech bunkers
+    if (game.bunkers && game.bunkers.some(b =>
+        Math.abs(x - b.x) < type.size / 2 + 1.5 && Math.abs(y - b.y) < type.size / 2 + 1.5)) {
+        return false;
+    }
+
     // Building collision: footprints may sit adjacent but not overlap
     for (const building of game.buildings) {
         const otherType = BUILDING_TYPES[building.type];
@@ -2818,6 +3089,7 @@ function fireProjectile(source, target, customDamage) {
         target,
         damage,
         versus: type.versus || null,
+        splash: type.splash || 0,
         life: 100,
         blockadeIndex: blockadeIndex,
         willHit: willHit,
@@ -2848,6 +3120,14 @@ function checkLineOfSight(x1, y1, x2, y2) {
 }
 
 function createExplosion(x, y, big = false) {
+    // Screen shake when the blast is on screen
+    if (canvas) {
+        const s = worldToScreen(x, y);
+        if (s.x > -60 && s.x < canvas.offsetWidth + 60 && s.y > -60 && s.y < canvas.offsetHeight + 60) {
+            game.shake = Math.min(9, (game.shake || 0) + (big ? 5 : 1.2));
+        }
+    }
+
     // Multi-layered explosion with fire, sparks, smoke, and debris
 
     // Layer 1: Central flash (white-hot core)
@@ -3861,6 +4141,9 @@ function resetGame() {
     game.attackMoveMode = false;
     game.orderMarkers = [];
     game.lastAttackAlert = null;
+    game.bunkers = [];
+    game.banner = null;
+    game.shake = 0;
     terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
 
@@ -4084,6 +4367,9 @@ function initGame() {
     placeOilField(enemyBaseX - 7, enemyBaseY + 2, 2);
     placeOilField(enemyBaseX + 3, enemyBaseY - 7, 2);
     placeOilField(enemyBaseX - 9, enemyBaseY - 6, 1);
+
+    // Scatter neutral tech bunkers across the wasteland
+    placeBunkers();
 
     // Map is final now - render the static terrain cache
     buildTerrainCache();
