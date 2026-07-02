@@ -71,7 +71,67 @@ const SoundManager = {
             case 'alert':
                 this._playAlert(vol * 0.7);
                 break;
+            case 'ack_move':
+                // soft confirmation blip for movement orders
+                this._tone(520, 0.05, 'sine', vol * 0.22);
+                this._tone(700, 0.06, 'sine', vol * 0.18, 0.05);
+                break;
+            case 'ack_attack':
+                // aggressive double blip for attack orders
+                this._tone(300, 0.06, 'square', vol * 0.22);
+                this._tone(240, 0.08, 'square', vol * 0.22, 0.06);
+                break;
+            case 'unit_ready':
+                this._tone(620, 0.07, 'sine', vol * 0.3);
+                this._tone(930, 0.11, 'sine', vol * 0.26, 0.08);
+                break;
+            case 'construction_complete':
+                this._tone(440, 0.09, 'sine', vol * 0.32);
+                this._tone(660, 0.13, 'sine', vol * 0.28, 0.1);
+                break;
+            case 'research_complete':
+                this._tone(523, 0.1, 'sine', vol * 0.3);
+                this._tone(659, 0.1, 'sine', vol * 0.3, 0.11);
+                this._tone(784, 0.16, 'sine', vol * 0.32, 0.22);
+                break;
+            case 'bonus':
+                // treasure jingle for bunker rewards
+                this._tone(587, 0.08, 'sine', vol * 0.3);
+                this._tone(740, 0.08, 'sine', vol * 0.3, 0.09);
+                this._tone(880, 0.08, 'sine', vol * 0.3, 0.18);
+                this._tone(1175, 0.18, 'sine', vol * 0.32, 0.27);
+                break;
+            case 'denied':
+                this._tone(170, 0.13, 'sawtooth', vol * 0.28);
+                break;
+            case 'warn':
+                this._tone(220, 0.11, 'square', vol * 0.32);
+                this._tone(185, 0.13, 'square', vol * 0.28, 0.12);
+                break;
+            case 'victory':
+                [523, 659, 784, 1047].forEach((f, i) => this._tone(f, i === 3 ? 0.4 : 0.14, 'sine', vol * 0.35, i * 0.15));
+                break;
+            case 'defeat':
+                [392, 330, 262, 196].forEach((f, i) => this._tone(f, i === 3 ? 0.5 : 0.18, 'sine', vol * 0.35, i * 0.2));
+                break;
         }
+    },
+
+    // Single enveloped tone, optionally delayed (building block for jingles)
+    _tone(freq, duration, type, vol, delay = 0) {
+        const ctx = this.ctx;
+        const t = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + duration + 0.02);
     },
 
     _playAlert(vol) {
@@ -695,12 +755,39 @@ function render() {
     // Event banner (attack waves, bunker rewards, scavengers)
     drawBanner();
 
+    // Attack-move mode: persistent status hint above the footer
+    if (game.attackMoveMode) {
+        ctx.save();
+        ctx.font = 'bold 13px Rajdhani, Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const text = 'ATTACK-MOVE: left-click a target area  (Esc / right-click cancels)';
+        const w = ctx.measureText(text).width + 30;
+        const cx = canvas.offsetWidth / 2;
+        const cy = canvas.offsetHeight - 26;
+        ctx.fillStyle = 'rgba(60,12,8,0.8)';
+        ctx.fillRect(cx - w / 2, cy - 12, w, 24);
+        ctx.strokeStyle = '#ff5533';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - w / 2, cy - 12, w, 24);
+        ctx.fillStyle = '#ff8866';
+        ctx.fillText(text, cx, cy);
+        ctx.restore();
+    }
+
     // Undo the shake offset
     game.camera.x -= shakeX;
     game.camera.y -= shakeY;
 
     // Draw minimap
     renderMinimap();
+}
+
+// Generic minimap pings (bunker claims, raids, dried-up patches)
+function addPing(x, y, color) {
+    if (!game.pings) game.pings = [];
+    game.pings.push({ x, y, color, time: Date.now() });
+    if (game.pings.length > 8) game.pings.shift();
 }
 
 function setBanner(text, seconds = 4, color = '#ffcc44') {
@@ -1508,6 +1595,22 @@ function renderMinimap() {
         }
     }
 
+    // Generic event pings
+    if (game.pings) {
+        for (const p of game.pings) {
+            const age = (Date.now() - p.time) / 1000;
+            if (age > 4) continue;
+            const pulse = (age * 2) % 1;
+            minimapCtx.strokeStyle = p.color;
+            minimapCtx.globalAlpha = 1 - pulse;
+            minimapCtx.lineWidth = 1.5;
+            minimapCtx.beginPath();
+            minimapCtx.arc(p.x * scale, p.y * scale, 2 + pulse * 7, 0, Math.PI * 2);
+            minimapCtx.stroke();
+            minimapCtx.globalAlpha = 1;
+        }
+    }
+
     // Under-attack ping (pulsing ring, 4 seconds)
     if (game.lastAttackAlert && Date.now() - game.lastAttackAlert.time < 4000) {
         const age = (Date.now() - game.lastAttackAlert.time) / 1000;
@@ -1549,6 +1652,14 @@ function update(dt) {
     updateBunkers();
     updateScavengers();
     updateUI();
+
+    // One-time onboarding hints
+    if (game.tick === 600 && !game.buildings.some(b => b.playerId === 0 && b.type === 'derrick')) {
+        setBanner('Tip: build Oil Derricks on the dark oil patches to earn funds', 6, '#66e0ff');
+    }
+    if (game.tick === 2100 && (game.bunkers || []).some(b => !b.claimed)) {
+        setBanner('Tip: send a unit to the glowing tech bunkers for rewards', 6, '#66e0ff');
+    }
 
     // Fade out order feedback markers
     if (game.orderMarkers) {
@@ -1972,6 +2083,9 @@ function updateBuildings(dt) {
                 if (type.damage) {
                     building.activationTime = game.tick + 180; // ~3 seconds at 60 FPS
                 }
+                if (building.playerId === 0) {
+                    SoundManager.play('construction_complete');
+                }
             } else {
                 // Construction in progress - keep hp at 1
                 building.hp = 1;
@@ -2041,7 +2155,10 @@ function updateBuildings(dt) {
                 const player = game.players[building.playerId];
                 player.techLevel = Math.max(player.techLevel, building.researching.level);
                 building.researching = null;
-                if (building.playerId === 0) SoundManager.play('ui_build');
+                if (building.playerId === 0) {
+                    SoundManager.play('research_complete');
+                    setBanner(`Research complete: Tech Level ${player.techLevel} unlocked!`, 5, '#cc66ff');
+                }
             }
         }
 
@@ -2102,6 +2219,9 @@ function updateBuildings(dt) {
                 }
 
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
+                if (building.playerId === 0) {
+                    SoundManager.play('unit_ready');
+                }
                 // Send to rally point if set
                 if (newUnit && building.rallyX !== undefined) {
                     newUnit.targetX = building.rallyX + (Math.random() - 0.5) * 2;
@@ -2545,10 +2665,12 @@ function updateBunkers() {
         }
         if (claimer.playerId === 0) {
             setBanner(rewardText, 5, '#66e0ff');
-            SoundManager.play('ui_build');
+            SoundManager.play('bonus');
         } else {
             setBanner('The enemy secured a tech bunker!', 4, '#ff7755');
+            SoundManager.play('warn');
         }
+        addPing(bunker.x, bunker.y, '#66e0ff');
     }
 }
 
@@ -2587,6 +2709,8 @@ function updateScavengers() {
         }
     }
     setBanner('Scavengers spotted in the wasteland!', 4, '#cfae3a');
+    SoundManager.play('warn');
+    addPing(start.x, start.y, '#cfae3a');
 }
 
 function updateResources() {
@@ -2616,9 +2740,14 @@ function updateResources() {
                 player.oil = Math.min(50000, player.oil + pumped);
                 if (building.oilTile) {
                     building.oilTile.oilAmount = Math.max(0, building.oilLeft);
-                    // Patch ran dry: update the cached terrain
+                    // Patch ran dry: update the cached terrain and warn the owner
                     if (building.oilLeft <= 0) {
                         redrawTerrainTile(Math.floor(building.x), Math.floor(building.y));
+                        if (building.playerId === 0) {
+                            setBanner('An oil patch has run dry - expand to a new field!', 5, '#cfae3a');
+                            SoundManager.play('warn');
+                            addPing(building.x, building.y, '#cfae3a');
+                        }
                     }
                 }
             }
@@ -2710,7 +2839,14 @@ function updateUI() {
         }
         infoEl.innerHTML = infoText;
     } else {
-        infoEl.innerHTML = `<strong style="font-size:14px;">${game.selection.length} units selected</strong>`;
+        const counts = {};
+        for (const s of game.selection) {
+            if (UNIT_TYPES[s.type]) counts[s.type] = (counts[s.type] || 0) + 1;
+        }
+        const parts = Object.entries(counts)
+            .map(([t, n]) => `${n}&times; ${unitDisplayName(t, playerFaction)}`);
+        infoEl.innerHTML = `<strong style="font-size:14px;">${game.selection.length} units selected</strong>` +
+            `<br><span style="font-size:11px;color:#8888aa;">${parts.join('<br>')}</span>`;
     }
 
     // Build menu
@@ -2767,6 +2903,10 @@ function updateBuildMenu() {
         if (!enabled) btn.classList.add('disabled');
         btn.addEventListener('mousedown', (e) => {
             e.stopPropagation();
+            if (btn.classList.contains('disabled')) {
+                SoundManager.play('denied');
+                return;
+            }
             onClick();
         });
         menu.appendChild(btn);
@@ -3388,7 +3528,7 @@ function initializeEventHandlers() {
             }
             game.attackMoveMode = false;
             addOrderMarker(world.x, world.y, 'attack');
-            SoundManager.play('ui_click');
+            SoundManager.play('ack_attack');
             return;
         }
         if (game.placingBuilding) {
@@ -3407,6 +3547,8 @@ function initializeEventHandlers() {
                 // Only reset after successful placement
                 game.placingBuilding = null;
                 game.placingBuildingFrom = null;
+            } else {
+                SoundManager.play('denied');
             }
             // If placement failed, keep placingBuilding set so player can try again
             // Player can cancel with right-click or Escape
@@ -3511,10 +3653,12 @@ function initializeEventHandlers() {
             }
         }
 
-        // Visual confirmation of the order
+        // Audio-visual confirmation of the order
         const anyOwnUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
         if (anyOwnUnits) {
-            addOrderMarker(world.x, world.y, 'move');
+            const isAttackOrder = !!(enemyDirectClick || enemyNearbyClick);
+            addOrderMarker(world.x, world.y, isAttackOrder ? 'attack' : 'move');
+            SoundManager.play(isAttackOrder ? 'ack_attack' : 'ack_move');
         }
 
         for (const sel of game.selection) {
@@ -4143,6 +4287,7 @@ function resetGame() {
     game.lastAttackAlert = null;
     game.bunkers = [];
     game.banner = null;
+    game.pings = [];
     game.shake = 0;
     terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
@@ -4204,6 +4349,7 @@ function checkTimeLimit() {
 
     if (playerScore > enemyScore) {
         game.status = 'WON';
+        SoundManager.play('victory');
         showScreen('victoryScreen');
         const statsEl = document.getElementById('victoryStats');
         if (statsEl) {
@@ -4216,6 +4362,7 @@ Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
         }
     } else {
         game.status = 'LOST';
+        SoundManager.play('defeat');
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
         if (statsEl) {
@@ -4232,6 +4379,7 @@ function checkWinCondition() {
 
     if (enemyUnits.length === 0 && enemyBuildings.length === 0) {
         game.status = 'WON';
+        SoundManager.play('victory');
         const playerUnits = game.units.filter(u => u.playerId === 0).length;
         const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
         showScreen('victoryScreen');
@@ -4252,6 +4400,7 @@ function checkLoseCondition() {
 
     if (playerUnits.length === 0 && playerBuildings.length === 0) {
         game.status = 'LOST';
+        SoundManager.play('defeat');
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
         if (statsEl) {

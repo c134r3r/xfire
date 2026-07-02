@@ -50,6 +50,10 @@ Three mirrored sides, KKnD-style — same roles, different flavor:
 - Artillery, heavy assaults, flamers and heavy towers deal **splash
   damage** — spread your troops. Rank-3 veterans slowly self-repair,
   and burning buildings smoke when heavily damaged.
+- Full audio-visual feedback: order acknowledgment blips, unit-ready and
+  construction chimes, research/victory/defeat jingles, denied buzz on
+  locked buttons, on-screen banners with minimap pings, and one-time
+  onboarding tips for the oil economy and tech bunkers.
 
 ## Tech tree
 
