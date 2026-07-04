@@ -451,7 +451,8 @@ const game = {
     damageNumbers: [],
     map: [],
     fogOfWar: [],
-    group1: [], group2: [], group3: [], group4: [], group5: []
+    group1: [], group2: [], group3: [], group4: [], group5: [],
+    stats: { unitsBuilt: 0, unitsLost: 0, unitsKilled: 0, buildingsRazed: 0, oilEarned: 0, bunkersClaimed: 0 }
 };
 
 // Game constants imported from constants.js:
@@ -874,6 +875,9 @@ function render() {
     drawObjectiveGuides();
     drawObjectives();
 
+    // F1 controls overlay
+    if (game.showHelp) drawHelpOverlay();
+
     // Event banner (attack waves, bunker rewards, scavengers)
     drawBanner();
 
@@ -1161,6 +1165,56 @@ function addPing(x, y, color) {
     if (!game.pings) game.pings = [];
     game.pings.push({ x, y, color, time: Date.now() });
     if (game.pings.length > 8) game.pings.shift();
+}
+
+// Full controls reference, toggled with F1
+function drawHelpOverlay() {
+    const lines = [
+        ['Left click / drag', 'Select / box-select units'],
+        ['Double-click', 'Select all units of that type'],
+        ['Right click', 'Move / attack / set rally point'],
+        ['A + left click', 'Attack-move (engage everything on the way)'],
+        ['S or X', 'Stop'],
+        ['H', 'Select & center your HQ'],
+        ['Space', 'Jump to the last attack on your base'],
+        ['1-9 / Ctrl+1-9', 'Recall / assign control group (double-tap centers)'],
+        ['Arrows / screen edge', 'Scroll the map'],
+        ['Wheel / trackpad', 'Scroll; Ctrl+wheel or +/- zoom'],
+        ['Middle-drag', 'Pan the camera'],
+        ['Right-click unit button', 'Cancel last queued unit (refund)'],
+        ['P', 'Pause'],
+        ['Esc', 'Cancel placement / clear selection'],
+        ['F1', 'Close this help']
+    ];
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    const w = 520, rowH = 24;
+    const h = lines.length * rowH + 64;
+    const x = (cw - w) / 2, y = (ch - h) / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,8,16,0.88)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#ff6b35';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.font = 'bold 16px Rajdhani, Arial';
+    ctx.fillStyle = '#ff8c55';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CONTROLS', cw / 2, y + 26);
+
+    ctx.font = '13px Rajdhani, Arial';
+    lines.forEach(([key, what], i) => {
+        const ly = y + 52 + i * rowH;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffd890';
+        ctx.fillText(key, x + 200, ly);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ccccdd';
+        ctx.fillText(what, x + 216, ly);
+    });
+    ctx.restore();
 }
 
 function setBanner(text, seconds = 4, color = '#ffcc44') {
@@ -1713,10 +1767,23 @@ function drawBuilding(building) {
         ctx.lineTo(rally.x, rally.y);
         ctx.stroke();
         ctx.setLineDash([]);
+        // rally flag
+        ctx.strokeStyle = '#c8c8b8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rally.x, rally.y);
+        ctx.lineTo(rally.x, rally.y - 14);
+        ctx.stroke();
         ctx.fillStyle = '#33ff55';
         ctx.beginPath();
-        ctx.arc(rally.x, rally.y, 3, 0, Math.PI * 2);
+        ctx.moveTo(rally.x, rally.y - 14);
+        ctx.lineTo(rally.x + 10, rally.y - 11);
+        ctx.lineTo(rally.x, rally.y - 8);
+        ctx.closePath();
         ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(rally.x, rally.y, 4, 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
     }
 }
 
@@ -2172,6 +2239,8 @@ function update(dt) {
     updateUI();
     updateObjectives();
     updateDecals(dt);
+    updateRemnantsPing();
+    updateLowFundsHint();
 
     // Fade out order feedback markers
     if (game.orderMarkers) {
@@ -2308,6 +2377,7 @@ function updateUnits(dt) {
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             SoundManager.play('explosion_small');
+            if (unit.playerId === 0) game.stats.unitsLost++;
             // leave something behind on the battlefield
             if (type.category === 'armor') {
                 addDecal({
@@ -2760,6 +2830,7 @@ function updateBuildings(dt) {
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 if (building.playerId === 0) {
                     SoundManager.play('unit_ready');
+                    game.stats.unitsBuilt++;
                 }
                 // Send to rally point if set
                 if (newUnit && building.rallyX !== undefined) {
@@ -2768,6 +2839,41 @@ function updateBuildings(dt) {
                 }
                 building.productionQueue.shift();
                 building.produceProgress = 0;
+            }
+        }
+    }
+}
+
+// Book a confirmed kill: scoreboard, veterancy and promotion fanfare
+function registerKill(proj, victim) {
+    if (victim._killRegistered) return;
+    victim._killRegistered = true;
+
+    if (proj.playerId === 0) {
+        if (UNIT_TYPES[victim.type]) game.stats.unitsKilled++;
+        else game.stats.buildingsRazed++;
+    }
+
+    const shooter = proj.source;
+    if (shooter && UNIT_TYPES[shooter.type] && game.units.includes(shooter)) {
+        const before = veterancyRank(shooter.kills);
+        shooter.kills = (shooter.kills || 0) + 1;
+        const after = veterancyRank(shooter.kills);
+        if (after > before && shooter.playerId === 0) {
+            // Promotion celebration: golden burst + jingle
+            for (let i = 0; i < 10; i++) {
+                const ang = (i / 10) * Math.PI * 2;
+                game.particles.push({
+                    x: shooter.x, y: shooter.y, z: 6,
+                    vx: Math.cos(ang) * 0.18, vy: Math.sin(ang) * 0.18, vz: 0.4,
+                    color: '#ffd14a', size: 2.2, life: 0.8, type: 'spark'
+                });
+            }
+            SoundManager.play('unit_ready');
+            if (!game._promoBannerShown) {
+                game._promoBannerShown = true;
+                const name = unitDisplayName(shooter.type, getFaction(0));
+                setBanner(`${name} promoted to veteran! (+15% damage per rank)`, 5, '#ffd14a');
             }
         }
     }
@@ -2831,11 +2937,7 @@ function updateProjectiles(dt) {
                             SoundManager.play('alert');
                         }
                     }
-                    // Veterancy: credit the kill to the shooter
-                    if (proj.target.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
-                        game.units.includes(proj.source)) {
-                        proj.source.kills = (proj.source.kills || 0) + 1;
-                    }
+                    if (proj.target.hp <= 0) registerKill(proj, proj.target);
                     // Flame hits set the ground on fire briefly
                     if (proj.weapon === 'flame') {
                         for (let f = 0; f < 3; f++) {
@@ -2861,10 +2963,7 @@ function updateProjectiles(dt) {
                                 const sdmg = Math.round(finalDamage * 0.5 * (1 - sdist / (proj.splash * 2)));
                                 if (sdmg > 0) {
                                     v.hp -= sdmg;
-                                    if (v.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
-                                        game.units.includes(proj.source)) {
-                                        proj.source.kills = (proj.source.kills || 0) + 1;
-                                    }
+                                    if (v.hp <= 0) registerKill(proj, v);
                                 }
                             }
                         }
@@ -3201,9 +3300,11 @@ function updateBunkers() {
         const roll = Math.random();
         let rewardText = '';
 
+        if (claimer.playerId === 0) game.stats.bunkersClaimed++;
         if (roll < 0.4) {
             const amount = 600 + Math.floor(Math.random() * 400);
             player.oil = Math.min(50000, player.oil + amount);
+            if (claimer.playerId === 0) game.stats.oilEarned += amount;
             rewardText = `Bunker secured: +${amount} oil salvaged`;
         } else if (roll < 0.75) {
             const pool = ['trooper', 'trooper', 'buggy', 'tank'];
@@ -3244,6 +3345,39 @@ function updateBunkers() {
         }
         addPing(bunker.x, bunker.y, '#66e0ff');
     }
+}
+
+// When the enemy is nearly wiped out, reveal the stragglers so the
+// player never has to comb the map for one hidden building
+function updateRemnantsPing() {
+    if (game.tick % 300 !== 0) return; // every 5s
+    const enemies = [
+        ...game.units.filter(u => u.playerId === 1),
+        ...game.buildings.filter(b => b.playerId === 1)
+    ];
+    if (enemies.length === 0 || enemies.length > 3) return;
+    if (Date.now() - (game._remnantsPingTime || 0) < 20000) {
+        // keep the minimap pings coming, but not the banner
+        for (const e of enemies) addPing(e.x, e.y, '#ff5533');
+        return;
+    }
+    game._remnantsPingTime = Date.now();
+    for (const e of enemies) addPing(e.x, e.y, '#ff5533');
+    setBanner('Enemy remnants located - finish them off!', 5, '#ff8866');
+}
+
+// If the player is broke with no income, point them back at the oil
+function updateLowFundsHint() {
+    if (game.tick % 300 !== 0 || game.tick < 3600) return;
+    const player = game.players[0];
+    if (player.oil >= 150) return;
+    const hasIncome = game.buildings.some(b => b.playerId === 0 && b.type === 'derrick' &&
+        !b.isUnderConstruction && (b.oilLeft === undefined || b.oilLeft > 0));
+    if (hasIncome) return;
+    if (Date.now() - (game._lowFundsTime || 0) < 45000) return;
+    game._lowFundsTime = Date.now();
+    setBanner('Low on funds! Build Oil Derricks on the dark oil patches.', 6, '#cfae3a');
+    SoundManager.play('warn');
 }
 
 // Roaming scavenger packs keep the wasteland dangerous
@@ -3310,6 +3444,7 @@ function updateResources() {
                 const pumped = Math.min((type.pumpRate * boost) / 60, building.oilLeft);
                 building.oilLeft -= pumped;
                 player.oil = Math.min(50000, player.oil + pumped);
+                if (building.playerId === 0) game.stats.oilEarned += pumped;
                 if (building.oilTile) {
                     building.oilTile.oilAmount = Math.max(0, building.oilLeft);
                     // Patch ran dry: update the cached terrain and warn the owner
@@ -3493,19 +3628,25 @@ function updateBuildMenu() {
         menu.appendChild(el);
     };
 
-    const makeButton = (iconUrl, label, cost, title, enabled, onClick, desc) => {
+    const makeButton = (iconUrl, label, cost, title, enabled, onClick, desc, onCancel) => {
         const btn = document.createElement('button');
         btn.className = 'build-btn';
         btn.innerHTML = `<img src="${iconUrl}" alt=""><span class="build-btn-label">${label}</span><span class="build-btn-cost">${cost}</span>`;
         if (!enabled) btn.classList.add('disabled');
         btn.addEventListener('mousedown', (e) => {
             e.stopPropagation();
+            if (e.button === 2) {
+                if (onCancel) onCancel();
+                return;
+            }
+            if (e.button !== 0) return;
             if (btn.classList.contains('disabled')) {
                 SoundManager.play('denied');
                 return;
             }
             onClick();
         });
+        btn.addEventListener('contextmenu', (e) => e.preventDefault());
         btn.addEventListener('mouseenter', () => showTooltip(btn, label, cost, title, desc));
         btn.addEventListener('mouseleave', hideTooltip);
         menu.appendChild(btn);
@@ -3571,7 +3712,7 @@ function updateBuildMenu() {
                 const name = unitDisplayName(unitRole, faction);
                 const techOk = player.techLevel >= uType.tech;
                 const canBuild = techOk && player.oil >= uType.cost && selectedBuilding.productionQueue.length < 10;
-                const stats = `DMG ${uType.damage} | RNG ${(uType.range / 24).toFixed(1)} | SPD ${(uType.speed * 60).toFixed(1)} | HP ${uType.hp}`;
+                const stats = `DMG ${uType.damage} | RNG ${(uType.range / 24).toFixed(1)} | SPD ${(uType.speed * 60).toFixed(1)} | HP ${uType.hp}\nRight-click: cancel last queued (refund)`;
                 const title = techOk
                     ? `${name} - ${uType.cost} oil\n${stats}`
                     : `${name} - Requires Tech Level ${uType.tech}\n${stats}`;
@@ -3584,7 +3725,21 @@ function updateBuildMenu() {
                         menu._lastStateKey = null;
                         updateBuildMenu();
                     }
-                }, UNIT_DESC[unitRole]);
+                }, UNIT_DESC[unitRole], () => {
+                    // cancel the most recent queued unit of this role, full refund
+                    for (let qi = selectedBuilding.productionQueue.length - 1; qi >= 0; qi--) {
+                        if (selectedBuilding.productionQueue[qi].type === unitRole) {
+                            selectedBuilding.productionQueue.splice(qi, 1);
+                            if (qi === 0) selectedBuilding.produceProgress = 0;
+                            player.oil += uType.cost;
+                            SoundManager.play('ui_click');
+                            menu._lastStateKey = null;
+                            updateBuildMenu();
+                            return;
+                        }
+                    }
+                    SoundManager.play('denied');
+                });
             }
         }
         // Info-only buildings
@@ -4676,6 +4831,12 @@ canvas.addEventListener('wheel', (e) => {
         togglePause();
     }
 
+    // F1: toggle the controls overlay
+    if (e.key === 'F1') {
+        game.showHelp = !game.showHelp;
+        e.preventDefault();
+    }
+
     // Escape to cancel
     if (e.key === 'Escape') {
         game.placingBuilding = null;
@@ -4848,6 +5009,19 @@ function startGame() {
     const tutorialEl = document.getElementById('tutorialSelect');
     gameSettings.tutorial = !tutorialEl || tutorialEl.value === 'on';
 
+    // Remember the chosen settings for next time
+    try {
+        localStorage.setItem('xfire_settings', JSON.stringify({
+            timeLimit: gameSettings.timeLimit,
+            difficulty: gameSettings.difficulty,
+            mapSize: gameSettings.mapSize,
+            startingOil: gameSettings.startingOil,
+            playerFaction: gameSettings.playerFaction,
+            enemyFaction: gameSettings.enemyFaction,
+            tutorial: gameSettings.tutorial ? 'on' : 'off'
+        }));
+    } catch (e) { /* private mode etc. */ }
+
     // Set actual map size based on selection
     const mapSizes = {
         small: 32,
@@ -4939,6 +5113,10 @@ function resetGame() {
     game.objectives = [];
     game.objectiveFlash = null;
     game.decals = [];
+    game.stats = { unitsBuilt: 0, unitsLost: 0, unitsKilled: 0, buildingsRazed: 0, oilEarned: 0, bunkersClaimed: 0 };
+    game._promoBannerShown = false;
+    game._remnantsPingTime = 0;
+    game.showHelp = false;
     game.shake = 0;
     terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
@@ -5003,25 +5181,35 @@ function checkTimeLimit() {
         SoundManager.play('victory');
         showScreen('victoryScreen');
         const statsEl = document.getElementById('victoryStats');
-        if (statsEl) {
-            const timeMin = Math.floor(game.timeElapsed / 60);
-            const timeSec = Math.floor(game.timeElapsed % 60);
-            statsEl.innerHTML = `Time Limit Victory!<br>
-Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
-Your Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
-Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
-        }
+        if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - your forces prevail!</div>' + buildStatsHTML();
     } else {
         game.status = 'LOST';
         SoundManager.play('defeat');
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
-        if (statsEl) {
-            statsEl.innerHTML = `Time Limit Reached<br>
-Your Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
-Enemy Forces: ${enemyUnits} units, ${enemyBuildings} buildings`;
-        }
+        if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - the enemy holds the field.</div>' + buildStatsHTML();
     }
+}
+
+// Formatted end-of-match scoreboard
+function buildStatsHTML() {
+    const s = game.stats;
+    const timeMin = Math.floor(game.timeElapsed / 60);
+    const timeSec = Math.floor(game.timeElapsed % 60);
+    const vets = game.units.filter(u => u.playerId === 0 && veterancyRank(u.kills) > 0).length;
+    const row = (label, value) =>
+        `<div style="display:flex;justify-content:space-between;gap:24px;">` +
+        `<span style="color:#8888aa;">${label}</span><strong>${value}</strong></div>`;
+    return `<div style="text-align:left;min-width:260px;">` +
+        row('Match time', `${timeMin}:${String(timeSec).padStart(2, '0')}`) +
+        row('Units built', s.unitsBuilt) +
+        row('Units lost', s.unitsLost) +
+        row('Enemies destroyed', s.unitsKilled) +
+        row('Buildings razed', s.buildingsRazed) +
+        row('Oil earned', Math.floor(s.oilEarned)) +
+        row('Tech bunkers claimed', s.bunkersClaimed) +
+        row('Veterans in the field', vets) +
+        `</div>`;
 }
 
 function checkWinCondition() {
@@ -5035,13 +5223,7 @@ function checkWinCondition() {
         const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
         showScreen('victoryScreen');
         const statsEl = document.getElementById('victoryStats');
-        if (statsEl) {
-            const timeMin = Math.floor(game.timeElapsed / 60);
-            const timeSec = Math.floor(game.timeElapsed % 60);
-            statsEl.innerHTML = `Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
-Remaining Forces: ${playerUnits} units, ${playerBuildings} buildings<br>
-Oil Remaining: ${Math.floor(game.players[0].oil)}`;
-        }
+        if (statsEl) statsEl.innerHTML = buildStatsHTML();
     }
 }
 
@@ -5054,13 +5236,30 @@ function checkLoseCondition() {
         SoundManager.play('defeat');
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
-        if (statsEl) {
-            const timeMin = Math.floor(game.timeElapsed / 60);
-            const timeSec = Math.floor(game.timeElapsed % 60);
-            statsEl.innerHTML = `Time: ${timeMin}:${String(timeSec).padStart(2, '0')}<br>
-All your units and buildings have been destroyed.`;
-        }
+        if (statsEl) statsEl.innerHTML = buildStatsHTML();
     }
+}
+
+// Restore the last-used settings into the menu selects
+function restoreSavedSettings() {
+    let saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem('xfire_settings'));
+    } catch (e) { return; }
+    if (!saved) return;
+    const apply = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && value !== undefined && [...el.options].some(o => o.value === String(value))) {
+            el.value = String(value);
+        }
+    };
+    apply('timeLimitSelect', saved.timeLimit);
+    apply('difficultySelect', saved.difficulty);
+    apply('mapSizeSelect', saved.mapSize);
+    apply('startingOilSelect', saved.startingOil);
+    apply('playerFactionSelect', saved.playerFaction);
+    apply('enemyFactionSelect', saved.enemyFaction);
+    apply('tutorialSelect', saved.tutorial);
 }
 
 function setupMenuHandlers() {
@@ -5299,6 +5498,7 @@ try {
     } else {
         initializeEventHandlers();
         setupMenuHandlers();
+        restoreSavedSettings();
 
         // Show loading screen, then main menu
         showLoadingScreen().then(() => {

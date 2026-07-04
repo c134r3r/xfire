@@ -94,6 +94,19 @@ explaining what the building or unit is for. The default starting oil is
 it takes a moment to orient itself, issues one build order at a time and
 never attacks in the opening minutes.
 
+## Player comforts
+
+- **End-of-match scoreboard**: units built/lost, enemies destroyed,
+  buildings razed, oil earned, bunkers claimed and surviving veterans
+- **Veteran promotions** celebrate with a golden burst and jingle
+- **Right-click a unit button** to cancel the last queued unit (full refund)
+- When the enemy is down to its last few stragglers, they are pinged on
+  the minimap ("Enemy remnants located") - no end-game hide-and-seek
+- A low-funds warning points you back at the oil when you are broke
+  without a working derrick
+- **F1** opens a full controls reference in-game; your menu settings are
+  remembered between sessions
+
 ## Controls
 
 | Input                  | Action                                     |
@@ -112,6 +125,8 @@ never attacks in the opening minutes.
 | Middle-drag            | Pan the camera                             |
 | **P**                  | Pause                                      |
 | **Esc**                | Cancel placement / clear selection         |
+| **F1**                 | Controls overlay                           |
+| Right-click unit button | Cancel last queued unit (refund)          |
 
 ## Files
 
