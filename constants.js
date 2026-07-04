@@ -320,3 +320,29 @@ const WEAPON_CLASS = {
     tank: 'cannon', heavy: 'cannon', towerHeavy: 'cannon',
     artillery: 'arty'
 };
+
+// ============================================
+// TOOLTIP DESCRIPTIONS (what is it for?)
+// ============================================
+const BUILDING_DESC = {
+    hq: 'Your command center. Lose it and all your buildings, and the battle is over.',
+    powerStation: 'Refines crude oil: each one boosts the income of EVERY derrick by +25% (max 2 count). You start with one.',
+    derrick: 'Your income source. MUST be placed on a dark oil patch! Pumps funds automatically until the patch runs dry.',
+    barracks: 'Trains infantry: cheap riflemen, anti-infantry flamers and anti-tank rocketeers.',
+    factory: 'Builds vehicles: scout bikes, tanks and artillery - the backbone of your army.',
+    researchLab: 'Researches Tech Level 2 and 3, unlocking advanced units, the Repair Bay and heavy towers.',
+    repairBay: 'Automatically repairs your vehicles parked nearby (costs a little oil per tick).',
+    tower: 'Automatic defense turret with rapid fire. Great against infantry rushes.',
+    towerHeavy: 'Heavy anti-armor cannon tower. Outranges battle tanks - the wall against vehicle pushes.'
+};
+
+const UNIT_DESC = {
+    trooper: 'Cheap all-round infantry. Numbers win early fights.',
+    flamer: 'Very short range, burns groups of infantry with splash. Weak against vehicles.',
+    rocketeer: 'Anti-tank infantry with long reach but slow rockets. Escort them.',
+    bike: 'Fastest unit in the game: scouting, grabbing tech bunkers, harassment.',
+    buggy: 'Light fighting vehicle. Good early escort and raider.',
+    tank: 'Main battle tank - solid armor and punch, the core of any army.',
+    heavy: 'Slow assault monster with splash damage. Breaks bases.',
+    artillery: 'Extreme-range siege gun with big splash. Fragile - keep it protected.'
+};

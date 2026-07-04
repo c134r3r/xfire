@@ -72,6 +72,18 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
+## Guided start
+
+New players get an on-screen **objective chain** (toggleable in the
+settings): build a derrick, barracks, machine shop, train an army,
+research, grab a bunker, destroy the enemy. Golden arrows point at the
+nearest oil patches and bunkers, every oil patch lights up while you are
+placing a derrick, and each sidebar button shows a hover tooltip
+explaining what the building or unit is for. The default starting oil is
+5000 so you can get going immediately, and the AI plays at a human pace:
+it takes a moment to orient itself, issues one build order at a time and
+never attacks in the opening minutes.
+
 ## Controls
 
 | Input                  | Action                                     |

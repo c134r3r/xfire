@@ -381,7 +381,8 @@ const gameSettings = {
     timeLimit: 'unlimited',
     difficulty: 'normal',
     mapSize: 'medium',
-    startingOil: 3000,
+    startingOil: 5000,
+    tutorial: true,
     playerFaction: 'survivors',
     enemyFaction: 'random',
     MAP_SIZE: MAP_SIZE,
@@ -422,7 +423,7 @@ const game = {
             id: 0,
             color: '#4488ff',
             faction: 'survivors',
-            oil: 3000,
+            oil: 5000,
             techLevel: 1,
             team: 'player'
         },
@@ -430,7 +431,7 @@ const game = {
             id: 1,
             color: '#ff4444',
             faction: 'evolved',
-            oil: 3000,
+            oil: 5000,
             techLevel: 1,
             team: 'enemy'
         },
@@ -806,6 +807,23 @@ function render() {
         ctx.setLineDash([]);
     }
 
+    // While placing a derrick: spotlight every live oil patch
+    if (game.placingBuilding && BUILDING_TYPES[game.placingBuilding]?.needsOil && game.oilTiles) {
+        const zoom = getZoom();
+        const pulse = (Date.now() / 700) % 1;
+        for (const t of game.oilTiles) {
+            const tile = game.map[t.y]?.[t.x];
+            if (!tile || !tile.oil || (tile.oilAmount !== undefined && tile.oilAmount <= 0)) continue;
+            const s = worldToScreen(t.x, t.y);
+            if (s.x < -60 || s.x > canvas.offsetWidth + 60 || s.y < -60 || s.y > canvas.offsetHeight + 60) continue;
+            ctx.strokeStyle = `rgba(255,204,68,${0.9 - pulse * 0.5})`;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.ellipse(s.x, s.y, (16 + pulse * 6) * zoom, (8 + pulse * 3) * zoom, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
     // Draw building placement preview
     if (game.placingBuilding) {
         const world = screenToWorld(game.mouse.x, game.mouse.y);
@@ -817,6 +835,10 @@ function render() {
 
         drawBuildingPreview(game.placingBuilding, tx, ty, isValid);
     }
+
+    // Guided-start overlays
+    drawObjectiveGuides();
+    drawObjectives();
 
     // Event banner (attack waves, bunker rewards, scavengers)
     drawBanner();
@@ -847,6 +869,180 @@ function render() {
 
     // Draw minimap
     renderMinimap();
+}
+
+// ============================================
+// GUIDED START: objective chain with map arrows
+// ============================================
+
+function initObjectives() {
+    if (!gameSettings.tutorial) {
+        game.objectives = [];
+        return;
+    }
+    const f = game.players[0].faction;
+    game.objectives = [
+        {
+            text: `Build an ${buildingDisplayName('derrick', f)} ON A DARK OIL PATCH (sidebar, ${BUILDING_TYPES.derrick.cost} oil)`,
+            guide: 'oil',
+            check: () => game.buildings.some(b => b.playerId === 0 && b.type === 'derrick')
+        },
+        {
+            text: `Build a ${buildingDisplayName('barracks', f)} to train infantry`,
+            check: () => game.buildings.some(b => b.playerId === 0 && b.type === 'barracks')
+        },
+        {
+            text: `Build a ${buildingDisplayName('factory', f)} for vehicles`,
+            check: () => game.buildings.some(b => b.playerId === 0 && b.type === 'factory')
+        },
+        {
+            text: 'Train an army (8+ units) - click your production buildings',
+            check: () => game.units.filter(u => u.playerId === 0).length >= 8
+        },
+        {
+            text: `Build a ${buildingDisplayName('researchLab', f)} and research Tech Level 2`,
+            check: () => game.players[0].techLevel >= 2
+        },
+        {
+            text: 'Send a unit to a glowing TECH BUNKER for a reward',
+            guide: 'bunker',
+            check: () => !game.bunkers || game.bunkers.every(b => b.claimed) ||
+                         game.bunkers.some(b => b.claimed && b.claimedBy === 0)
+        },
+        {
+            text: 'Destroy the enemy base! (A = attack-move)',
+            check: () => false
+        }
+    ];
+}
+
+function currentObjective() {
+    return (game.objectives || []).find(o => !o.done) || null;
+}
+
+function updateObjectives() {
+    const obj = currentObjective();
+    if (!obj) return;
+    if (obj.check()) {
+        obj.done = true;
+        game.objectiveFlash = { text: obj.text, until: Date.now() + 3000 };
+        SoundManager.play('construction_complete');
+    }
+}
+
+// Objective panel (top-left) + completed flash
+function drawObjectives() {
+    const obj = currentObjective();
+    const flash = game.objectiveFlash && Date.now() < game.objectiveFlash.until ? game.objectiveFlash : null;
+    if (!obj && !flash) return;
+
+    ctx.save();
+    ctx.font = 'bold 13px Rajdhani, Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    let y = 16;
+
+    if (flash) {
+        const text = '\u2714 ' + flash.text;
+        const w = ctx.measureText(text).width + 24;
+        ctx.globalAlpha = Math.min(1, (flash.until - Date.now()) / 600);
+        ctx.fillStyle = 'rgba(10,26,12,0.8)';
+        ctx.fillRect(10, y - 12, w, 24);
+        ctx.strokeStyle = '#44dd66';
+        ctx.strokeRect(10, y - 12, w, 24);
+        ctx.fillStyle = '#66ee88';
+        ctx.fillText(text, 22, y + 1);
+        ctx.globalAlpha = 1;
+        y += 30;
+    }
+
+    if (obj) {
+        ctx.font = 'bold 11px Rajdhani, Arial';
+        ctx.fillStyle = '#ffaa33';
+        ctx.fillText('OBJECTIVE', 22, y + 1);
+        y += 18;
+        ctx.font = 'bold 13px Rajdhani, Arial';
+        const w = ctx.measureText(obj.text).width + 24;
+        ctx.fillStyle = 'rgba(12,12,20,0.78)';
+        ctx.fillRect(10, y - 13, w, 26);
+        ctx.strokeStyle = 'rgba(255,170,51,0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(10, y - 13, w, 26);
+        ctx.fillStyle = '#ffd890';
+        ctx.fillText(obj.text, 22, y + 1);
+    }
+    ctx.restore();
+}
+
+// Bouncing golden arrow above a world position; clamps to the
+// screen edge and points toward the target when it is off-screen
+function drawGuideArrow(wx, wy) {
+    const zoom = getZoom();
+    const s = worldToScreen(wx, wy);
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    const bob = Math.sin(Date.now() / 240) * 5;
+
+    const onScreen = s.x > 30 && s.x < cw - 30 && s.y > 60 && s.y < ch - 40;
+    let x = s.x, y = s.y, angle = Math.PI / 2; // pointing down at target
+    if (!onScreen) {
+        const cx = cw / 2, cy = ch / 2;
+        angle = Math.atan2(s.y - cy, s.x - cx);
+        const margin = 44;
+        x = Math.max(margin, Math.min(cw - margin, s.x));
+        y = Math.max(70, Math.min(ch - 50, s.y));
+    }
+
+    ctx.save();
+    ctx.translate(x, y - (onScreen ? 34 * zoom + bob : 0));
+    ctx.rotate(onScreen ? Math.PI / 2 : angle);
+    ctx.fillStyle = '#ffcc44';
+    ctx.strokeStyle = '#7a5a10';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-6, -9);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-6, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Ground ring when the target is visible
+    if (onScreen) {
+        const pulse = (Date.now() / 900) % 1;
+        ctx.strokeStyle = `rgba(255,204,68,${0.8 * (1 - pulse)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y, (8 + pulse * 16) * zoom, (4 + pulse * 8) * zoom, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+// Where should the guide arrows point for the active objective?
+function drawObjectiveGuides() {
+    const obj = currentObjective();
+    if (!obj || !obj.guide) return;
+    const hq = game.buildings.find(b => b.playerId === 0 && b.type === 'hq');
+    if (!hq) return;
+
+    if (obj.guide === 'oil') {
+        // two nearest live, unoccupied oil patches
+        const spots = (game.oilTiles || [])
+            .filter(t => {
+                const tile = game.map[t.y]?.[t.x];
+                if (!tile || !tile.oil || (tile.oilAmount !== undefined && tile.oilAmount <= 0)) return false;
+                return !game.buildings.some(b => b.type === 'derrick' && Math.abs(b.x - t.x) < 2 && Math.abs(b.y - t.y) < 2);
+            })
+            .sort((a, b) => Math.hypot(a.x - hq.x, a.y - hq.y) - Math.hypot(b.x - hq.x, b.y - hq.y))
+            .slice(0, 2);
+        for (const t of spots) drawGuideArrow(t.x + 0.5, t.y + 0.5);
+    } else if (obj.guide === 'bunker') {
+        const bunker = (game.bunkers || [])
+            .filter(b => !b.claimed)
+            .sort((a, b) => Math.hypot(a.x - hq.x, a.y - hq.y) - Math.hypot(b.x - hq.x, b.y - hq.y))[0];
+        if (bunker) drawGuideArrow(bunker.x, bunker.y);
+    }
 }
 
 // Generic minimap pings (bunker claims, raids, dried-up patches)
@@ -1738,14 +1934,7 @@ function update(dt) {
     updateBunkers();
     updateScavengers();
     updateUI();
-
-    // One-time onboarding hints
-    if (game.tick === 600 && !game.buildings.some(b => b.playerId === 0 && b.type === 'derrick')) {
-        setBanner('Tip: build Oil Derricks on the dark oil patches to earn funds', 6, '#66e0ff');
-    }
-    if (game.tick === 2100 && (game.bunkers || []).some(b => !b.claimed)) {
-        setBanner('Tip: send a unit to the glowing tech bunkers for rewards', 6, '#66e0ff');
-    }
+    updateObjectives();
 
     // Fade out order feedback markers
     if (game.orderMarkers) {
@@ -2473,6 +2662,10 @@ function updateFogOfWar() {
 }
 
 function updateAI() {
+    // Orientation phase: like a human player, the AI needs a moment
+    // before its first action (easy waits the longest)
+    const startDelay = { easy: 4200, normal: 2700, hard: 1500 }[gameSettings.difficulty] || 2700;
+    if (game.tick < startDelay) return;
     if (game.tick % 120 !== 0) return; // Run every 2 seconds
 
     const ai = game.players[1];
@@ -2527,7 +2720,11 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     const labs = aiBuildings.filter(b => b.type === 'researchLab' && !b.isUnderConstruction);
     const towers = count('tower') + count('towerHeavy');
 
+    // Human-like action budget: at most one construction order per
+    // think-tick (every 2s), like a player clicking through their base
+    let buildActions = 1;
     const tryBuild = (role, near) => {
+        if (buildActions <= 0) return false;
         const type = BUILDING_TYPES[role];
         if (ai.oil < type.cost) return false;
         let pos;
@@ -2539,6 +2736,7 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
         if (!pos) return false;
         createBuilding(role, 1, pos.x, pos.y, true);
         ai.oil -= type.cost;
+        buildActions--;
         return true;
     };
 
@@ -2575,12 +2773,15 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     if (numFactories < 2 && ai.oil > 2000) tryBuild('factory', aiHQ);
 
     // ---- UNIT PRODUCTION ----
+    let prodActions = game.tick < 18000 ? 1 : 2;
     const queueUnit = (building, role) => {
+        if (prodActions <= 0) return false;
         const uType = UNIT_TYPES[role];
         if (!uType || ai.oil < uType.cost || ai.techLevel < uType.tech) return false;
         if (building.productionQueue.length >= 2) return false;
         ai.oil -= uType.cost;
         addToProductionQueue(building, role);
+        prodActions--;
         return true;
     };
 
@@ -2614,6 +2815,11 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
     }
 
     // ---- ATTACK WAVES ----
+    // A human can't field an assault force in the first minutes -
+    // neither does the AI (per-difficulty earliest attack time)
+    const minAttackTick = { easy: 32400, normal: 25200, hard: 16200 }[gameSettings.difficulty] || 25200;
+    if (game.tick < minAttackTick) return;
+
     const combatUnits = aiUnits;
     const attackThreshold = { easy: 16, normal: 12, hard: 8 }[gameSettings.difficulty] || 12;
     const gameTime = game.tick / 60;
@@ -2711,6 +2917,7 @@ function updateBunkers() {
         if (!claimer) continue;
 
         bunker.claimed = true;
+        bunker.claimedBy = claimer.playerId;
         const player = game.players[claimer.playerId];
         const roll = Math.random();
         let rewardText = '';
@@ -2939,6 +3146,32 @@ function updateUI() {
     updateBuildMenu();
 }
 
+// ---- Rich hover tooltip for sidebar buttons ----
+let tooltipEl = null;
+
+function showTooltip(btn, name, cost, statusLine, desc) {
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.className = 'game-tooltip';
+        document.body.appendChild(tooltipEl);
+    }
+    let html = `<div class="tt-title">${name}` +
+        (cost !== undefined && cost !== '' ? ` <span class="tt-cost">${cost} oil</span>` : '') + `</div>`;
+    if (desc) html += `<div class="tt-desc">${desc}</div>`;
+    if (statusLine) html += `<div class="tt-stats">${statusLine.replace(/\n/g, '<br>')}</div>`;
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.display = 'block';
+    const rect = btn.getBoundingClientRect();
+    const ttw = 240;
+    tooltipEl.style.width = ttw + 'px';
+    tooltipEl.style.left = Math.max(8, rect.left - ttw - 12) + 'px';
+    tooltipEl.style.top = Math.max(8, Math.min(window.innerHeight - 140, rect.top - 8)) + 'px';
+}
+
+function hideTooltip() {
+    if (tooltipEl) tooltipEl.style.display = 'none';
+}
+
 // Does the player have a finished building of this role?
 function hasBuilding(playerId, role) {
     return game.buildings.some(b => b.playerId === playerId && b.type === role && !b.isUnderConstruction);
@@ -2981,11 +3214,10 @@ function updateBuildMenu() {
         menu.appendChild(el);
     };
 
-    const makeButton = (iconUrl, label, cost, title, enabled, onClick) => {
+    const makeButton = (iconUrl, label, cost, title, enabled, onClick, desc) => {
         const btn = document.createElement('button');
         btn.className = 'build-btn';
         btn.innerHTML = `<img src="${iconUrl}" alt=""><span class="build-btn-label">${label}</span><span class="build-btn-cost">${cost}</span>`;
-        btn.title = title;
         if (!enabled) btn.classList.add('disabled');
         btn.addEventListener('mousedown', (e) => {
             e.stopPropagation();
@@ -2995,6 +3227,8 @@ function updateBuildMenu() {
             }
             onClick();
         });
+        btn.addEventListener('mouseenter', () => showTooltip(btn, label, cost, title, desc));
+        btn.addEventListener('mouseleave', hideTooltip);
         menu.appendChild(btn);
         return btn;
     };
@@ -3023,7 +3257,7 @@ function updateBuildMenu() {
                     makeButton(
                         IsoSprites.icon('building', 'researchLab', faction),
                         upgrade.label, upgrade.cost,
-                        `${upgrade.label} - Unlocks: ${upgrade.unlocks}`,
+                        `Unlocks: ${upgrade.unlocks}`,
                         player.oil >= upgrade.cost,
                         () => {
                             if (player.oil >= upgrade.cost && !selectedBuilding.researching && player.techLevel + 1 === next) {
@@ -3071,7 +3305,7 @@ function updateBuildMenu() {
                         menu._lastStateKey = null;
                         updateBuildMenu();
                     }
-                });
+                }, UNIT_DESC[unitRole]);
             }
         }
         // Info-only buildings
@@ -3122,7 +3356,7 @@ function updateBuildMenu() {
                 game.placingBuilding = role;
                 game.placingBuildingFrom = null;
             }
-        });
+        }, BUILDING_DESC[role]);
     }
 }
 
@@ -4314,6 +4548,10 @@ function startGame() {
     if (playerFactionEl) gameSettings.playerFaction = playerFactionEl.value;
     if (enemyFactionEl) gameSettings.enemyFaction = enemyFactionEl.value;
 
+    // Guided start on/off
+    const tutorialEl = document.getElementById('tutorialSelect');
+    gameSettings.tutorial = !tutorialEl || tutorialEl.value === 'on';
+
     // Set actual map size based on selection
     const mapSizes = {
         small: 32,
@@ -4402,6 +4640,8 @@ function resetGame() {
     game.bunkers = [];
     game.banner = null;
     game.pings = [];
+    game.objectives = [];
+    game.objectiveFlash = null;
     game.shake = 0;
     terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];
@@ -4633,6 +4873,9 @@ function initGame() {
 
     // Scatter neutral tech bunkers across the wasteland
     placeBunkers();
+
+    // Guided-start objectives (uses the resolved player faction)
+    initObjectives();
 
     // Map is final now - render the static terrain cache
     buildTerrainCache();
