@@ -663,6 +663,34 @@ function tileToWorld(tx, ty) {
 // oil-patch bubbles are animated on top.
 // ============================================
 let terrainCache = null;
+let dustMotes = [];
+// (the vignette/warm grade is a zero-cost CSS overlay: #vignette)
+
+// Faint dust motes drifting across the wasteland
+function drawDust() {
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    if (dustMotes.length === 0) {
+        for (let i = 0; i < 16; i++) {
+            dustMotes.push({
+                x: Math.random() * cw, y: Math.random() * ch,
+                vx: 0.25 + Math.random() * 0.4, vy: 0.08 + Math.random() * 0.15,
+                size: 1 + Math.random() * 2, a: 0.05 + Math.random() * 0.08
+            });
+        }
+    }
+    ctx.fillStyle = '#f5e8c8';
+    for (const m of dustMotes) {
+        m.x += m.vx;
+        m.y += m.vy;
+        if (m.x > cw + 4) { m.x = -4; m.y = Math.random() * ch; }
+        if (m.y > ch + 4) { m.y = -4; }
+        ctx.globalAlpha = m.a;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
 
 function buildTerrainCache() {
     const mapSize = getMapSize();
@@ -765,6 +793,7 @@ function render() {
     // Terrain (cached) + animated oil patches
     drawTerrain();
     drawOilAnimations();
+    drawDecals();
     drawBunkers();
 
     // Draw buildings and units together, sorted by isometric depth (x + y)
@@ -836,6 +865,11 @@ function render() {
         drawBuildingPreview(game.placingBuilding, tx, ty, isValid);
     }
 
+    // Atmosphere: drifting dust motes
+    if (game.status === 'PLAYING' || game.status === 'PAUSED') {
+        drawDust();
+    }
+
     // Guided-start overlays
     drawObjectiveGuides();
     drawObjectives();
@@ -869,6 +903,83 @@ function render() {
 
     // Draw minimap
     renderMinimap();
+}
+
+// ============================================
+// BATTLEFIELD DECALS (wrecks, splats, scorch)
+// Persist for a while after fights, then fade.
+// ============================================
+
+function addDecal(decal) {
+    if (!game.decals) game.decals = [];
+    decal.maxLife = decal.life;
+    game.decals.push(decal);
+    if (game.decals.length > 60) game.decals.shift();
+}
+
+function drawDecals() {
+    if (!game.decals) return;
+    const zoom = getZoom();
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    for (const d of game.decals) {
+        const s = worldToScreen(d.x, d.y);
+        if (s.x < -140 || s.x > cw + 140 || s.y < -140 || s.y > ch + 140) continue;
+        const alpha = Math.min(1, d.life / 10);
+        ctx.globalAlpha = alpha;
+
+        if (d.type === 'wreck') {
+            const spr = IsoSprites.wreckSprite(d.role, d.faction, d.dir);
+            ctx.drawImage(spr,
+                s.x - spr.anchorX * zoom, s.y - spr.anchorY * zoom,
+                spr.width * zoom, spr.height * zoom);
+            // dwindling smoke from fresh wrecks
+            if (d.maxLife - d.life < 6 && Math.random() < 0.12) {
+                game.particles.push({
+                    x: d.x, y: d.y, z: 6,
+                    vx: (Math.random() - 0.5) * 0.04, vy: (Math.random() - 0.5) * 0.04,
+                    vz: 0.15, color: '#44403a', size: 4 + Math.random() * 3,
+                    life: 1, type: 'smoke'
+                });
+            }
+        } else if (d.type === 'splat') {
+            ctx.fillStyle = d.color;
+            ctx.beginPath();
+            ctx.ellipse(s.x, s.y, 7 * zoom, 3.5 * zoom, 0, 0, Math.PI * 2);
+            ctx.fill();
+            for (const [ox, oy, r] of d.drops) {
+                ctx.beginPath();
+                ctx.ellipse(s.x + ox * zoom, s.y + oy * zoom, r * zoom, r * 0.5 * zoom, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (d.type === 'scorch') {
+            const grad = ctx.createRadialGradient(s.x, s.y, 1, s.x, s.y, d.size * zoom);
+            grad.addColorStop(0, 'rgba(14,10,8,0.75)');
+            grad.addColorStop(0.6, 'rgba(24,18,12,0.45)');
+            grad.addColorStop(1, 'rgba(30,24,16,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(s.x, s.y, d.size * zoom, d.size * 0.5 * zoom, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // rubble chunks
+            ctx.fillStyle = '#4c463e';
+            for (const [ox, oy, r, rot] of d.rubble) {
+                ctx.save();
+                ctx.translate(s.x + ox * zoom, s.y + oy * zoom);
+                ctx.rotate(rot);
+                ctx.fillRect(-r, -r * 0.6, r * 2, r * 1.2);
+                ctx.restore();
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+}
+
+function updateDecals(dt) {
+    if (!game.decals) return;
+    for (let i = game.decals.length - 1; i >= 0; i--) {
+        game.decals[i].life -= dt;
+        if (game.decals[i].life <= 0) game.decals.splice(i, 1);
+    }
 }
 
 // ============================================
@@ -1193,6 +1304,18 @@ function tileRandom(tx, ty, seed = 0) {
     return n - Math.floor(n);
 }
 
+// Bilinear-interpolated value noise: smooth tonal patches across the map
+function smoothNoise(x, y) {
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const fx = x - x0, fy = y - y0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const s = (a, b) => tileRandom(a, b, 42);
+    const top = s(x0, y0) + (s(x0 + 1, y0) - s(x0, y0)) * sx;
+    const bot = s(x0, y0 + 1) + (s(x0 + 1, y0 + 1) - s(x0, y0 + 1)) * sx;
+    return top + (bot - top) * sy;
+}
+
 // Render one tile into the terrain cache (fixed zoom 1)
 function drawTileToCache(tx, ty) {
     const tile = game.map[ty]?.[tx];
@@ -1214,8 +1337,10 @@ function drawTileToCache(tx, ty) {
 
     const base = baseColors[tile.type] || baseColors.grass;
 
-    // Add per-tile color variation (±15%)
-    const variation = (tileRandom(tx, ty) - 0.5) * 30;
+    // Smooth large-scale tonal patches + a touch of per-tile grain
+    // (kills the checkerboard look of pure per-tile randomness)
+    const variation = (smoothNoise(tx / 5, ty / 5) - 0.5) * 36 +
+                      (tileRandom(tx, ty) - 0.5) * 8;
     let r = Math.max(0, Math.min(255, base.r + variation));
     let g = Math.max(0, Math.min(255, base.g + variation));
     let b = Math.max(0, Math.min(255, base.b + variation));
@@ -1255,7 +1380,95 @@ function drawTileToCache(tx, ty) {
     c.strokeStyle = 'rgba(0,0,0,0.15)';
     c.stroke();
 
+    // Shore foam on water edges that touch land
+    if (tile.type === 'water') {
+        const corners = {
+            top: [pos.x, pos.y - tileH / 2],
+            right: [pos.x + tileW / 2, pos.y],
+            bottom: [pos.x, pos.y + tileH / 2],
+            left: [pos.x - tileW / 2, pos.y]
+        };
+        const edges = [
+            { n: [tx, ty - 1], a: corners.top, b: corners.right },
+            { n: [tx + 1, ty], a: corners.right, b: corners.bottom },
+            { n: [tx, ty + 1], a: corners.bottom, b: corners.left },
+            { n: [tx - 1, ty], a: corners.left, b: corners.top }
+        ];
+        c.strokeStyle = 'rgba(205,235,240,0.55)';
+        c.lineWidth = 2;
+        for (const e of edges) {
+            const nb = game.map[e.n[1]]?.[e.n[0]];
+            if (nb && nb.type !== 'water') {
+                c.beginPath();
+                c.moveTo(e.a[0] + (pos.x - e.a[0]) * 0.06, e.a[1] + (pos.y - e.a[1]) * 0.06);
+                c.lineTo(e.b[0] + (pos.x - e.b[0]) * 0.06, e.b[1] + (pos.y - e.b[1]) * 0.06);
+                c.stroke();
+            }
+        }
+    }
+
     drawTileDetailsToCache(c, tx, ty, tile.type, pos);
+
+    // Scattered wasteland props (deterministic, plains only, never on oil)
+    if (tile.type === 'grass' && !tile.oil) {
+        const r7 = tileRandom(tx, ty, 7);
+        if (r7 < 0.03) {
+            // small rock cluster
+            for (let i = 0; i < 3; i++) {
+                const ox = (tileRandom(tx, ty, 20 + i) - 0.5) * 18;
+                const oy = (tileRandom(tx, ty, 30 + i) - 0.5) * 9;
+                const rw = 2.5 + tileRandom(tx, ty, 40 + i) * 3.5;
+                c.fillStyle = '#6d6154';
+                c.beginPath();
+                c.ellipse(pos.x + ox, pos.y + oy, rw, rw * 0.6, 0, 0, Math.PI * 2);
+                c.fill();
+                c.fillStyle = '#8d8172';
+                c.beginPath();
+                c.ellipse(pos.x + ox - rw * 0.25, pos.y + oy - rw * 0.3, rw * 0.5, rw * 0.3, 0, 0, Math.PI * 2);
+                c.fill();
+            }
+        } else if (r7 < 0.05) {
+            // dead bush
+            c.strokeStyle = 'rgba(74,56,34,0.85)';
+            c.lineWidth = 1.2;
+            for (let i = 0; i < 5; i++) {
+                const ang = -Math.PI * 0.15 - (i / 5) * Math.PI * 0.7;
+                const len = 5 + tileRandom(tx, ty, 50 + i) * 5;
+                c.beginPath();
+                c.moveTo(pos.x, pos.y + 2);
+                c.quadraticCurveTo(
+                    pos.x + Math.cos(ang) * len * 0.5, pos.y + 2 + Math.sin(ang) * len * 0.7,
+                    pos.x + Math.cos(ang) * len, pos.y + 2 + Math.sin(ang) * len);
+                c.stroke();
+            }
+        } else if (r7 < 0.062) {
+            // bleached bones
+            c.strokeStyle = 'rgba(222,214,190,0.8)';
+            c.lineWidth = 1.5;
+            for (let i = 0; i < 3; i++) {
+                c.beginPath();
+                c.arc(pos.x - 4 + i * 4, pos.y, 3.5 - i * 0.5, Math.PI * 0.15, Math.PI * 0.85);
+                c.stroke();
+            }
+            c.fillStyle = 'rgba(222,214,190,0.85)';
+            c.beginPath();
+            c.ellipse(pos.x + 8, pos.y - 1, 2.5, 1.8, 0.3, 0, Math.PI * 2);
+            c.fill();
+        } else if (r7 < 0.09) {
+            // cracked, parched earth
+            c.strokeStyle = 'rgba(60,48,30,0.4)';
+            c.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const sx0 = pos.x + (tileRandom(tx, ty, 60 + i) - 0.5) * 20;
+                const sy0 = pos.y + (tileRandom(tx, ty, 70 + i) - 0.5) * 10;
+                c.beginPath();
+                c.moveTo(sx0, sy0);
+                c.lineTo(sx0 + (tileRandom(tx, ty, 80 + i) - 0.5) * 14, sy0 + (tileRandom(tx, ty, 90 + i) - 0.5) * 7);
+                c.lineTo(sx0 + (tileRandom(tx, ty, 100 + i) - 0.5) * 18, sy0 + (tileRandom(tx, ty, 110 + i) - 0.5) * 9);
+                c.stroke();
+            }
+        }
+    }
 
     // Static oil pool (bubbles are animated separately)
     if (tile.oil) {
@@ -1438,6 +1651,9 @@ function drawBuilding(building) {
         const c2 = worldToScreen(building.x + half, building.y - half);
         const c3 = worldToScreen(building.x + half, building.y + half);
         const c4 = worldToScreen(building.x - half, building.y + half);
+        ctx.save();
+        ctx.shadowColor = '#33ff55';
+        ctx.shadowBlur = 6;
         ctx.strokeStyle = '#33ff55';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1447,6 +1663,7 @@ function drawBuilding(building) {
         ctx.lineTo(c4.x, c4.y);
         ctx.closePath();
         ctx.stroke();
+        ctx.restore();
     }
 
     // Derrick: remaining patch reserves
@@ -1514,12 +1731,23 @@ function drawUnit(unit) {
 
     const isSelected = game.selection.includes(unit);
 
-    // Selection ellipse under the unit (green = own, red ring on hover not needed)
+    // Selection: glowing double ring under the unit
     if (isSelected) {
-        ctx.strokeStyle = unit.playerId === 0 ? '#33ff55' : '#ff5533';
-        ctx.lineWidth = 1.5;
+        const col = unit.playerId === 0 ? '#33ff55' : '#ff5533';
+        const rx = (type.size + 6) * zoom, ry = (type.size + 6) * 0.5 * zoom;
+        ctx.save();
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 7;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.ellipse(screen.x, screen.y + 2 * zoom, (type.size + 6) * zoom, (type.size + 6) * 0.5 * zoom, 0, 0, Math.PI * 2);
+        ctx.ellipse(screen.x, screen.y + 2 * zoom, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        ctx.strokeStyle = IsoSprites.withAlpha(col, 0.35);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y + 2 * zoom, rx * 0.75, ry * 0.75, 0, 0, Math.PI * 2);
         ctx.stroke();
     }
 
@@ -1800,7 +2028,7 @@ function drawParticle(particle) {
 
         case 'shockwave':
             // Expanding ring
-            const ringSize = (1 - particle.life) * 30 + 5;
+            const ringSize = (1 - particle.life) * (particle.maxR || 30) + 5;
             ctx.globalAlpha = particle.life * 0.6;
             ctx.strokeStyle = '#ff8800';
             ctx.lineWidth = 3;
@@ -1904,6 +2132,14 @@ function renderMinimap() {
         minimapCtx.stroke();
     }
 
+    // Red border flash while the base is under attack
+    if (game.lastAttackAlert && Date.now() - game.lastAttackAlert.time < 3000) {
+        const pulse = 0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 180));
+        minimapCtx.strokeStyle = `rgba(255,50,40,${pulse})`;
+        minimapCtx.lineWidth = 3;
+        minimapCtx.strokeRect(1.5, 1.5, minimapCanvas.width - 3, minimapCanvas.height - 3);
+    }
+
     // Draw camera viewport
     const viewStart = screenToWorld(0, 0);
     const viewEnd = screenToWorld(canvas.offsetWidth, canvas.offsetHeight);
@@ -1935,6 +2171,7 @@ function update(dt) {
     updateScavengers();
     updateUI();
     updateObjectives();
+    updateDecals(dt);
 
     // Fade out order feedback markers
     if (game.orderMarkers) {
@@ -2071,6 +2308,22 @@ function updateUnits(dt) {
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             SoundManager.play('explosion_small');
+            // leave something behind on the battlefield
+            if (type.category === 'armor') {
+                addDecal({
+                    type: 'wreck', x: unit.x, y: unit.y, life: 40,
+                    role: unit.type, faction: getFaction(unit.playerId),
+                    dir: IsoSprites.dirFromAngle(unit.angle || 0)
+                });
+            } else {
+                const faction = getFaction(unit.playerId);
+                addDecal({
+                    type: 'splat', x: unit.x, y: unit.y, life: 25,
+                    color: faction === 'series9' ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
+                    drops: Array.from({ length: 3 }, () => [
+                        (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 9, 1.5 + Math.random() * 2])
+                });
+            }
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
@@ -2298,7 +2551,9 @@ function updateUnits(dt) {
         }
 
         // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
-        if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0) {
+        // Staggered scan (every 12 ticks per unit) keeps big battles cheap
+        if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0 &&
+            (game.tick + i) % 12 === 0) {
             const sightRange = sightT(type);
             let nearestEnemy = null;
             let nearestDist = Infinity;
@@ -2371,13 +2626,22 @@ function updateBuildings(dt) {
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
             SoundManager.play('explosion_large');
+            addDecal({
+                type: 'scorch', x: building.x, y: building.y, life: 60,
+                size: 16 + type.size * 9,
+                rubble: Array.from({ length: 4 + type.size }, () => [
+                    (Math.random() - 0.5) * type.size * 22,
+                    (Math.random() - 0.5) * type.size * 11,
+                    2 + Math.random() * 3,
+                    Math.random() * Math.PI])
+            });
             game.buildings.splice(i, 1);
             game.selection = game.selection.filter(s => s !== building);
             continue;
         }
 
-        // Turret attack (only if visible to the building's owner and activated)
-        if (type.damage && !building.isUnderConstruction) {
+        // Turret attack (staggered scan keeps many towers cheap)
+        if (type.damage && !building.isUnderConstruction && (game.tick + i) % 6 === 0) {
             // Check if turret is activated (only shoot after activation delay)
             const isActivated = !building.activationTime || game.tick >= building.activationTime;
 
@@ -2571,6 +2835,21 @@ function updateProjectiles(dt) {
                     if (proj.target.hp <= 0 && proj.source && UNIT_TYPES[proj.source.type] &&
                         game.units.includes(proj.source)) {
                         proj.source.kills = (proj.source.kills || 0) + 1;
+                    }
+                    // Flame hits set the ground on fire briefly
+                    if (proj.weapon === 'flame') {
+                        for (let f = 0; f < 3; f++) {
+                            game.particles.push({
+                                x: proj.x + (Math.random() - 0.5) * 0.8,
+                                y: proj.y + (Math.random() - 0.5) * 0.8,
+                                z: 1,
+                                vx: 0, vy: 0, vz: 0.05,
+                                color: proj.faction === 'series9' ? '#7dffb0' : ['#ff5511', '#ff8822', '#ffcc33'][f],
+                                size: 2.5 + Math.random() * 2.5,
+                                life: 1 + Math.random() * 0.7,
+                                type: 'explosion'
+                            });
+                        }
                     }
                     // Area damage: hurt everything hostile around the impact
                     if (proj.splash > 0) {
@@ -3691,6 +3970,32 @@ function createExplosion(x, y, big = false) {
         });
     }
 
+    // Shockwave ring for every blast (bigger ones expand further)
+    game.particles.push({
+        x, y, z: 0,
+        vx: 0, vy: 0, vz: 0,
+        color: '#ff8800',
+        size: 5,
+        maxR: big ? 52 : 24,
+        life: 0.5,
+        type: 'shockwave'
+    });
+
+    // Lingering ground fire
+    const fireSpots = big ? 4 : 2;
+    for (let i = 0; i < fireSpots; i++) {
+        game.particles.push({
+            x: x + (Math.random() - 0.5) * (big ? 2 : 0.8),
+            y: y + (Math.random() - 0.5) * (big ? 2 : 0.8),
+            z: 1,
+            vx: 0, vy: 0, vz: 0.06,
+            color: ['#ff5511', '#ff8822', '#ffaa22'][i % 3],
+            size: 3 + Math.random() * 3,
+            life: 1.4 + Math.random() * 0.8,
+            type: 'explosion'
+        });
+    }
+
     // Layer 5: Debris (only for big explosions)
     if (big) {
         const debrisColors = ['#553322', '#442211', '#332211', '#664433'];
@@ -3709,15 +4014,6 @@ function createExplosion(x, y, big = false) {
             });
         }
 
-        // Shockwave ring (visual effect)
-        game.particles.push({
-            x, y, z: 0,
-            vx: 0, vy: 0, vz: 0,
-            color: '#ff880044',
-            size: 5,
-            life: 0.5,
-            type: 'shockwave'
-        });
     }
 }
 
@@ -4642,6 +4938,7 @@ function resetGame() {
     game.pings = [];
     game.objectives = [];
     game.objectiveFlash = null;
+    game.decals = [];
     game.shake = 0;
     terrainCache = null;
     for (let g = 6; g <= 9; g++) game[`group${g}`] = [];

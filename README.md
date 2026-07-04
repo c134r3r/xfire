@@ -72,6 +72,16 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
+## Atmosphere & battlefield persistence
+
+The wasteland is dressed with smooth tonal terrain patches, scattered
+rocks, bleached bones, dead brush and cracked earth; water gets shore
+foam, the viewport a soft vignette and drifting dust. Fights leave marks:
+destroyed vehicles become smoking charred wrecks, infantry leaves splats,
+and razed buildings leave scorch marks with rubble - all fading out over
+time. Explosions push shockwave rings, spawn lingering ground fire and
+shake the screen.
+
 ## Guided start
 
 New players get an on-screen **objective chain** (toggleable in the

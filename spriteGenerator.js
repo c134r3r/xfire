@@ -1062,5 +1062,28 @@ const IsoSprites = (() => {
         return Math.round(((angle % (Math.PI * 2)) + Math.PI * 2) / (Math.PI * 2) * DIRS) % DIRS;
     }
 
-    return { unitSprite, buildingSprite, icon, dirFromAngle, DIRS, tint, withAlpha };
+    // Burned-out wreck: darkened, charred copy of the unit sprite
+    function wreckSprite(role, faction, dirIndex) {
+        const key = `w|${role}|${faction}|${dirIndex}`;
+        if (cache.has(key)) return cache.get(key);
+        const base = unitSprite(role, faction, dirIndex);
+        const c = document.createElement('canvas');
+        c.width = base.width;
+        c.height = base.height;
+        c.anchorX = base.anchorX;
+        c.anchorY = base.anchorY;
+        const cc = c.getContext('2d');
+        cc.drawImage(base, 0, 0);
+        cc.globalCompositeOperation = 'source-atop';
+        cc.fillStyle = 'rgba(24,18,12,0.72)';
+        cc.fillRect(0, 0, c.width, c.height);
+        // charred highlights so the silhouette still reads
+        cc.globalCompositeOperation = 'overlay';
+        cc.fillStyle = 'rgba(120,80,40,0.25)';
+        cc.fillRect(0, 0, c.width, c.height);
+        cache.set(key, c);
+        return c;
+    }
+
+    return { unitSprite, buildingSprite, wreckSprite, icon, dirFromAngle, DIRS, tint, withAlpha };
 })();
