@@ -308,13 +308,16 @@ const IsoSprites = (() => {
         return { x: d * cos - side * sin, y: d * sin + side * cos };
     }
 
-    function drawInfantry(s, yaw, pal, faction, weapon) {
-        // legs
+    function drawInfantry(s, yaw, pal, faction, weapon, frame = 0) {
+        // legs (two-frame walk: the stride mirrors each step)
+        const stride = frame === 1 ? -1 : 1;
         if (faction === 'series9') {
-            s.box(0, 0, 0, 4, 4, 3, yaw, pal.tread);
+            s.box(0, 0, 0, 4, 4, 3, yaw + (frame === 1 ? 0.25 : 0), pal.tread);
         } else {
-            s.rod(-1.2, 0.8, 4, -1.6, 1.4, 0, 1.6, pal.cloth);
-            s.rod(1.2, -0.8, 4, 1.6, -1.4, 0, 1.6, pal.cloth);
+            const l1 = fwd(yaw, 1.4 * stride, 1.1);
+            const l2 = fwd(yaw, -1.4 * stride, -1.1);
+            s.rod(-l1.x * 0.4, -l1.y * 0.4, 4, l1.x, l1.y, 0, 1.6, pal.cloth);
+            s.rod(-l2.x * 0.4, -l2.y * 0.4, 4, l2.x, l2.y, 0, 1.6, pal.cloth);
         }
         // torso
         const torsoCol = faction === 'evolved' ? pal.skin : pal.hull;
@@ -363,17 +366,17 @@ const IsoSprites = (() => {
     const UNIT_BUILDERS = {
 
         // ---------- infantry ----------
-        trooper(s, yaw, pal, faction) {
+        trooper(s, yaw, pal, faction, frame) {
             s.shadow(0, 0, 4.5, 0.3);
-            drawInfantry(s, yaw, pal, faction, 'rifle');
+            drawInfantry(s, yaw, pal, faction, 'rifle', frame);
         },
-        flamer(s, yaw, pal, faction) {
+        flamer(s, yaw, pal, faction, frame) {
             s.shadow(0, 0, 4.5, 0.3);
-            drawInfantry(s, yaw, pal, faction, 'flame');
+            drawInfantry(s, yaw, pal, faction, 'flame', frame);
         },
-        rocketeer(s, yaw, pal, faction) {
+        rocketeer(s, yaw, pal, faction, frame) {
             s.shadow(0, 0, 4.5, 0.3);
-            drawInfantry(s, yaw, pal, faction, 'rocket');
+            drawInfantry(s, yaw, pal, faction, 'rocket', frame);
         },
 
         // ---------- vehicles ----------
@@ -447,51 +450,31 @@ const IsoSprites = (() => {
         tank(s, yaw, pal, faction) {
             s.shadow(0, 0, 11, 0.34, 1.1);
             if (faction === 'evolved') {
-                // Scorpion: clawed beast with a tail stinger
+                // Scorpion hull: clawed beast (the tail is the rotating turret)
                 legs(s, yaw, 4, 9, 10, pal.hullDark, 1);
                 s.blob(0, 0, 5, 10, 13, pal.hull, { stretchX: 1.25, edge: true });
                 const f = fwd(yaw, 12);
                 s.spike(f.x, f.y, 4, yaw + 0.55, 9, 3, 1, pal.accent);
                 s.spike(f.x, f.y, 4, yaw - 0.55, 9, 3, 1, pal.accent);
-                // tail arcs over the back, stinger forward
-                let px = -10, pz = 8;
-                for (let i = 0; i < 4; i++) {
-                    const seg = fwd(yaw, px);
-                    s.blob(seg.x, seg.y, pz, 2.6 - i * 0.3, 4, tint(pal.hull, -6 + i * 6));
-                    px += 4.5; pz += 4;
-                }
-                const tip = fwd(yaw, 8);
-                s.spike(tip.x, tip.y, pz + 2, yaw, 8, 2.5, -2, pal.accent);
-                s.glowDot(tip.x, tip.y, pz + 2, 1.6, pal.glow);
             } else if (faction === 'series9') {
-                // Sentinel: hover tank with energy cannon
+                // Sentinel hull: hover chassis with skirts
                 s.box(0, 0, 4, 24, 15, 6, yaw, pal.hull, { edge: true });
                 const skL = fwd(yaw, 0, 9), skR = fwd(yaw, 0, -9);
                 s.box(skL.x, skL.y, 3, 20, 3, 3, yaw, pal.hullDark);
                 s.box(skR.x, skR.y, 3, 20, 3, 3, yaw, pal.hullDark);
-                s.box(-2 * Math.cos(yaw), -2 * Math.sin(yaw), 10, 11, 9, 5, yaw, tint(pal.hull, 10), { edge: true });
-                const m = fwd(yaw, 14);
-                s.rod(0, 0, 13, m.x, m.y, 13.5, 3.2, pal.metalDark);
-                s.glowDot(m.x, m.y, 13.5, 1.8, pal.glow);
-                s.glowDot(-6 * Math.cos(yaw), -6 * Math.sin(yaw), 13, 1.5, pal.glow);
+                const g = fwd(yaw, -8);
+                s.glowDot(g.x, g.y, 9, 1.5, pal.glow);
             } else {
-                // Anaconda: classic tread tank
+                // Anaconda hull: treads + body
                 treads(s, yaw, 26, 9, 6, 5, pal.tread);
                 s.box(0, 0, 5, 24, 15, 6, yaw, pal.hull, { edge: true });
-                const t = fwd(yaw, -2);
-                s.cyl(t.x, t.y, 11, 6, 5, tint(pal.hull, 6), { edge: true });
-                const m = fwd(yaw, 16);
-                s.rod(t.x, t.y, 14, m.x, m.y, 14.5, 3, pal.metalDark);
-                const mm = fwd(yaw, 19);
-                s.rod(fwd(yaw, 17).x, fwd(yaw, 17).y, 14.5, mm.x, mm.y, 14.6, 4, pal.metalDark);
-                s.glowDot(t.x - 3, t.y - 3, 17, 1, pal.accent);
             }
         },
 
         heavy(s, yaw, pal, faction) {
             s.shadow(0, 0, 14, 0.38, 1.15);
             if (faction === 'evolved') {
-                // War Mastodon
+                // War Mastodon body (the howdah cannon is the turret)
                 const cos = Math.cos(yaw), sin = Math.sin(yaw);
                 for (const [lx, ly] of [[8, 8], [8, -8], [-8, 8], [-8, -8]]) {
                     s.cyl(lx * cos - ly * sin, lx * sin + ly * cos, 0, 2.6, 7, pal.hullDark);
@@ -499,38 +482,19 @@ const IsoSprites = (() => {
                 s.blob(0, 0, 7, 12, 17, pal.hull, { stretchX: 1.2, edge: true });
                 const h = fwd(yaw, 14);
                 s.blob(h.x, h.y, 9, 6, 8, tint(pal.hull, 6), { edge: true });
-                // tusks
                 s.spike(h.x, h.y, 8, yaw + 0.35, 12, 3, 4, pal.accent);
                 s.spike(h.x, h.y, 8, yaw - 0.35, 12, 3, 4, pal.accent);
-                // howdah with cannon
-                s.box(-4 * cos, -4 * sin, 19, 9, 8, 4, yaw, pal.metalDark, { edge: true });
-                const m = fwd(yaw, 10);
-                s.rod(-4 * cos, -4 * sin, 22, m.x, m.y, 24, 2.6, pal.tread);
                 s.glowDot(h.x + 2, h.y - 2, 14, 1.2, pal.glow);
             } else if (faction === 'series9') {
-                // Annihilator: massive hover wedge with twin lances
+                // Annihilator hull: hover wedge with core
                 s.box(0, 0, 5, 32, 20, 7, yaw, pal.hull, { edge: true });
                 s.box(-3 * Math.cos(yaw), -3 * Math.sin(yaw), 12, 18, 13, 6, yaw, tint(pal.hull, 8), { edge: true });
-                // central core
                 s.glowDot(0, 0, 19, 3, pal.glow);
-                for (const side of [4.5, -4.5]) {
-                    const m = fwd(yaw, 19, side);
-                    s.rod(fwd(yaw, -2, side).x, fwd(yaw, -2, side).y, 16, m.x, m.y, 16.5, 3, pal.metalDark);
-                    s.glowDot(m.x, m.y, 16.5, 1.6, pal.glow);
-                }
             } else {
-                // Juggernaut: twin-cannon land fortress
+                // Juggernaut hull: treads + two-tier body
                 treads(s, yaw, 32, 11, 8, 6, pal.tread);
                 s.box(0, 0, 6, 30, 19, 7, yaw, pal.hull, { edge: true });
                 s.box(-2 * Math.cos(yaw), -2 * Math.sin(yaw), 13, 18, 13, 6, yaw, tint(pal.hull, 7), { edge: true });
-                const t = fwd(yaw, -2);
-                s.cyl(t.x, t.y, 19, 6.5, 5, tint(pal.hull, 12), { edge: true });
-                for (const side of [2.6, -2.6]) {
-                    const m = fwd(yaw, 19, side);
-                    s.rod(fwd(yaw, -2, side).x, fwd(yaw, -2, side).y, 22, m.x, m.y, 22.5, 2.8, pal.metalDark);
-                }
-                s.rod(t.x - 4, t.y - 4, 24, t.x - 5, t.y - 5, 30, 1.2, pal.metalDark);
-                s.glowDot(t.x - 5, t.y - 5, 30, 1.2, pal.accent);
             }
         },
 
@@ -573,6 +537,165 @@ const IsoSprites = (() => {
         },
 
     };
+
+    // ============================================
+    // ROTATING TURRETS (drawn separately from hulls
+    // so they can track targets independently)
+    // Geometry is local: pivot at (0,0,0) = the mount.
+    // ============================================
+
+    // Where the turret sits on the hull: forward offset (hull-local)
+    // and mount height above the ground.
+    const TURRET_MOUNT = {
+        tank: {
+            survivors: { ox: -2, z: 11 },
+            evolved: { ox: -2, z: 6 },
+            series9: { ox: -2, z: 10 }
+        },
+        heavy: {
+            survivors: { ox: -2, z: 19 },
+            evolved: { ox: -4, z: 19 },
+            series9: { ox: -3, z: 12 }
+        }
+    };
+
+    const TOWER_TURRET_MOUNT = {
+        tower: { survivors: 20, evolved: 26, series9: 22 },
+        towerHeavy: { survivors: 24, evolved: 30, series9: 26 }
+    };
+
+    const TURRET_BUILDERS = {
+        tank(s, yaw, pal, faction) {
+            if (faction === 'evolved') {
+                // Scorpion tail: arcs up over the pivot, stinger forward
+                let px = -8, pz = 0;
+                for (let i = 0; i < 4; i++) {
+                    const seg = fwd(yaw, px);
+                    s.blob(seg.x, seg.y, pz, 2.6 - i * 0.3, 4, tint(pal.hull, -6 + i * 6));
+                    px += 4.5; pz += 4;
+                }
+                const tip = fwd(yaw, 10);
+                s.spike(tip.x, tip.y, pz + 2, yaw, 8, 2.5, -2, pal.accent);
+                s.glowDot(tip.x, tip.y, pz + 2, 1.6, pal.glow);
+            } else if (faction === 'series9') {
+                s.box(0, 0, 0, 11, 9, 5, yaw, tint(pal.hull, 10), { edge: true });
+                const m = fwd(yaw, 16);
+                s.rod(0, 0, 3, m.x, m.y, 3.5, 3.2, pal.metalDark);
+                s.glowDot(m.x, m.y, 3.5, 1.8, pal.glow);
+            } else {
+                s.cyl(0, 0, 0, 6, 5, tint(pal.hull, 6), { edge: true });
+                const m = fwd(yaw, 18);
+                s.rod(0, 0, 3, m.x, m.y, 3.5, 3, pal.metalDark);
+                const mm = fwd(yaw, 21);
+                s.rod(fwd(yaw, 19).x, fwd(yaw, 19).y, 3.5, mm.x, mm.y, 3.6, 4, pal.metalDark);
+                s.glowDot(-3, -3, 6, 1, pal.accent);
+            }
+        },
+
+        heavy(s, yaw, pal, faction) {
+            if (faction === 'evolved') {
+                // Mastodon howdah with cannon
+                s.box(0, 0, 0, 9, 8, 4, yaw, pal.metalDark, { edge: true });
+                const m = fwd(yaw, 14);
+                s.rod(0, 0, 3, m.x, m.y, 5, 2.6, pal.tread);
+            } else if (faction === 'series9') {
+                s.box(0, 0, 0, 8, 12, 4, yaw, tint(pal.hull, 12), { edge: true });
+                for (const side of [4.5, -4.5]) {
+                    const m = fwd(yaw, 22, side);
+                    s.rod(fwd(yaw, 1, side).x, fwd(yaw, 1, side).y, 4, m.x, m.y, 4.5, 3, pal.metalDark);
+                    s.glowDot(m.x, m.y, 4.5, 1.6, pal.glow);
+                }
+            } else {
+                s.cyl(0, 0, 0, 6.5, 5, tint(pal.hull, 12), { edge: true });
+                for (const side of [2.6, -2.6]) {
+                    const m = fwd(yaw, 21, side);
+                    s.rod(fwd(yaw, 0, side).x, fwd(yaw, 0, side).y, 3, m.x, m.y, 3.5, 2.8, pal.metalDark);
+                }
+                s.rod(-4, -4, 5, -5, -5, 11, 1.2, pal.metalDark);
+                s.glowDot(-5, -5, 11, 1.2, pal.accent);
+            }
+        },
+
+        // Defense tower heads
+        tower(s, yaw, pal, faction) {
+            if (faction === 'evolved') {
+                const m = fwd(yaw, 16);
+                s.rod(0, 0, 0, m.x, m.y, 6, 3, pal.hullDark);
+                s.glowDot(m.x, m.y, 6, 1.8, pal.glow);
+            } else if (faction === 'series9') {
+                const m = fwd(yaw, 11);
+                s.rod(0, 0, 2, m.x, m.y, 4, 2.4, pal.metalDark);
+                s.glowDot(m.x, m.y, 4, 2, pal.glow);
+            } else {
+                s.box(0, 0, 0, 16, 16, 8, yaw, tint(pal.hull, 8), { edge: true });
+                const m = fwd(yaw, 15);
+                s.rod(0, 0, 5, m.x, m.y, 5.5, 2.6, pal.metalDark);
+            }
+        },
+
+        towerHeavy(s, yaw, pal, faction) {
+            if (faction === 'evolved') {
+                const m = fwd(yaw, 14);
+                s.rod(0, 0, 0, m.x, m.y, 12, 3.5, pal.hullDark);
+                s.glowDot(m.x, m.y, 12, 2.2, pal.glow);
+            } else if (faction === 'series9') {
+                const m = fwd(yaw, 15);
+                s.rod(0, 0, 2, m.x, m.y, 4, 3.5, pal.metalDark);
+                s.glowDot(m.x, m.y, 4, 2.4, pal.glow);
+            } else {
+                s.cyl(0, 0, 0, 4.5, 4, tint(pal.hull, 14), { edge: true });
+                for (const side of [3, -3]) {
+                    const m = fwd(yaw, 19, side);
+                    s.rod(fwd(yaw, 0, side).x, fwd(yaw, 0, side).y, 4, m.x, m.y, 5, 3, pal.metalDark);
+                }
+            }
+        }
+    };
+
+    function turretSprite(role, faction, dirIndex) {
+        const key = `t|${role}|${faction}|${dirIndex}`;
+        if (cache.has(key)) return cache.get(key);
+        const s = new Surface(104, 104, 52, 62);
+        const yaw = (dirIndex / DIRS) * Math.PI * 2;
+        const pal = FACTIONS[faction].palette;
+        const builder = TURRET_BUILDERS[role];
+        if (builder) builder(s, yaw, pal, faction);
+        const finished = finalize(postProcess(s.canvas));
+        cache.set(key, finished);
+        return finished;
+    }
+
+    function turretMount(role, faction) {
+        return TURRET_MOUNT[role] ? TURRET_MOUNT[role][faction] : null;
+    }
+
+    function towerTurretMount(role, faction) {
+        return TOWER_TURRET_MOUNT[role] ? TOWER_TURRET_MOUNT[role][faction] : null;
+    }
+
+    // Hull + turret combined (icons, wrecks, death animations)
+    function unitComposite(role, faction, dirIndex, frame = 0) {
+        if (!TURRET_MOUNT[role]) return unitSprite(role, faction, dirIndex, frame);
+        const key = `comp|${role}|${faction}|${dirIndex}`;
+        if (cache.has(key)) return cache.get(key);
+        const body = unitSprite(role, faction, dirIndex, 0);
+        const tur = turretSprite(role, faction, dirIndex);
+        const m = TURRET_MOUNT[role][faction];
+        const yaw = (dirIndex / DIRS) * Math.PI * 2;
+        const mx = m.ox * Math.cos(yaw), my = m.ox * Math.sin(yaw);
+        const dx = (mx - my), dy = (mx + my) / 2 - m.z;
+
+        const c = document.createElement('canvas');
+        c.width = body.width; c.height = body.height;
+        c.logicalWidth = body.logicalWidth;
+        c.logicalHeight = body.logicalHeight;
+        c.anchorX = body.anchorX; c.anchorY = body.anchorY;
+        const cc = c.getContext('2d');
+        cc.drawImage(body, 0, 0);
+        cc.drawImage(tur, body.anchorX + dx - tur.anchorX, body.anchorY + dy - tur.anchorY);
+        cache.set(key, c);
+        return c;
+    }
 
     // ============================================
     // BUILDING SPRITES
@@ -923,21 +1046,11 @@ const IsoSprites = (() => {
                     const ang = i / 3 * Math.PI * 2 + 0.5;
                     s.spike(Math.cos(ang) * 6, Math.sin(ang) * 6, 28, ang, 8, 3, 10, pal.accent);
                 }
-                // thrower arm
-                s.rod(0, 0, 26, Math.cos(yaw) * 16, Math.sin(yaw) * 16, 32, 3, pal.hullDark);
-                s.glowDot(Math.cos(yaw) * 16, Math.sin(yaw) * 16, 32, 1.8, pal.glow);
             } else if (faction === 'series9') {
                 s.cyl(0, 0, 0, a * 0.35, 22, pal.hull, { edge: true });
                 s.glowDot(0, 0, 28, 3.5, pal.glow);
-                for (let i = 0; i < 3; i++) {
-                    const ang = i / 3 * Math.PI * 2;
-                    s.rod(Math.cos(ang) * 6, Math.sin(ang) * 6, 22, Math.cos(ang) * 9, Math.sin(ang) * 9, 32, 1.8, pal.metalDark);
-                }
             } else {
                 s.cyl(0, 0, 0, a * 0.38, 20, pal.hull, { edge: true });
-                s.box(0, 0, 20, 16, 16, 8, yaw, tint(pal.hull, 8), { edge: true });
-                const m = fwd(yaw, 15);
-                s.rod(0, 0, 25, m.x, m.y, 25.5, 2.6, pal.metalDark);
                 // sandbag ring
                 for (let i = 0; i < 6; i++) {
                     const ang = i / 6 * Math.PI * 2;
@@ -981,24 +1094,13 @@ const IsoSprites = (() => {
                 // bloated acid sac
                 s.blob(0, 0, 20, a * 0.32, 16, tint(pal.glow, -25), { edge: true });
                 s.glowDot(-3, -3, 30, 2.5, pal.glow);
-                // lobber arm
-                s.rod(0, 0, 30, Math.cos(yaw) * 14, Math.sin(yaw) * 14, 42, 3.5, pal.hullDark);
-                s.glowDot(Math.cos(yaw) * 14, Math.sin(yaw) * 14, 42, 2.2, pal.glow);
             } else if (faction === 'series9') {
                 s.cyl(0, 0, 0, a * 0.4, 18, pal.hull, { edge: true });
                 s.cyl(0, 0, 18, a * 0.22, 8, tint(pal.hull, 10), { edge: true });
                 s.glowDot(0, 0, 32, 4.5, pal.glow);
-                for (let i = 0; i < 4; i++) {
-                    const ang = i / 4 * Math.PI * 2 + 0.4;
-                    s.rod(Math.cos(ang) * 5, Math.sin(ang) * 5, 26, Math.cos(ang) * 10, Math.sin(ang) * 10, 40, 2, pal.metalDark);
-                }
             } else {
                 s.box(0, 0, 0, a * 0.85, a * 0.85, 14, 0, pal.hull, { edge: true, panel: true });
                 s.cyl(0, 0, 14, a * 0.3, 10, tint(pal.hull, 8), { edge: true });
-                for (const side of [3, -3]) {
-                    const m = fwd(yaw, 19, side);
-                    s.rod(fwd(yaw, 0, side).x, fwd(yaw, 0, side).y, 28, m.x, m.y, 29, 3, pal.metalDark);
-                }
                 s.glowDot(-6, -6, 26, 1.4, pal.accent);
             }
         }
@@ -1098,17 +1200,21 @@ const IsoSprites = (() => {
     // PUBLIC API
     // ============================================
 
-    function unitSprite(role, faction, dirIndex) {
-        const key = `u|${role}|${faction}|${dirIndex}`;
+    const INFANTRY_ROLES = new Set(['trooper', 'flamer', 'rocketeer']);
+
+    function unitSprite(role, faction, dirIndex, frame = 0) {
+        // only infantry has walk frames; force 0 for vehicles to share cache
+        if (!INFANTRY_ROLES.has(role)) frame = 0;
+        const key = `u|${role}|${faction}|${dirIndex}|${frame}`;
         if (cache.has(key)) return cache.get(key);
 
-        const big = (role === 'heavy' || role === 'tanker' || role === 'artillery');
+        const big = (role === 'heavy' || role === 'artillery');
         const size = big ? 132 : 104;
         const s = new Surface(size, size, size / 2, size * 0.62);
         const yaw = (dirIndex / DIRS) * Math.PI * 2;
         const pal = FACTIONS[faction].palette;
         const builder = UNIT_BUILDERS[role];
-        if (builder) builder(s, yaw, pal, faction);
+        if (builder) builder(s, yaw, pal, faction, frame);
         const finished = finalize(postProcess(s.canvas));
         cache.set(key, finished);
         return finished;
@@ -1144,7 +1250,7 @@ const IsoSprites = (() => {
         const key = `${kind}|${role}|${faction}`;
         if (iconCache.has(key)) return iconCache.get(key);
         const src = kind === 'unit'
-            ? unitSprite(role, faction, 3) // 3/4 front view
+            ? unitComposite(role, faction, 3) // 3/4 front view
             : buildingSprite(role, faction, 0);
         const c = document.createElement('canvas');
         c.width = 44; c.height = 44;
@@ -1167,7 +1273,7 @@ const IsoSprites = (() => {
     function wreckSprite(role, faction, dirIndex) {
         const key = `w|${role}|${faction}|${dirIndex}`;
         if (cache.has(key)) return cache.get(key);
-        const base = unitSprite(role, faction, dirIndex);
+        const base = unitComposite(role, faction, dirIndex);
         const c = document.createElement('canvas');
         c.width = base.width;
         c.height = base.height;
@@ -1188,5 +1294,8 @@ const IsoSprites = (() => {
         return c;
     }
 
-    return { unitSprite, buildingSprite, wreckSprite, icon, dirFromAngle, DIRS, tint, withAlpha };
+    return {
+        unitSprite, unitComposite, turretSprite, turretMount, towerTurretMount,
+        buildingSprite, wreckSprite, icon, dirFromAngle, DIRS, tint, withAlpha
+    };
 })();

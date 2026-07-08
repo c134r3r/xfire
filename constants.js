@@ -184,13 +184,13 @@ const UNIT_TYPES = {
     tank: {
         name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.023,
         range: 85, damage: 42, attackSpeed: 1400, sight: 140, size: 15,
-        category: 'armor', buildTime: 600
+        category: 'armor', turret: true, buildTime: 600
     },
     heavy: {
         // outranges everything except artillery; lobs shells over rock walls
         name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.015,
         range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
-        category: 'armor', splash: 0.9, overWalls: true, buildTime: 900
+        category: 'armor', splash: 0.9, overWalls: true, turret: true, buildTime: 900
     },
     artillery: {
         // siege weapon: huge range, fragile, fires over rock walls

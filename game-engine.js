@@ -975,6 +975,7 @@ function render() {
     drawTerrain();
     drawOilAnimations();
     drawDecals();
+    drawDying();
     drawBunkers();
 
     // Draw buildings and units together, sorted by isometric depth (x + y).
@@ -1096,6 +1097,85 @@ function render() {
 }
 
 // ============================================
+// UNIT COLLISION
+// Soft-body separation via a per-tile spatial hash,
+// plus a push-out from building footprints, so units
+// stop stacking on one spot or driving through bases.
+// ============================================
+
+function unitRadius(type) {
+    return type.size / 34; // tiles (infantry ~0.26, heavy ~0.53)
+}
+
+function resolveUnitCollisions() {
+    const units = game.units;
+    if (units.length < 2 && game.buildings.length === 0) return;
+
+    // spatial hash: bucket units per tile (and stamp an index so each
+    // pair is resolved exactly once without a costly indexOf lookup)
+    const grid = new Map();
+    for (let i = 0; i < units.length; i++) {
+        const u = units[i];
+        u._ci = i;
+        const key = (u.x | 0) + ',' + (u.y | 0);
+        let cell = grid.get(key);
+        if (!cell) grid.set(key, cell = []);
+        cell.push(u);
+    }
+
+    // pairwise separation within the 3x3 neighborhood
+    for (let i = 0; i < units.length; i++) {
+        const u = units[i];
+        const ut = UNIT_TYPES[u.type];
+        if (!ut) continue;
+        const ru = unitRadius(ut);
+        const cx = u.x | 0, cy = u.y | 0;
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+            for (let gx = cx - 1; gx <= cx + 1; gx++) {
+                const cell = grid.get(gx + ',' + gy);
+                if (!cell) continue;
+                for (const v of cell) {
+                    // handle each pair once
+                    if (v._ci <= i) continue;
+                    const vt = UNIT_TYPES[v.type];
+                    if (!vt) continue;
+                    const minD = ru + unitRadius(vt);
+                    let dx = v.x - u.x, dy = v.y - u.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 >= minD * minD) continue;
+                    let d = Math.sqrt(d2);
+                    if (d < 0.001) {
+                        // perfectly stacked: nudge apart in a random direction
+                        const a = Math.random() * Math.PI * 2;
+                        dx = Math.cos(a); dy = Math.sin(a); d = 1;
+                    }
+                    const push = Math.min(0.06, (minD - d) * 0.35);
+                    const nx = dx / d, ny = dy / d;
+                    u.x -= nx * push; u.y -= ny * push;
+                    v.x += nx * push; v.y += ny * push;
+                }
+            }
+        }
+
+        // push out of building footprints
+        for (const b of game.buildings) {
+            const bt = BUILDING_TYPES[b.type];
+            if (!bt) continue;
+            const half = bt.size / 2 + ru * 0.5;
+            const dx = u.x - b.x, dy = u.y - b.y;
+            if (Math.abs(dx) < half && Math.abs(dy) < half) {
+                // exit along the axis with the least penetration
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    u.x = b.x + Math.sign(dx || 1) * Math.min(half, Math.abs(dx) + 0.06);
+                } else {
+                    u.y = b.y + Math.sign(dy || 1) * Math.min(half, Math.abs(dy) + 0.06);
+                }
+            }
+        }
+    }
+}
+
+// ============================================
 // BATTLEFIELD DECALS (wrecks, splats, scorch)
 // Persist for a while after fights, then fade.
 // ============================================
@@ -1162,6 +1242,61 @@ function drawDecals() {
             }
         }
         ctx.globalAlpha = 1;
+    }
+}
+
+// Short death animation before the wreck/splat decal takes over:
+// vehicles flash white and sink, infantry topples over.
+function updateDying(dt) {
+    if (!game.dying) return;
+    for (let i = game.dying.length - 1; i >= 0; i--) {
+        const d = game.dying[i];
+        d.t += dt;
+        const duration = d.infantry ? 0.55 : 0.5;
+        if (d.t >= duration) {
+            if (d.infantry) {
+                addDecal({
+                    type: 'splat', x: d.x, y: d.y, life: 25,
+                    color: d.faction === 'series9' ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
+                    drops: Array.from({ length: 3 }, () => [
+                        (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 9, 1.5 + Math.random() * 2])
+                });
+            } else {
+                addDecal({
+                    type: 'wreck', x: d.x, y: d.y, life: 40,
+                    role: d.role, faction: d.faction, dir: d.dir
+                });
+            }
+            game.dying.splice(i, 1);
+        }
+    }
+}
+
+function drawDying() {
+    if (!game.dying) return;
+    const zoom = getZoom();
+    for (const d of game.dying) {
+        const s = worldToScreen(d.x, d.y);
+        const spr = IsoSprites.unitComposite(d.role, d.faction, d.dir);
+        const w = (spr.logicalWidth || spr.width) * zoom;
+        const h = (spr.logicalHeight || spr.height) * zoom;
+        ctx.save();
+        if (d.infantry) {
+            // topple around the feet
+            const p = Math.min(1, d.t / 0.55);
+            ctx.translate(s.x, s.y);
+            ctx.rotate(p * 1.5);
+            ctx.globalAlpha = 1 - p * 0.7;
+            ctx.drawImage(spr, -spr.anchorX * zoom, -spr.anchorY * zoom, w, h);
+        } else {
+            // white flash, then sink and fade under the fireball
+            const p = Math.min(1, d.t / 0.5);
+            ctx.globalAlpha = 1 - p * 0.8;
+            const sink = p * 4 * zoom;
+            try { if (d.t < 0.14) ctx.filter = 'brightness(2.4) saturate(0.5)'; } catch (e) { /* older engines */ }
+            ctx.drawImage(spr, s.x - spr.anchorX * zoom, s.y - spr.anchorY * zoom + sink, w, h);
+        }
+        ctx.restore();
     }
 }
 
@@ -1345,6 +1480,22 @@ function drawObjectiveGuides() {
             .sort((a, b) => Math.hypot(a.x - hq.x, a.y - hq.y) - Math.hypot(b.x - hq.x, b.y - hq.y))[0];
         if (bunker) drawGuideArrow(bunker.x, bunker.y);
     }
+}
+
+// Compact formation grid around a destination: each unit in a group
+// order gets its own slot instead of everyone crowding one point.
+function formationOffsets(n, spacing = 1.05) {
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    const offs = [];
+    for (let i = 0; i < n; i++) {
+        const c = i % cols, r = (i / cols) | 0;
+        offs.push({
+            x: (c - (cols - 1) / 2) * spacing,
+            y: (r - (rows - 1) / 2) * spacing
+        });
+    }
+    return offs;
 }
 
 // Generic minimap pings (bunker claims, raids, dried-up patches)
@@ -1878,6 +2029,19 @@ function drawBuilding(building) {
 
     ctx.drawImage(sprite, dx, dy, dw, dh);
 
+    // Rotating tower head
+    if ((building.type === 'tower' || building.type === 'towerHeavy')) {
+        const tdir = IsoSprites.dirFromAngle(building.turretAngle ?? Math.PI / 4);
+        const tur = IsoSprites.turretSprite(building.type, faction, tdir);
+        const mz = IsoSprites.towerTurretMount(building.type, faction) || 20;
+        const ty = screen.y - mz * bscale;
+        ctx.drawImage(tur,
+            screen.x - tur.anchorX * bscale,
+            ty - tur.anchorY * bscale,
+            (tur.logicalWidth || tur.width) * bscale,
+            (tur.logicalHeight || tur.height) * bscale);
+    }
+
     const barY = dy - 2;
 
     // Health bar (only when damaged or selected)
@@ -1989,7 +2153,10 @@ function drawUnit(unit) {
     const faction = getFaction(unit.playerId);
 
     const dir = IsoSprites.dirFromAngle(unit.angle || 0);
-    const sprite = IsoSprites.unitSprite(unit.type, faction, dir);
+    // Infantry animates a two-frame stride while moving
+    const moving = unit.targetX !== undefined || (unit.path && unit.path.length > 0);
+    const walkFrame = moving ? Math.floor(game.tick / 10 + unit.x * 3) % 2 : 0;
+    const sprite = IsoSprites.unitSprite(unit.type, faction, dir, walkFrame);
 
     const isSelected = game.selection.includes(unit);
 
@@ -2018,6 +2185,22 @@ function drawUnit(unit) {
         screen.y - sprite.anchorY * zoom,
         (sprite.logicalWidth || sprite.width) * zoom,
         (sprite.logicalHeight || sprite.height) * zoom);
+
+    // Rotating turret overlay, mounted on the hull
+    if (type.turret) {
+        const tdir = IsoSprites.dirFromAngle(unit.turretAngle ?? unit.angle ?? 0);
+        const tur = IsoSprites.turretSprite(unit.type, faction, tdir);
+        const m = IsoSprites.turretMount(unit.type, faction);
+        const yaw = unit.angle || 0;
+        const mx = m.ox * Math.cos(yaw), my = m.ox * Math.sin(yaw);
+        const tx = screen.x + (mx - my) * zoom;
+        const ty = screen.y + ((mx + my) / 2 - m.z) * zoom;
+        ctx.drawImage(tur,
+            tx - tur.anchorX * zoom,
+            ty - tur.anchorY * zoom,
+            (tur.logicalWidth || tur.width) * zoom,
+            (tur.logicalHeight || tur.height) * zoom);
+    }
 
     // Health bar (damaged or selected)
     const hpPercent = Math.max(0, unit.hp / type.hp);
@@ -2434,6 +2617,7 @@ function update(dt) {
     game.tick++;
 
     updateUnits(dt);
+    resolveUnitCollisions();
     updateBuildings(dt);
     updateProjectiles(dt);
     updateParticles(dt);
@@ -2450,6 +2634,7 @@ function update(dt) {
     updateUI();
     updateObjectives();
     updateDecals(dt);
+    updateDying(dt);
     updateRemnantsPing();
     updateLowFundsHint();
 
@@ -2584,30 +2769,31 @@ function updateUnits(dt) {
         const unit = game.units[i];
         const type = UNIT_TYPES[unit.type];
 
-        // Death check
+        // Death check: hand the unit over to the dying animation
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             SoundManager.play('explosion_small');
             if (unit.playerId === 0) game.stats.unitsLost++;
-            // leave something behind on the battlefield
-            if (type.category === 'armor') {
-                addDecal({
-                    type: 'wreck', x: unit.x, y: unit.y, life: 40,
-                    role: unit.type, faction: getFaction(unit.playerId),
-                    dir: IsoSprites.dirFromAngle(unit.angle || 0)
-                });
-            } else {
-                const faction = getFaction(unit.playerId);
-                addDecal({
-                    type: 'splat', x: unit.x, y: unit.y, life: 25,
-                    color: faction === 'series9' ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
-                    drops: Array.from({ length: 3 }, () => [
-                        (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 9, 1.5 + Math.random() * 2])
-                });
-            }
+            if (!game.dying) game.dying = [];
+            game.dying.push({
+                role: unit.type,
+                faction: getFaction(unit.playerId),
+                dir: IsoSprites.dirFromAngle(unit.angle || 0),
+                x: unit.x, y: unit.y, t: 0,
+                infantry: type.category === 'infantry'
+            });
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
+        }
+
+        // Turret tracking: swing toward the target, else settle forward
+        if (type.turret) {
+            const tgt = unit.attackTarget;
+            const desired = (tgt && tgt.hp > 0)
+                ? Math.atan2(tgt.y - unit.y, tgt.x - unit.x)
+                : unit.angle || 0;
+            unit.turretAngle = rotateToward(unit.turretAngle ?? unit.angle ?? 0, desired, 0.09);
         }
 
         // Attack logic
@@ -2666,8 +2852,11 @@ function updateUnits(dt) {
                         unit.y -= (dy / dist) * speed;
                     }
                     // Otherwise, stay in place if in optimal range
-                    // Fire only with a clear line (or wall-lobbing weapons)
-                    if (dist <= rangeT(type) && losClear && game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                    // Fire with a clear line and (for turreted units) an aligned turret
+                    const aimed = !type.turret ||
+                        angleDiff(unit.turretAngle ?? unit.angle, Math.atan2(dy, dx)) < 0.35;
+                    if (dist <= rangeT(type) && losClear && aimed &&
+                        game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
                     }
@@ -2886,6 +3075,22 @@ function updateUnits(dt) {
 function rangeT(type) { return (type.range || 0) / 24; }
 function sightT(type) { return (type.sight || 100) / 24; }
 
+// Rotate an angle toward a target angle by at most `step`, wrap-aware
+function rotateToward(current, target, step) {
+    let diff = target - current;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    if (Math.abs(diff) <= step) return target;
+    return current + Math.sign(diff) * step;
+}
+
+function angleDiff(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return Math.abs(d);
+}
+
 function updateBuildings(dt) {
     for (let i = game.buildings.length - 1; i >= 0; i--) {
         const building = game.buildings[i];
@@ -2929,6 +3134,17 @@ function updateBuildings(dt) {
             continue;
         }
 
+        // Tower head rotation runs every frame (smooth tracking)
+        if (type.damage && !building.isUnderConstruction) {
+            const tgt = building.currentTarget;
+            const valid = tgt && tgt.hp > 0 && game.units.includes(tgt);
+            if (!valid) building.currentTarget = null;
+            const desired = valid
+                ? Math.atan2(tgt.y - building.y, tgt.x - building.x)
+                : Math.PI / 4;
+            building.turretAngle = rotateToward(building.turretAngle ?? Math.PI / 4, desired, 0.06);
+        }
+
         // Turret attack (staggered scan keeps many towers cheap)
         if (type.damage && !building.isUnderConstruction && (game.tick + i) % 6 === 0) {
             // Check if turret is activated (only shoot after activation delay)
@@ -2953,7 +3169,11 @@ function updateBuildings(dt) {
                     }
                 }
 
-                if (nearestEnemy && nearestEnemy.hp > 0 && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
+                building.currentTarget = nearestEnemy || null;
+                if (nearestEnemy && nearestEnemy.hp > 0 &&
+                    angleDiff(building.turretAngle ?? Math.PI / 4,
+                        Math.atan2(nearestEnemy.y - building.y, nearestEnemy.x - building.x)) < 0.4 &&
+                    game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
                     fireProjectile(building, nearestEnemy, type.damage);
                     building.lastAttack = game.tick;
                 }
@@ -4538,14 +4758,15 @@ function initializeEventHandlers() {
         // Attack-move: A then left-click orders an aggressive march
         if (game.attackMoveMode) {
             const world = screenToWorld(x, y);
-            for (const sel of game.selection) {
-                if (!UNIT_TYPES[sel.type] || sel.playerId !== 0) continue;
-                sel.targetX = world.x + (Math.random() - 0.5);
-                sel.targetY = world.y + (Math.random() - 0.5);
+            const fighters = game.selection.filter(s => UNIT_TYPES[s.type] && s.playerId === 0);
+            const slots = formationOffsets(fighters.length, 1.3);
+            fighters.forEach((sel, k) => {
+                sel.targetX = world.x + slots[k].x;
+                sel.targetY = world.y + slots[k].y;
                 sel.attackMove = true;
                 sel.attackTarget = null;
                 sel.path = findPath(sel.x, sel.y, sel.targetX, sel.targetY);
-            }
+            });
             game.attackMoveMode = false;
             addOrderMarker(world.x, world.y, 'attack');
             SoundManager.play('ack_attack');
@@ -4674,15 +4895,20 @@ function initializeEventHandlers() {
         }
 
         // Audio-visual confirmation of the order
-        const anyOwnUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
-        if (anyOwnUnits) {
+        const movers = game.selection.filter(s => UNIT_TYPES[s.type] && s.playerId === 0);
+        if (movers.length > 0) {
             const isAttackOrder = !!(enemyDirectClick || enemyNearbyClick);
             addOrderMarker(world.x, world.y, isAttackOrder ? 'attack' : 'move');
             SoundManager.play(isAttackOrder ? 'ack_attack' : 'ack_move');
         }
 
+        // Group moves spread into a formation grid around the click point
+        const slots = formationOffsets(movers.length);
+        let slotIndex = 0;
+
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
+                const slot = slots[slotIndex++] || { x: 0, y: 0 };
                 sel.attackMove = false;
                 sel.resumeX = undefined;
                 sel.resumeY = undefined;
@@ -4716,17 +4942,19 @@ function initializeEventHandlers() {
                     sel.attackTarget = null;
                     sel.path = null;
                 } else {
-                    // Calculate path for movement
-                    const path = findPath(sel.x, sel.y, world.x, world.y);
+                    // Move to this unit's formation slot
+                    const gx = world.x + slot.x;
+                    const gy = world.y + slot.y;
+                    const path = findPath(sel.x, sel.y, gx, gy);
                     if (path && path.length > 0) {
                         sel.path = path;
                         sel.pathIndex = 0;
-                        sel.targetX = world.x;
-                        sel.targetY = world.y;
+                        sel.targetX = gx;
+                        sel.targetY = gy;
                     } else {
                         // Fallback to direct movement if no path found
-                        sel.targetX = world.x;
-                        sel.targetY = world.y;
+                        sel.targetX = gx;
+                        sel.targetY = gy;
                         sel.path = null;
                     }
                     sel.attackTarget = null;
@@ -5334,6 +5562,7 @@ function resetGame() {
     game.objectives = [];
     game.objectiveFlash = null;
     game.decals = [];
+    game.dying = [];
     game.stats = { unitsBuilt: 0, unitsLost: 0, unitsKilled: 0, buildingsRazed: 0, oilEarned: 0, bunkersClaimed: 0 };
     game._promoBannerShown = false;
     game._remnantsPingTime = 0;

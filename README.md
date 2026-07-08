@@ -72,6 +72,17 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
+## Animation & movement
+
+Tanks, heavy assaults and both defense towers have **rotating turrets**
+that track their targets independently of the hull (they only fire once
+aligned); infantry animates a two-frame walk cycle; and units die with a
+short animation - vehicles flash and sink under the fireball before
+leaving a wreck, infantry topples over. Units have **soft collision**:
+they push each other apart instead of stacking, can't drive through
+buildings, and group move orders spread into a **formation grid** so an
+army arrives as a line, not a blob.
+
 ## Rock walls & line of sight
 
 Long rock-wall ridges cross the wasteland: impassable, and they **block
