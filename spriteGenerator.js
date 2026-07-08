@@ -108,6 +108,30 @@ const IsoSprites = (() => {
             this.poly(rot.map(([x, y]) => [x, y, z + h]),
                 tint(color, opts.topShade !== undefined ? opts.topShade : 20),
                 opts.edge ? tint(color, -45) : null);
+
+            // Roof panel seams + rivets for a machined look
+            if (opts.panel) {
+                const c = this.ctx;
+                const mid01 = [(rot[0][0] + rot[1][0]) / 2, (rot[0][1] + rot[1][1]) / 2];
+                const mid23 = [(rot[2][0] + rot[3][0]) / 2, (rot[2][1] + rot[3][1]) / 2];
+                const a1 = this.p(mid01[0], mid01[1], z + h);
+                const a2 = this.p(mid23[0], mid23[1], z + h);
+                c.strokeStyle = withAlpha(tint(color, -32), 0.55);
+                c.lineWidth = 1;
+                c.beginPath();
+                c.moveTo(a1.x, a1.y);
+                c.lineTo(a2.x, a2.y);
+                c.stroke();
+                c.fillStyle = withAlpha(tint(color, -40), 0.7);
+                for (const [px, py] of rot) {
+                    const ix = cx + (px - cx) * 0.72;
+                    const iy = cy + (py - cy) * 0.72;
+                    const s = this.p(ix, iy, z + h);
+                    c.beginPath();
+                    c.arc(s.x, s.y, 1, 0, Math.PI * 2);
+                    c.fill();
+                }
+            }
         }
 
         // Vertical cylinder
@@ -198,9 +222,10 @@ const IsoSprites = (() => {
             }
         }
 
-        // Glowing dot
+        // Glowing dot (r scaled by the surface's pulse factor for blinking lights)
         glowDot(x, y, z, r, color) {
             const c = this.ctx;
+            r *= this.pulse || 1;
             const s = this.p(x, y, z);
             c.save();
             c.shadowColor = color;
@@ -540,46 +565,6 @@ const IsoSprites = (() => {
             }
         },
 
-        tanker(s, yaw, pal, faction) {
-            s.shadow(0, 0, 12, 0.34, 1.15);
-            if (faction === 'evolved') {
-                // Tanker Beetle with a swollen oil sac
-                legs(s, yaw, 3, 9, 10, pal.hullDark);
-                const b = fwd(yaw, -4);
-                s.blob(b.x, b.y, 5, 11, 16, tint(pal.hull, -4), { edge: true });
-                const c = s.p(b.x, b.y, 10);
-                const grad = s.ctx.createRadialGradient(c.x, c.y, 1, c.x, c.y, 14);
-                grad.addColorStop(0, withAlpha(pal.glow, 0.5));
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
-                s.ctx.fillStyle = grad;
-                s.ctx.beginPath();
-                s.ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
-                s.ctx.fill();
-                const h = fwd(yaw, 10);
-                s.blob(h.x, h.y, 5, 4, 6, pal.hull);
-                s.glowDot(h.x + 1, h.y - 1, 9, 1.2, pal.glow);
-            } else if (faction === 'series9') {
-                // Transporter: hover flatbed with glowing container
-                s.box(0, 0, 4, 26, 13, 4, yaw, pal.hull, { edge: true });
-                const b = fwd(yaw, -4);
-                s.box(b.x, b.y, 8, 15, 10, 9, yaw, tint(pal.hull, -8), { edge: true });
-                const f = fwd(yaw, 10);
-                s.box(f.x, f.y, 8, 6, 9, 5, yaw, tint(pal.hull, 8));
-                s.glowDot(b.x, b.y, 18, 1.8, pal.glow);
-            } else {
-                // Oil Tanker truck: cab + horizontal tank
-                wheels(s, yaw, [[9, 7], [9, -7], [-3, 7], [-3, -7], [-10, 7], [-10, -7]], 2.8, pal.tread);
-                const f = fwd(yaw, 10);
-                s.box(f.x, f.y, 4, 8, 11, 8, yaw, pal.hull, { edge: true });
-                const b = fwd(yaw, -4);
-                s.box(b.x, b.y, 4, 18, 11, 9, yaw, pal.metal, { edge: true });
-                s.box(b.x, b.y, 13, 16, 8, 2, yaw, tint(pal.metal, 10));
-                // hazard stripe along the tank flank
-                s.box(b.x, b.y, 8, 18.4, 11.4, 1.2, yaw, pal.metal, { topShade: -10 });
-                const s1 = fwd(yaw, -12), s2 = fwd(yaw, 4);
-                s.rod(s1.x - Math.sin(yaw) * 5.9, s1.y + Math.cos(yaw) * 5.9, 8.6, s2.x - Math.sin(yaw) * 5.9, s2.y + Math.cos(yaw) * 5.9, 8.6, 1.6, pal.accent);
-            }
-        }
     };
 
     // ============================================
@@ -587,11 +572,13 @@ const IsoSprites = (() => {
     // ============================================
 
     function basePlate(s, ft, pal, faction) {
-        const a = ft * 30; // slightly inside the exact tile diamond
+        const a = ft * 21; // small apron that hugs the structure, well inside the footprint
         s.poly([[a, a, 0], [a, -a, 0], [-a, -a, 0], [-a, a, 0]], pal.base, tint(pal.baseDark, -15));
         // bevel on the south-facing edges
-        s.poly([[a, -a, 0], [a, a, 0], [a + 3, a + 3, -2], [a + 3, -a - 3, -2]], tint(pal.baseDark, -8));
-        s.poly([[-a, a, 0], [a, a, 0], [a + 3, a + 3, -2], [-a - 3, a + 3, -2]], tint(pal.baseDark, -18));
+        s.poly([[a, -a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [a + 2, -a - 2, -1.5]], tint(pal.baseDark, -8));
+        s.poly([[-a, a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [-a - 2, a + 2, -1.5]], tint(pal.baseDark, -18));
+        // Soft contact shadow so structures sit into the plate
+        s.disc(0, 0, 0.5, a * 0.72, 'rgba(0,0,0,0.15)');
         if (faction === 'evolved') {
             // organic splatter
             for (let i = 0; i < 5; i++) {
@@ -640,8 +627,8 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.25, a * 0.1, 36, 2, pal.glow);
                 teamFlag(s, -a * 0.55, -a * 0.55, 18, teamColor);
             } else if (faction === 'series9') {
-                s.box(0, 0, 0, a * 1.3, a * 1.3, 13, 0, pal.hull, { edge: true });
-                s.box(0, 0, 13, a * 1.0, a * 1.0, 13, 0, tint(pal.hull, 6), { edge: true });
+                s.box(0, 0, 0, a * 1.3, a * 1.3, 13, 0, pal.hull, { edge: true, panel: true });
+                s.box(0, 0, 13, a * 1.0, a * 1.0, 13, 0, tint(pal.hull, 6), { edge: true, panel: true });
                 s.box(0, 0, 26, a * 0.68, a * 0.68, 13, 0, tint(pal.hull, 12), { edge: true });
                 // glow seams
                 for (const z of [13, 26]) {
@@ -659,8 +646,11 @@ const IsoSprites = (() => {
                 teamFlag(s, -a * 0.55, -a * 0.55, 14, teamColor);
             } else {
                 // Survivors Outpost: bunker complex
-                s.box(0, 0, 0, a * 1.25, a * 1.05, 22, 0, pal.hull, { edge: true });
-                s.box(-a * 0.15, -a * 0.15, 22, a * 0.75, a * 0.6, 16, 0, tint(pal.hull, 8), { edge: true });
+                s.box(0, 0, 0, a * 1.25, a * 1.05, 22, 0, pal.hull, { edge: true, panel: true });
+                s.box(-a * 0.15, -a * 0.15, 22, a * 0.75, a * 0.6, 16, 0, tint(pal.hull, 8), { edge: true, panel: true });
+                // roof vents
+                s.box(a * 0.32, a * 0.1, 22, 7, 5, 4, 0, pal.metalDark, { edge: true });
+                s.box(a * 0.2, a * 0.25, 22, 5, 5, 3, 0, pal.metal);
                 // windows
                 for (let i = -1; i <= 1; i++) {
                     s.poly([[a * 0.63, i * 12 - 4, 10], [a * 0.63, i * 12 + 4, 10], [a * 0.63, i * 12 + 4, 16], [a * 0.63, i * 12 - 4, 16]], pal.window);
@@ -703,7 +693,7 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.15, -a * 0.15, 26, 4.5, pal.glow);
                 s.rod(-a * 0.15, -a * 0.15, 10, -a * 0.15, -a * 0.15, 20, 3, pal.metalDark);
             } else {
-                s.box(-a * 0.25, -a * 0.2, 0, a * 0.75, a * 0.75, 16, 0, pal.hull, { edge: true });
+                s.box(-a * 0.25, -a * 0.2, 0, a * 0.75, a * 0.75, 16, 0, pal.hull, { edge: true, panel: true });
                 // twin oil silos
                 s.cyl(a * 0.35, -a * 0.4, 0, 9, 26, pal.metal, { edge: true });
                 s.cyl(a * 0.05, -a * 0.55, 0, 7, 20, pal.metal, { edge: true });
@@ -784,7 +774,7 @@ const IsoSprites = (() => {
                 }
             } else {
                 // long hut with pitched roof
-                s.box(0, 0, 0, a * 1.1, a * 0.62, 13, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.1, a * 0.62, 13, 0, pal.hull, { edge: true, panel: true });
                 s.poly([[-a * 0.58, -a * 0.34, 13], [a * 0.58, -a * 0.34, 13], [a * 0.58, 0, 22], [-a * 0.58, 0, 22]], tint(pal.roof, 10));
                 s.poly([[-a * 0.58, a * 0.34, 13], [a * 0.58, a * 0.34, 13], [a * 0.58, 0, 22], [-a * 0.58, 0, 22]], tint(pal.roof, -14));
                 // door + sandbags
@@ -815,7 +805,7 @@ const IsoSprites = (() => {
                 s.spike(a * 0.3, a * 0.5, 8, 2.2, 8, 3, 6, pal.accent);
                 s.spike(a * 0.5, a * 0.3, 8, 0.6, 8, 3, 6, pal.accent);
             } else if (faction === 'series9') {
-                s.box(0, 0, 0, a * 1.15, a * 1.0, 18, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.15, a * 1.0, 18, 0, pal.hull, { edge: true, panel: true });
                 s.poly([[-a * 0.6, -a * 0.52, 18], [a * 0.6, -a * 0.52, 18], [a * 0.6, a * 0.1, 30], [-a * 0.6, a * 0.1, 30]], tint(pal.hull, 10));
                 // glowing slit door
                 s.poly([[2, a * 0.52, 0], [30, a * 0.52, 0], [30, a * 0.52, 14], [2, a * 0.52, 14]], '#101418');
@@ -824,7 +814,10 @@ const IsoSprites = (() => {
                 s.glowDot(-a * 0.42, -a * 0.3, 33, 2, pal.glow);
             } else {
                 // industrial hall with sawtooth roof and gate
-                s.box(0, 0, 0, a * 1.2, a * 0.95, 17, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 1.2, a * 0.95, 17, 0, pal.hull, { edge: true, panel: true });
+                // supply crates by the gate
+                s.box(-a * 0.35, a * 0.62, 0, 7, 7, 6, 0.3, pal.accent, { edge: true });
+                s.box(-a * 0.22, a * 0.66, 0, 6, 6, 5, -0.2, tint(pal.hull, 12), { edge: true });
                 for (let i = -1; i <= 1; i++) {
                     s.poly([[i * a * 0.4 - a * 0.18, -a * 0.48, 17], [i * a * 0.4 + a * 0.18, -a * 0.48, 17],
                             [i * a * 0.4 + a * 0.18, a * 0.48, 17], [i * a * 0.4 - a * 0.18, a * 0.48, 17]], tint(pal.roof, -4));
@@ -867,7 +860,7 @@ const IsoSprites = (() => {
                 }
                 s.glowDot(0, 0, 42, 3, pal.glow);
             } else {
-                s.box(0, 0, 0, a * 0.95, a * 0.8, 12, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 0.95, a * 0.8, 12, 0, pal.hull, { edge: true, panel: true });
                 s.blob(-a * 0.08, -a * 0.08, 12, a * 0.3, 16, pal.metal, { edge: true });
                 s.rod(a * 0.35, a * 0.25, 12, a * 0.35, a * 0.25, 34, 1.8, pal.metalDark);
                 s.disc(a * 0.35, a * 0.25, 31, 4.5, pal.metal, { stretchY: 2, edge: pal.metalDark });
@@ -946,6 +939,32 @@ const IsoSprites = (() => {
             }
         },
 
+        // Neutral tech bunker (not faction-owned): frame 0 = sealed, 1 = looted
+        bunker(s, ft, pal, faction, frame, teamColor) {
+            const con = '#8a8578', conDark = '#5f5b50';
+            const a = ft * 21;
+            s.poly([[a, a, 0], [a, -a, 0], [-a, -a, 0], [-a, a, 0]], con, tint(conDark, -15));
+            // half-buried concrete dome
+            s.blob(0, -2, 0, a * 0.55, 22, tint(con, -4), { edge: true });
+            // reinforced entrance facing the camera
+            s.poly([[4, a * 0.5, 0], [18, a * 0.5, 0], [18, a * 0.5, 11], [4, a * 0.5, 11]], frame === 0 ? '#2c2a24' : '#0e0d0a');
+            s.rod(3, a * 0.52, 11.5, 19, a * 0.52, 11.5, 2.2, conDark);
+            // sandbag ring remnants
+            for (let i = 0; i < 5; i++) {
+                const ang = 0.6 + i * 1.1;
+                s.disc(Math.cos(ang) * a * 0.75, Math.sin(ang) * a * 0.75, 0.5, 3, tint(con, -14));
+            }
+            if (frame === 0) {
+                // sealed: antenna with a beckoning beacon
+                s.rod(-6, -8, 20, -6, -8, 36, 1.6, conDark);
+                s.glowDot(-6, -8, 37, 2.4, '#66e0ff');
+                s.glowDot(9, a * 0.45, 6, 1.2, '#66e0ff');
+            } else {
+                // looted: broken antenna, dark and abandoned
+                s.rod(-6, -8, 20, -1, -4, 26, 1.6, conDark);
+            }
+        },
+
         towerHeavy(s, ft, pal, faction, frame, teamColor) {
             basePlate(s, ft, pal, faction);
             const a = ft * 30;
@@ -967,7 +986,7 @@ const IsoSprites = (() => {
                     s.rod(Math.cos(ang) * 5, Math.sin(ang) * 5, 26, Math.cos(ang) * 10, Math.sin(ang) * 10, 40, 2, pal.metalDark);
                 }
             } else {
-                s.box(0, 0, 0, a * 0.85, a * 0.85, 14, 0, pal.hull, { edge: true });
+                s.box(0, 0, 0, a * 0.85, a * 0.85, 14, 0, pal.hull, { edge: true, panel: true });
                 s.cyl(0, 0, 14, a * 0.3, 10, tint(pal.hull, 8), { edge: true });
                 for (const side of [3, -3]) {
                     const m = fwd(yaw, 19, side);
@@ -1008,11 +1027,13 @@ const IsoSprites = (() => {
         const s = new Surface(w, h, w / 2, h - ft * 16 - 14);
         // baked drop shadow toward the south-east
         s.ctx.save();
-        s.ctx.translate(6, 4);
-        s.disc(0, 0, ft * 26, 'rgba(0,0,0,0.28)');
+        s.ctx.translate(4, 3);
+        s.disc(0, 0, ft * 17, 'rgba(0,0,0,0.28)');
         s.ctx.restore();
         const pal = FACTIONS[faction].palette;
         const teamColor = FACTIONS[faction].color;
+        // Frame 1 renders slightly brighter glow lights -> blinking animation
+        s.pulse = frame === 1 ? 1.35 : 1;
         const builder = BUILDING_BUILDERS[role];
         if (builder) builder(s, ft, pal, faction, frame, teamColor);
         cache.set(key, s.canvas);
@@ -1041,5 +1062,28 @@ const IsoSprites = (() => {
         return Math.round(((angle % (Math.PI * 2)) + Math.PI * 2) / (Math.PI * 2) * DIRS) % DIRS;
     }
 
-    return { unitSprite, buildingSprite, icon, dirFromAngle, DIRS, tint, withAlpha };
+    // Burned-out wreck: darkened, charred copy of the unit sprite
+    function wreckSprite(role, faction, dirIndex) {
+        const key = `w|${role}|${faction}|${dirIndex}`;
+        if (cache.has(key)) return cache.get(key);
+        const base = unitSprite(role, faction, dirIndex);
+        const c = document.createElement('canvas');
+        c.width = base.width;
+        c.height = base.height;
+        c.anchorX = base.anchorX;
+        c.anchorY = base.anchorY;
+        const cc = c.getContext('2d');
+        cc.drawImage(base, 0, 0);
+        cc.globalCompositeOperation = 'source-atop';
+        cc.fillStyle = 'rgba(24,18,12,0.72)';
+        cc.fillRect(0, 0, c.width, c.height);
+        // charred highlights so the silhouette still reads
+        cc.globalCompositeOperation = 'overlay';
+        cc.fillStyle = 'rgba(120,80,40,0.25)';
+        cc.fillRect(0, 0, c.width, c.height);
+        cache.set(key, c);
+        return c;
+    }
+
+    return { unitSprite, buildingSprite, wreckSprite, icon, dirFromAngle, DIRS, tint, withAlpha };
 })();

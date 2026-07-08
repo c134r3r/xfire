@@ -49,6 +49,7 @@
 
     <div id="gameContainer">
         <canvas id="canvas" width="800" height="500"></canvas>
+        <div id="vignette"></div>
         <div id="sidebar">
             <div class="panel">
                 <h3>Minimap</h3>
@@ -66,7 +67,7 @@
     </div>
 
     <div id="footer">
-        <span id="controlsHelp">LMB select | RMB move/attack | A attack-move | S stop | H HQ | Ctrl+1-9 / 1-9 groups | Arrows/Edge/Wheel scroll | +/- zoom</span>
+        <span id="controlsHelp">F1 help | LMB select | RMB move/attack | A attack-move | S stop | H HQ | Space last attack | Ctrl+1-9 / 1-9 groups | Arrows/Edge/Wheel scroll | +/- zoom</span>
         <span id="timerDisplay" style="display: none;">Time: <strong id="gameTimer">0:00</strong></span>
     </div>
 
@@ -154,10 +155,17 @@
                 <div class="setting-group">
                     <label>Starting Oil:</label>
                     <select id="startingOilSelect">
-                        <option value="2000">2000</option>
-                        <option value="3000" selected>3000</option>
-                        <option value="5000">5000</option>
+                        <option value="3000">3000</option>
+                        <option value="5000" selected>5000</option>
                         <option value="8000">8000</option>
+                        <option value="12000">12000</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Guided Start:</label>
+                    <select id="tutorialSelect">
+                        <option value="on" selected>On - objectives &amp; hints</option>
+                        <option value="off">Off</option>
                     </select>
                 </div>
             </div>
