@@ -532,6 +532,32 @@ function generateMap() {
         }
     }
 
+    // Rock-wall ridges: long impassable lines that block shots and
+    // funnel armies through chokepoints
+    const ridgeCount = Math.floor((3 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    for (let r = 0; r < ridgeCount; r++) {
+        let x = 8 + Math.floor(Math.random() * (mapSize - 16));
+        let y = 8 + Math.floor(Math.random() * (mapSize - 16));
+        let [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+        const len = 5 + Math.floor(Math.random() * 7);
+        for (let i = 0; i < len; i++) {
+            if (x < 2 || x >= mapSize - 2 || y < 2 || y >= mapSize - 2) break;
+            const tile = game.map[y][x];
+            if (tile.type === 'grass' && !tile.oil) {
+                tile.type = 'hill';
+                tile.height = 2;
+                tile.wall = true;
+            }
+            // occasional kink so ridges don't look ruler-straight
+            if (Math.random() < 0.2) {
+                [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+            }
+            x += dx;
+            y += dy;
+        }
+    }
+
     // Add oil fields - plenty of small clusters, scaled with map size
     const fieldCount = Math.floor((9 + Math.floor(Math.random() * 4)) * sizeMultiplier);
     for (let i = 0; i < fieldCount; i++) {
@@ -763,6 +789,98 @@ function buildTerrainCache() {
             drawTileToCache(x, y);
         }
     }
+    // Second pass: raised rock walls over the ground layer
+    for (let y = 0; y < mapSize; y++) {
+        for (let x = 0; x < mapSize; x++) {
+            if (game.map[y]?.[x]?.type === 'hill') drawWallToCache(x, y);
+        }
+    }
+}
+
+// Raised rock outcrop: cliff faces down to the ground, cracked rocky top.
+// Drawn in row order so southern walls naturally overlap northern faces.
+function drawWallToCache(tx, ty) {
+    if (!terrainCache) return;
+    const c = terrainCache.ctx;
+    const pos = tileCachePos(tx, ty);
+    const H = 20; // wall height in px
+    const hw = TILE_WIDTH / 2, hh = TILE_HEIGHT / 2;
+
+    const top = { x: pos.x, y: pos.y - hh - H };
+    const right = { x: pos.x + hw, y: pos.y - H };
+    const bottom = { x: pos.x, y: pos.y + hh - H };
+    const left = { x: pos.x - hw, y: pos.y - H };
+
+    const v = (tileRandom(tx, ty, 5) - 0.5) * 18;
+    const rockTop = `rgb(${Math.floor(132 + v)},${Math.floor(112 + v)},${Math.floor(84 + v)})`;
+    const faceSE = `rgb(${Math.floor(92 + v)},${Math.floor(74 + v)},${Math.floor(52 + v)})`;
+    const faceSW = `rgb(${Math.floor(70 + v)},${Math.floor(56 + v)},${Math.floor(40 + v)})`;
+
+    // south-east cliff face
+    c.fillStyle = faceSE;
+    c.beginPath();
+    c.moveTo(right.x, right.y);
+    c.lineTo(bottom.x, bottom.y);
+    c.lineTo(bottom.x, bottom.y + H);
+    c.lineTo(right.x, right.y + H);
+    c.closePath();
+    c.fill();
+
+    // south-west cliff face
+    c.fillStyle = faceSW;
+    c.beginPath();
+    c.moveTo(bottom.x, bottom.y);
+    c.lineTo(left.x, left.y);
+    c.lineTo(left.x, left.y + H);
+    c.lineTo(bottom.x, bottom.y + H);
+    c.closePath();
+    c.fill();
+
+    // vertical strata cracks on the faces
+    c.strokeStyle = 'rgba(30,22,14,0.4)';
+    c.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        const t = 0.2 + tileRandom(tx, ty, 120 + i) * 0.6;
+        const fx = bottom.x + (right.x - bottom.x) * t;
+        const fy = bottom.y + (right.y - bottom.y) * t;
+        c.beginPath();
+        c.moveTo(fx, fy + 2);
+        c.lineTo(fx + (tileRandom(tx, ty, 130 + i) - 0.5) * 3, fy + H - 2);
+        c.stroke();
+        const gx = left.x + (bottom.x - left.x) * t;
+        const gy = left.y + (bottom.y - left.y) * t;
+        c.beginPath();
+        c.moveTo(gx, gy + 2);
+        c.lineTo(gx + (tileRandom(tx, ty, 140 + i) - 0.5) * 3, gy + H - 2);
+        c.stroke();
+    }
+
+    // rocky top
+    c.fillStyle = rockTop;
+    c.beginPath();
+    c.moveTo(top.x, top.y);
+    c.lineTo(right.x, right.y);
+    c.lineTo(bottom.x, bottom.y);
+    c.lineTo(left.x, left.y);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = 'rgba(40,30,20,0.5)';
+    c.stroke();
+
+    // boulders + cracks on top
+    for (let i = 0; i < 3; i++) {
+        const ox = (tileRandom(tx, ty, 150 + i) - 0.5) * 20;
+        const oy = (tileRandom(tx, ty, 160 + i) - 0.5) * 10 - H;
+        const rw = 2.5 + tileRandom(tx, ty, 170 + i) * 4;
+        c.fillStyle = `rgba(60,46,32,0.55)`;
+        c.beginPath();
+        c.ellipse(pos.x + ox, pos.y + oy, rw, rw * 0.55, 0, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(168,146,112,0.6)';
+        c.beginPath();
+        c.ellipse(pos.x + ox - rw * 0.25, pos.y + oy - rw * 0.3, rw * 0.45, rw * 0.28, 0, 0, Math.PI * 2);
+        c.fill();
+    }
 }
 
 function tileCachePos(tx, ty) {
@@ -781,6 +899,15 @@ function redrawTerrainTile(tx, ty) {
             const x = tx + dx, y = ty + dy;
             if (x >= 0 && x < mapSize && y >= 0 && y < mapSize) {
                 drawTileToCache(x, y);
+            }
+        }
+    }
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const x = tx + dx, y = ty + dy;
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize &&
+                game.map[y]?.[x]?.type === 'hill') {
+                drawWallToCache(x, y);
             }
         }
     }
@@ -994,7 +1121,8 @@ function drawDecals() {
             const spr = IsoSprites.wreckSprite(d.role, d.faction, d.dir);
             ctx.drawImage(spr,
                 s.x - spr.anchorX * zoom, s.y - spr.anchorY * zoom,
-                spr.width * zoom, spr.height * zoom);
+                (spr.logicalWidth || spr.width) * zoom,
+                (spr.logicalHeight || spr.height) * zoom);
             // dwindling smoke from fresh wrecks
             if (d.maxLife - d.life < 6 && Math.random() < 0.12) {
                 game.particles.push({
@@ -1315,8 +1443,8 @@ function drawBunkers() {
         ctx.drawImage(sprite,
             screen.x - sprite.anchorX * bscale,
             screen.y - sprite.anchorY * bscale,
-            sprite.width * bscale,
-            sprite.height * bscale);
+            (sprite.logicalWidth || sprite.width) * bscale,
+            (sprite.logicalHeight || sprite.height) * bscale);
         // Beckoning pulse while unclaimed
         if (!b.claimed) {
             const pulse = (Date.now() / 1200 + b.x) % 1;
@@ -1388,8 +1516,8 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     ctx.drawImage(sprite,
         screen.x - sprite.anchorX * bscale,
         screen.y - sprite.anchorY * bscale,
-        sprite.width * bscale,
-        sprite.height * bscale);
+        (sprite.logicalWidth || sprite.width) * bscale,
+        (sprite.logicalHeight || sprite.height) * bscale);
     ctx.globalAlpha = 1;
 
     // Range indicator for towers
@@ -1676,6 +1804,9 @@ function drawTileDetailsToCache(c, tx, ty, tileType, pos) {
             break;
 
         case 'hill':
+            // (raised wall drawn in the second pass; keep base ground plain)
+            break;
+        case '_hill_unused':
             // Rocky outcrop boulders
             c.fillStyle = 'rgba(80,58,32,0.5)';
             for (let i = 0; i < detailCount; i++) {
@@ -1719,8 +1850,8 @@ function drawBuilding(building) {
     const bscale = zoom * BUILDING_DRAW_SCALE;
     const dx = screen.x - sprite.anchorX * bscale;
     const dy = screen.y - sprite.anchorY * bscale;
-    const dw = sprite.width * bscale;
-    const dh = sprite.height * bscale;
+    const dw = (sprite.logicalWidth || sprite.width) * bscale;
+    const dh = (sprite.logicalHeight || sprite.height) * bscale;
 
     if (building.isUnderConstruction) {
         const progress = building.buildProgress / building.buildTime;
@@ -1885,8 +2016,8 @@ function drawUnit(unit) {
     ctx.drawImage(sprite,
         screen.x - sprite.anchorX * zoom,
         screen.y - sprite.anchorY * zoom,
-        sprite.width * zoom,
-        sprite.height * zoom);
+        (sprite.logicalWidth || sprite.width) * zoom,
+        (sprite.logicalHeight || sprite.height) * zoom);
 
     // Health bar (damaged or selected)
     const hpPercent = Math.max(0, unit.hp / type.hp);
@@ -2504,11 +2635,16 @@ function updateUnits(dt) {
                 } else {
                     unit.angle = Math.atan2(dy, dx);
 
-                    // Stay at optimal range (75% of max range to have some buffer)
+                    // Rock walls block direct fire: units without overWalls
+                    // must keep advancing until they have a clear line
+                    const losClear = type.overWalls ||
+                        checkLineOfSight(unit.x, unit.y, target.x, target.y) < 0;
+
+                    // Stay at optimal range (with some buffer)
                     const optimalRange = rangeT(type) * 0.9;
                     const backupDistance = rangeT(type) * 0.3; // Only back up if much too close
 
-                    if (dist > optimalRange) {
+                    if (dist > optimalRange || (!losClear && dist > 1.4)) {
                         // Move towards target to get in range
                         const speed = type.speed * dt * 60;
                         const moveX = (dx / dist) * speed;
@@ -2530,8 +2666,8 @@ function updateUnits(dt) {
                         unit.y -= (dy / dist) * speed;
                     }
                     // Otherwise, stay in place if in optimal range
-                    // If in range, attack
-                    if (dist <= rangeT(type) && game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                    // Fire only with a clear line (or wall-lobbing weapons)
+                    if (dist <= rangeT(type) && losClear && game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
                     }
@@ -2708,14 +2844,16 @@ function updateUnits(dt) {
             let nearestEnemy = null;
             let nearestDist = Infinity;
 
-            // Check for enemy units in sight range
+            // Check for enemy units in sight range (walls hide targets
+            // from direct-fire units)
             for (const enemy of game.units) {
                 if (enemy.playerId === unit.playerId) continue;
                 const dx = enemy.x - unit.x;
                 const dy = enemy.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                if (dist <= sightRange && dist < nearestDist) {
+                if (dist <= sightRange && dist < nearestDist &&
+                    (type.overWalls || checkLineOfSight(unit.x, unit.y, enemy.x, enemy.y) < 0)) {
                     nearestDist = dist;
                     nearestEnemy = enemy;
                 }
@@ -2729,7 +2867,8 @@ function updateUnits(dt) {
                     const dy = building.y - unit.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist <= sightRange && dist < nearestDist) {
+                    if (dist <= sightRange && dist < nearestDist &&
+                        (type.overWalls || checkLineOfSight(unit.x, unit.y, building.x, building.y) < 0)) {
                         nearestDist = dist;
                         nearestEnemy = building;
                     }
@@ -2802,12 +2941,13 @@ function updateBuildings(dt) {
                 for (const unit of game.units) {
                     if (unit.playerId === building.playerId) continue;
 
-                    // Check if enemy is in sight range
+                    // In range and not hidden behind a rock wall
                     const dx = unit.x - building.x;
                     const dy = unit.y - building.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < rangeT(type) && dist < nearestDist) {
+                    if (dist < rangeT(type) && dist < nearestDist &&
+                        checkLineOfSight(building.x, building.y, unit.x, unit.y) < 0) {
                         nearestDist = dist;
                         nearestEnemy = unit;
                     }
@@ -4056,8 +4196,9 @@ function fireProjectile(source, target, customDamage) {
         }
     }
 
-    // Check if path is blocked by hills
-    const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
+    // Rock walls block direct fire; siege weapons lob over them
+    const blockadeIndex = type.overWalls ? -1 :
+        checkLineOfSight(source.x, source.y, target.x, target.y);
 
     // Add accuracy/inaccuracy - 20% chance to miss
     const hitChance = 0.8;

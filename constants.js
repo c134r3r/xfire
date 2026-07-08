@@ -187,16 +187,16 @@ const UNIT_TYPES = {
         category: 'armor', buildTime: 600
     },
     heavy: {
-        // outranges everything except artillery and heavy towers
+        // outranges everything except artillery; lobs shells over rock walls
         name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.015,
         range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
-        category: 'armor', splash: 0.9, buildTime: 900
+        category: 'armor', splash: 0.9, overWalls: true, buildTime: 900
     },
     artillery: {
-        // siege weapon: huge range, fragile, very slow rate of fire
+        // siege weapon: huge range, fragile, fires over rock walls
         name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.012,
         range: 175, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
-        category: 'armor', splash: 1.7, buildTime: 780
+        category: 'armor', splash: 1.7, overWalls: true, buildTime: 780
     }
 };
 
@@ -343,6 +343,6 @@ const UNIT_DESC = {
     bike: 'Fastest unit in the game: scouting, grabbing tech bunkers, harassment.',
     buggy: 'Light fighting vehicle. Good early escort and raider.',
     tank: 'Main battle tank - solid armor and punch, the core of any army.',
-    heavy: 'Slow assault monster with splash damage. Breaks bases.',
-    artillery: 'Extreme-range siege gun with big splash. Fragile - keep it protected.'
+    heavy: 'Slow assault monster with splash damage that fires OVER rock walls. Breaks bases.',
+    artillery: 'Extreme-range siege gun with big splash that fires OVER rock walls. Fragile - protect it.'
 };

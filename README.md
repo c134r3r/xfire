@@ -72,6 +72,15 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
+## Rock walls & line of sight
+
+Long rock-wall ridges cross the wasteland: impassable, and they **block
+direct fire** - shells and tracers stop at the cliff face. Only the top
+tech-3 units (Heavy Assault and Artillery) lob their shots **over** the
+walls, which makes them true siege weapons and turns ridges into
+defensive terrain worth fighting for. Towers and regular units must find
+a clear line; idle units won't waste shots on targets hidden behind rock.
+
 ## Fog of war
 
 The map starts under a black shroud. Your units and buildings reveal

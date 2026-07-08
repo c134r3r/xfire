@@ -8,6 +8,9 @@
 const IsoSprites = (() => {
 
     const DIRS = 16;
+    // Sprites are rendered at SS-times resolution and drawn downscaled,
+    // giving clean anti-aliased edges on curves and thin lines.
+    const SS = 2;
     const cache = new Map();
     const iconCache = new Map();
 
@@ -37,11 +40,15 @@ const IsoSprites = (() => {
     class Surface {
         constructor(w, h, ax, ay) {
             this.canvas = document.createElement('canvas');
-            this.canvas.width = w;
-            this.canvas.height = h;
+            this.canvas.width = w * SS;
+            this.canvas.height = h * SS;
+            // logical (display) metrics: the engine draws with these
+            this.canvas.logicalWidth = w;
+            this.canvas.logicalHeight = h;
             this.canvas.anchorX = ax;
             this.canvas.anchorY = ay;
             this.ctx = this.canvas.getContext('2d');
+            this.ctx.scale(SS, SS);
             this.ax = ax;
             this.ay = ay;
         }
@@ -229,7 +236,7 @@ const IsoSprites = (() => {
             const s = this.p(x, y, z);
             c.save();
             c.shadowColor = color;
-            c.shadowBlur = r * 3;
+            c.shadowBlur = r * 3 * SS;
             c.fillStyle = color;
             c.beginPath();
             c.arc(s.x, s.y, r, 0, Math.PI * 2);
@@ -997,6 +1004,96 @@ const IsoSprites = (() => {
         }
     };
 
+    // ---------- sprite post-processing ----------
+    let noisePattern = null;
+
+    function getNoisePattern(ctx) {
+        if (noisePattern) return noisePattern;
+        const n = document.createElement('canvas');
+        n.width = 48; n.height = 48;
+        const nc = n.getContext('2d');
+        const img = nc.createImageData(48, 48);
+        for (let i = 0; i < img.data.length; i += 4) {
+            const v = Math.random() < 0.5 ? 0 : 255;
+            img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+            img.data[i + 3] = Math.random() * 26;
+        }
+        nc.putImageData(img, 0, 0);
+        noisePattern = ctx.createPattern(n, 'repeat');
+        return noisePattern;
+    }
+
+    // Contour outline + top-left sun rim + subtle grain. Gives the flat
+    // vector shapes the chunky, readable look of classic RTS sprites.
+    function postProcess(srcCanvas) {
+        const w = srcCanvas.width, h = srcCanvas.height;
+
+        // silhouette of the sprite in a solid color
+        const mkSil = (color) => {
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const cc = c.getContext('2d');
+            cc.drawImage(srcCanvas, 0, 0);
+            cc.globalCompositeOperation = 'source-in';
+            cc.fillStyle = color;
+            cc.fillRect(0, 0, w, h);
+            return c;
+        };
+
+        const out = document.createElement('canvas');
+        out.width = w; out.height = h;
+        out.logicalWidth = srcCanvas.logicalWidth;
+        out.logicalHeight = srcCanvas.logicalHeight;
+        out.anchorX = srcCanvas.anchorX;
+        out.anchorY = srcCanvas.anchorY;
+        const oc = out.getContext('2d');
+
+        // 1) dark contour: silhouette stamped around the sprite
+        const dark = mkSil('rgba(18,14,8,0.85)');
+        const d = SS;
+        for (const [ox, oy] of [[-d, 0], [d, 0], [0, -d], [0, d], [-d, -d], [d, d], [-d, d], [d, -d]]) {
+            oc.drawImage(dark, ox, oy);
+        }
+
+        // 2) the sprite itself
+        oc.drawImage(srcCanvas, 0, 0);
+
+        // 3) sun rim on the upper-left inside edge
+        const rim = mkSil('rgba(255,226,160,1)');
+        const rc = rim.getContext('2d');
+        rc.globalCompositeOperation = 'destination-out';
+        rc.drawImage(srcCanvas, 1.6 * SS, 1.6 * SS);
+        oc.globalAlpha = 0.5;
+        oc.drawImage(rim, 0, 0);
+        oc.globalAlpha = 1;
+
+        // 4) weathering grain, clipped to the sprite body
+        oc.globalCompositeOperation = 'source-atop';
+        oc.fillStyle = getNoisePattern(oc);
+        oc.fillRect(0, 0, w, h);
+        oc.globalCompositeOperation = 'source-over';
+
+        return out;
+    }
+
+    // Downscale the supersampled, post-processed image to its logical
+    // size once. The anti-aliasing gets baked in, and per-frame drawImage
+    // reads a small 1x source - full quality at the old draw cost.
+    function finalize(processed) {
+        const f = document.createElement('canvas');
+        f.width = processed.logicalWidth;
+        f.height = processed.logicalHeight;
+        f.logicalWidth = processed.logicalWidth;
+        f.logicalHeight = processed.logicalHeight;
+        f.anchorX = processed.anchorX;
+        f.anchorY = processed.anchorY;
+        const fc = f.getContext('2d');
+        fc.imageSmoothingEnabled = true;
+        fc.imageSmoothingQuality = 'high';
+        fc.drawImage(processed, 0, 0, f.width, f.height);
+        return f;
+    }
+
     // ============================================
     // PUBLIC API
     // ============================================
@@ -1012,8 +1109,9 @@ const IsoSprites = (() => {
         const pal = FACTIONS[faction].palette;
         const builder = UNIT_BUILDERS[role];
         if (builder) builder(s, yaw, pal, faction);
-        cache.set(key, s.canvas);
-        return s.canvas;
+        const finished = finalize(postProcess(s.canvas));
+        cache.set(key, finished);
+        return finished;
     }
 
     function buildingSprite(role, faction, frame = 0) {
@@ -1036,8 +1134,9 @@ const IsoSprites = (() => {
         s.pulse = frame === 1 ? 1.35 : 1;
         const builder = BUILDING_BUILDERS[role];
         if (builder) builder(s, ft, pal, faction, frame, teamColor);
-        cache.set(key, s.canvas);
-        return s.canvas;
+        const finished = finalize(postProcess(s.canvas));
+        cache.set(key, finished);
+        return finished;
     }
 
     // Small icon (data URL) for sidebar buttons
@@ -1050,8 +1149,10 @@ const IsoSprites = (() => {
         const c = document.createElement('canvas');
         c.width = 44; c.height = 44;
         const cc = c.getContext('2d');
-        const scale = Math.min(44 / src.width, 44 / src.height) * (kind === 'unit' ? 1.55 : 1.15);
-        const dw = src.width * scale, dh = src.height * scale;
+        const lw = src.logicalWidth || src.width;
+        const lh = src.logicalHeight || src.height;
+        const scale = Math.min(44 / lw, 44 / lh) * (kind === 'unit' ? 1.55 : 1.15);
+        const dw = lw * scale, dh = lh * scale;
         cc.drawImage(src, (44 - dw) / 2, (44 - dh) / 2 + (kind === 'unit' ? -4 : 2), dw, dh);
         const url = c.toDataURL();
         iconCache.set(key, url);
@@ -1070,6 +1171,8 @@ const IsoSprites = (() => {
         const c = document.createElement('canvas');
         c.width = base.width;
         c.height = base.height;
+        c.logicalWidth = base.logicalWidth;
+        c.logicalHeight = base.logicalHeight;
         c.anchorX = base.anchorX;
         c.anchorY = base.anchorY;
         const cc = c.getContext('2d');
