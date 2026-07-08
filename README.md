@@ -72,6 +72,13 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
+## Fog of war
+
+The map starts under a black shroud. Your units and buildings reveal
+their surroundings; ground you have scouted but no longer watch falls
+back under a dark veil, and hostile units or buildings are only shown
+(on the map and the minimap) while they are inside your line of sight.
+
 ## Atmosphere & battlefield persistence
 
 The wasteland is dressed with smooth tonal terrain patches, scattered
