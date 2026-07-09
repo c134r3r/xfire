@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231a1a2e'/><text x='50' y='70' font-size='60' fill='%23ff6600' text-anchor='middle' font-weight='bold'>X</text></svg>">
     <link rel="stylesheet" href="styles.css">
     <script src="constants.js"></script>
+    <script src="audio.js"></script>
     <script src="spriteGenerator.js"></script>
     <script>
         // Preload background image before initializing game
@@ -181,6 +182,18 @@
         <div class="menu-container">
             <h1 class="menu-title">PAUSED</h1>
             <div class="pause-settings">
+                <div class="mixer-row">
+                    <label for="musicVolume">Music</label>
+                    <input type="range" id="musicVolume" min="0" max="100" value="50">
+                </div>
+                <div class="mixer-row">
+                    <label for="sfxVolume">Effects</label>
+                    <input type="range" id="sfxVolume" min="0" max="100" value="100">
+                </div>
+                <div class="mixer-row">
+                    <label for="voiceVolume">Voices</label>
+                    <input type="range" id="voiceVolume" min="0" max="100" value="55">
+                </div>
                 <label class="toggle-setting">
                     <input type="checkbox" id="combatSoundToggle" checked>
                     <span>Combat Sounds</span>

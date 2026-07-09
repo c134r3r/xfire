@@ -81,7 +81,9 @@ short animation - vehicles flash and sink under the fireball before
 leaving a wreck, infantry topples over. Units have **soft collision**:
 they push each other apart instead of stacking, can't drive through
 buildings, and group move orders spread into a **formation grid** so an
-army arrives as a line, not a blob.
+army arrives as a line, not a blob. Pathfinding routes around buildings,
+walls and ridges, and a stuck watchdog re-plans automatically whenever a
+unit stops making progress toward its ordered destination.
 
 ## Rock walls & line of sight
 
@@ -98,6 +100,17 @@ The map starts under a black shroud. Your units and buildings reveal
 their surroundings; ground you have scouted but no longer watch falls
 back under a dark veil, and hostile units or buildings are only shown
 (on the map and the minimap) while they are inside your line of sight.
+
+## Procedural audio
+
+The entire soundtrack is synthesized in code: a chiptune step-sequencer
+plays an original score whose **combat layer (drums, driving bass, lead)
+crossfades in when battle heat rises** and fades back to calm pads when
+the fighting stops. Units answer orders with wordless per-faction radio
+chatter - Survivors babble through a band-passed radio with a squelch
+click, the Evolved growl, Series 9 responds in data-link beeps - throttled
+so fast clicking never spams. The pause menu has a mixer with separate
+music / effects / voice sliders (persisted between sessions).
 
 ## Atmosphere & battlefield persistence
 

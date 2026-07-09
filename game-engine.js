@@ -19,10 +19,22 @@ const SoundManager = {
     init() {
         try {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            // SFX bus (music and voices have their own buses in audio.js)
+            this.sfxGain = this.ctx.createGain();
+            this.sfxGain.gain.value = 1;
+            this.sfxGain.connect(this.ctx.destination);
+            if (typeof MusicEngine !== 'undefined') MusicEngine.init(this.ctx);
+            if (typeof VoiceManager !== 'undefined') VoiceManager.init(this.ctx);
             console.log('[SoundManager] Initialized');
         } catch (e) {
             console.warn('[SoundManager] Web Audio not supported');
             this.enabled = false;
+        }
+    },
+
+    setSfxVolume(v) {
+        if (this.sfxGain) {
+            this.sfxGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
         }
     },
 
@@ -146,7 +158,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         noise.start();
     },
 
@@ -162,7 +174,7 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol * 0.35, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.25);
     },
@@ -178,7 +190,7 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.14);
     },
@@ -195,7 +207,7 @@ const SoundManager = {
         gain.gain.linearRampToValueAtTime(vol, t + 0.015);
         gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start(t);
         osc.stop(t + duration + 0.02);
     },
@@ -211,7 +223,7 @@ const SoundManager = {
             gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime + t);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.15);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(this.sfxGain || ctx.destination);
             osc.start(ctx.currentTime + t);
             osc.stop(ctx.currentTime + t + 0.15);
         });
@@ -230,7 +242,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + duration);
     },
@@ -260,7 +272,7 @@ const SoundManager = {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         noise.start();
     },
 
@@ -277,7 +289,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.05);
     },
@@ -295,7 +307,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.15);
     },
@@ -313,7 +325,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.08);
     }
@@ -487,11 +499,11 @@ function generateMap() {
     const sizeMultiplier = mapSize / 64;
 
     // Add hill areas (15% of map = mostly grass)
-    const hillCount = Math.floor((4 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    const hillCount = Math.floor((2 + Math.floor(Math.random() * 2)) * sizeMultiplier);
     for (let h = 0; h < hillCount; h++) {
         const centerX = 10 + Math.floor(Math.random() * (mapSize - 20));
         const centerY = 10 + Math.floor(Math.random() * (mapSize - 20));
-        const hillSize = 2 + Math.floor(Math.random() * 3);
+        const hillSize = 1 + Math.floor(Math.random() * 2);
 
         for (let y = centerY - hillSize; y <= centerY + hillSize; y++) {
             for (let x = centerX - hillSize; x <= centerX + hillSize; x++) {
@@ -534,13 +546,13 @@ function generateMap() {
 
     // Rock-wall ridges: long impassable lines that block shots and
     // funnel armies through chokepoints
-    const ridgeCount = Math.floor((3 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    const ridgeCount = Math.floor((2 + Math.floor(Math.random() * 2)) * sizeMultiplier);
     const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
     for (let r = 0; r < ridgeCount; r++) {
         let x = 8 + Math.floor(Math.random() * (mapSize - 16));
         let y = 8 + Math.floor(Math.random() * (mapSize - 16));
         let [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
-        const len = 5 + Math.floor(Math.random() * 7);
+        const len = 4 + Math.floor(Math.random() * 5);
         for (let i = 0; i < len; i++) {
             if (x < 2 || x >= mapSize - 2 || y < 2 || y >= mapSize - 2) break;
             const tile = game.map[y][x];
@@ -789,6 +801,26 @@ function buildTerrainCache() {
             drawTileToCache(x, y);
         }
     }
+    // Soft mottling: big feathered light/dark blotches dissolve any
+    // remaining tile seams into continuous ground
+    const blotches = Math.floor(mapSize * mapSize / 14);
+    for (let i = 0; i < blotches; i++) {
+        const bx = tileRandom(i, 7) * mapSize;
+        const by = tileRandom(i, 13) * mapSize;
+        const tile = game.map[by | 0]?.[bx | 0];
+        if (!tile || tile.type !== 'grass') continue;
+        const p = tileCachePos(bx, by);
+        const r = (1.5 + tileRandom(i, 23) * 2.5) * TILE_WIDTH / 2;
+        const light = tileRandom(i, 31) > 0.5;
+        const g = tctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        g.addColorStop(0, light ? 'rgba(190,168,120,0.10)' : 'rgba(52,40,24,0.10)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        tctx.fillStyle = g;
+        tctx.beginPath();
+        tctx.ellipse(p.x, p.y, r, r * 0.5, 0, 0, Math.PI * 2);
+        tctx.fill();
+    }
+
     // Second pass: raised rock walls over the ground layer
     for (let y = 0; y < mapSize; y++) {
         for (let x = 0; x < mapSize; x++) {
@@ -1732,8 +1764,9 @@ function drawTileToCache(tx, ty) {
 
     // Smooth large-scale tonal patches + a touch of per-tile grain
     // (kills the checkerboard look of pure per-tile randomness)
-    const variation = (smoothNoise(tx / 5, ty / 5) - 0.5) * 36 +
-                      (tileRandom(tx, ty) - 0.5) * 8;
+    const variation = (smoothNoise(tx / 5, ty / 5) - 0.5) * 34 +
+                      (smoothNoise(tx / 2.2 + 40, ty / 2.2 + 40) - 0.5) * 12 +
+                      (tileRandom(tx, ty) - 0.5) * 2;
     let r = Math.max(0, Math.min(255, base.r + variation));
     let g = Math.max(0, Math.min(255, base.g + variation));
     let b = Math.max(0, Math.min(255, base.b + variation));
@@ -1758,20 +1791,6 @@ function drawTileToCache(tx, ty) {
     c.closePath();
     c.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
     c.fill();
-
-    // Edge shadows for depth
-    c.beginPath();
-    c.moveTo(pos.x, pos.y + tileH / 2);
-    c.lineTo(pos.x - tileW / 2, pos.y);
-    c.strokeStyle = 'rgba(0,0,0,0.3)';
-    c.lineWidth = 1;
-    c.stroke();
-
-    c.beginPath();
-    c.moveTo(pos.x, pos.y + tileH / 2);
-    c.lineTo(pos.x + tileW / 2, pos.y);
-    c.strokeStyle = 'rgba(0,0,0,0.15)';
-    c.stroke();
 
     // Shore foam on water edges that touch land
     if (tile.type === 'water') {
@@ -2638,6 +2657,12 @@ function update(dt) {
     updateRemnantsPing();
     updateLowFundsHint();
 
+    // Battle heat decays; the music engine crossfades its layers
+    game.combatHeat = Math.max(0, (game.combatHeat || 0) - dt * 0.08);
+    if (typeof MusicEngine !== 'undefined' && game.tick % 30 === 0) {
+        MusicEngine.setHeat(game.combatHeat);
+    }
+
     // Fade out order feedback markers
     if (game.orderMarkers) {
         for (let i = game.orderMarkers.length - 1; i >= 0; i--) {
@@ -2688,7 +2713,7 @@ function findPath(startX, startY, endX, endY) {
     ];
 
     let iterations = 0;
-    const maxIterations = 1500; // Allow longer paths on bigger maps
+    const maxIterations = 3500; // Allow longer detours around bases and ridges
 
     while (openSet.length > 0 && iterations < maxIterations) {
         iterations++;
@@ -2697,8 +2722,8 @@ function findPath(startX, startY, endX, endY) {
         let current = openSet[0];
         let currentIndex = 0;
         for (let i = 1; i < openSet.length; i++) {
-            const currentF = fScore.get(key(openSet[i].x, openSet[i].y)) || Infinity;
-            const bestF = fScore.get(key(current.x, current.y)) || Infinity;
+            const currentF = fScore.get(key(openSet[i].x, openSet[i].y)) ?? Infinity;
+            const bestF = fScore.get(key(current.x, current.y)) ?? Infinity;
             if (currentF < bestF) {
                 current = openSet[i];
                 currentIndex = i;
@@ -2739,13 +2764,29 @@ function findPath(startX, startY, endX, endY) {
             if (tile.type === 'water' || tile.type === 'hill') {
                 continue;
             }
+            // Building footprints block the way (except the goal itself,
+            // so ordering units next to a building still works)
+            if (isTileBlocked(nx, ny) && !(nx === end.x && ny === end.y)) {
+                continue;
+            }
+            // No corner cutting: a diagonal step needs both orthogonal
+            // neighbors free, or the movement clips the obstacle corner
+            if (dir.dx !== 0 && dir.dy !== 0) {
+                const sideA = game.map?.[current.y]?.[nx];
+                const sideB = game.map?.[ny]?.[current.x];
+                const aBad = !sideA || sideA.type === 'water' || sideA.type === 'hill' ||
+                    isTileBlocked(nx, current.y);
+                const bBad = !sideB || sideB.type === 'water' || sideB.type === 'hill' ||
+                    isTileBlocked(current.x, ny);
+                if (aBad || bBad) continue;
+            }
 
             validNeighbors++;
-            const tentativeG = (gScore.get(key(current.x, current.y)) || Infinity) +
+            const tentativeG = (gScore.get(key(current.x, current.y)) ?? Infinity) +
                               (dir.dx !== 0 && dir.dy !== 0 ? 1.414 : 1); // Diagonal cost
 
             const neighborKey = key(nx, ny);
-            const currentG = gScore.get(neighborKey) || Infinity;
+            const currentG = gScore.get(neighborKey) ?? Infinity;
 
             if (tentativeG < currentG) {
                 cameFrom.set(neighborKey, current);
@@ -2869,6 +2910,44 @@ function updateUnits(dt) {
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
+            // Stuck watchdog: if the unit hasn't gotten closer to its
+            // destination for a while (wedged on a wall, a building or
+            // other units), find a fresh path on its own. After repeated
+            // failures, nudge the goal; eventually give up gracefully.
+            if ((game.tick + i) % 45 === 0) {
+                const prog = unit._prog;
+                if (prog && prog.tx === unit.targetX && prog.ty === unit.targetY) {
+                    const moved = Math.hypot(unit.x - prog.x, unit.y - prog.y);
+                    if (moved < 0.2 && dist > 1.2) {
+                        prog.fails = (prog.fails || 0) + 1;
+                        if (prog.fails >= 6) {
+                            // hopeless: stop cleanly instead of twitching forever
+                            unit.targetX = undefined;
+                            unit.targetY = undefined;
+                            unit.path = null;
+                            unit._prog = null;
+                        } else {
+                            if (prog.fails >= 3) {
+                                // loosen the goal a little - the exact slot
+                                // may simply be unreachable
+                                unit.targetX += (Math.random() - 0.5) * 2;
+                                unit.targetY += (Math.random() - 0.5) * 2;
+                            }
+                            unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                        }
+                    } else if (moved >= 0.2) {
+                        prog.fails = 0;
+                    }
+                }
+                if (unit.targetX !== undefined) {
+                    unit._prog = {
+                        x: unit.x, y: unit.y,
+                        tx: unit.targetX, ty: unit.targetY,
+                        fails: (unit._prog && unit._prog.fails) || 0
+                    };
+                }
+            }
+
             // Attack-move: engage anything spotted along the way
             if (unit.attackMove && type.damage > 0 && (game.tick + i) % 10 === 0) {
                 const sightRange = sightT(type);
@@ -2947,45 +3026,45 @@ function updateUnits(dt) {
                 const moveX = (dx / dist) * speed;
                 const moveY = (dy / dist) * speed;
                 const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
+                const nextBlocked = nextTile &&
+                    (nextTile.type === 'hill' || nextTile.type === 'water' ||
+                     isTileBlocked(unit.x + moveX, unit.y + moveY));
 
-                // Check if blocked
-                if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
-                    // Blocked - try pathfinding
-                    if (!unit.path || unit.path.length === 0) {
-                        unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
-                        unit.stuckCounter = 0;
-                    }
+                if (unit.path && unit.path.length > 0) {
+                    // Committed to a path: follow it waypoint by waypoint
+                    // instead of abandoning it whenever the direct line
+                    // briefly opens up (that caused endless wall-hugging)
+                    const wp = unit.path[0];
+                    const pdx = wp.x - unit.x;
+                    const pdy = wp.y - unit.y;
+                    const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
 
-                    if (unit.path && unit.path.length > 0) {
-                        const target = unit.path[0];
-                        const pdx = target.x - unit.x;
-                        const pdy = target.y - unit.y;
-                        const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-
-                        if (pdist < 0.5) {
-                            unit.path.shift();
-                        } else {
-                            unit.x += (pdx / pdist) * speed;
-                            unit.y += (pdy / pdist) * speed;
-                            unit.angle = Math.atan2(pdy, pdx);
-                        }
+                    if (pdist < 0.5) {
+                        unit.path.shift();
                     } else {
-                        // No path found - increase stuck counter and try backing up
+                        unit.x += (pdx / pdist) * speed;
+                        unit.y += (pdy / pdist) * speed;
+                        unit.angle = Math.atan2(pdy, pdx);
+                    }
+                } else if (nextBlocked) {
+                    // Blocked with no path: plan one
+                    unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                    if (!unit.path) {
                         unit.stuckCounter = (unit.stuckCounter || 0) + 1;
                         if (unit.stuckCounter > 30) {
-                            // Back up and try different route
+                            // Back up and try a different route
                             unit.x -= (dx / dist) * speed * 0.5;
                             unit.y -= (dy / dist) * speed * 0.5;
-                            unit.path = undefined;
                             unit.stuckCounter = 0;
                         }
+                    } else {
+                        unit.stuckCounter = 0;
                     }
                 } else {
-                    // Direct movement is possible
+                    // Clear line: move directly
                     unit.x += moveX;
                     unit.y += moveY;
                     unit.angle = Math.atan2(dy, dx);
-                    unit.path = undefined;
                     unit.stuckCounter = 0;
                 }
 
@@ -3120,6 +3199,7 @@ function updateBuildings(dt) {
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
             SoundManager.play('explosion_large');
+            blockTilesFor(building, false);
             addDecal({
                 type: 'scorch', x: building.x, y: building.y, life: 60,
                 size: 16 + type.size * 9,
@@ -3270,6 +3350,9 @@ function updateBuildings(dt) {
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 if (building.playerId === 0) {
                     SoundManager.play('unit_ready');
+                    if (typeof VoiceManager !== 'undefined') {
+                        VoiceManager.play('ready', getFaction(0));
+                    }
                     game.stats.unitsBuilt++;
                 }
                 // Send to rally point if set
@@ -3310,6 +3393,9 @@ function registerKill(proj, victim) {
                 });
             }
             SoundManager.play('unit_ready');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play('promote', getFaction(0));
+            }
             if (!game._promoBannerShown) {
                 game._promoBannerShown = true;
                 const name = unitDisplayName(shooter.type, getFaction(0));
@@ -3369,6 +3455,10 @@ function updateProjectiles(dt) {
                     }
 
                     proj.target.hp -= finalDamage;
+                    // battle heat feeds the dynamic music layer
+                    if (proj.playerId === 0 || proj.target.playerId === 0) {
+                        game.combatHeat = Math.min(1, (game.combatHeat || 0) + 0.12);
+                    }
                     // Base-under-attack alert (minimap ping + throttled sound + Space jumps there)
                     if (proj.target.playerId === 0) {
                         game.lastAttackAlert = { x: proj.target.x, y: proj.target.y, time: Date.now() };
@@ -4255,6 +4345,26 @@ function spawnUnit(type, playerId, x, y) {
     return newUnit;
 }
 
+// Occupancy grid: tiles covered by building footprints are unwalkable
+// for pathfinding and direct movement.
+function blockTilesFor(building, block) {
+    if (!game.blockedTiles) game.blockedTiles = new Set();
+    const bType = BUILDING_TYPES[building.type];
+    if (!bType) return;
+    const reach = Math.max(0, Math.floor(bType.size / 2));
+    for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+            const key = (Math.floor(building.x) + dx) + ',' + (Math.floor(building.y) + dy);
+            if (block) game.blockedTiles.add(key);
+            else game.blockedTiles.delete(key);
+        }
+    }
+}
+
+function isTileBlocked(x, y) {
+    return game.blockedTiles && game.blockedTiles.has((x | 0) + ',' + (y | 0));
+}
+
 function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     const bType = BUILDING_TYPES[type];
     const buildTimes = {
@@ -4291,6 +4401,7 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     }
 
     game.buildings.push(building);
+    blockTilesFor(building, true);
     return building;
 }
 
@@ -4770,6 +4881,9 @@ function initializeEventHandlers() {
             game.attackMoveMode = false;
             addOrderMarker(world.x, world.y, 'attack');
             SoundManager.play('ack_attack');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play('attack', getFaction(0));
+            }
             return;
         }
         if (game.placingBuilding) {
@@ -4817,6 +4931,9 @@ function initializeEventHandlers() {
                 // Directly select unit on mousedown for immediate feedback
                 game.selection = [clickedUnit];
                 SoundManager.play('unit_select');
+                if (typeof VoiceManager !== 'undefined') {
+                    VoiceManager.play('select', getFaction(0));
+                }
             } else if (clickedBuilding) {
                 // Select this building for building from
                 game.selection = [clickedBuilding];
@@ -4900,6 +5017,9 @@ function initializeEventHandlers() {
             const isAttackOrder = !!(enemyDirectClick || enemyNearbyClick);
             addOrderMarker(world.x, world.y, isAttackOrder ? 'attack' : 'move');
             SoundManager.play(isAttackOrder ? 'ack_attack' : 'ack_move');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play(isAttackOrder ? 'attack' : 'move', getFaction(0));
+            }
         }
 
         // Group moves spread into a formation grid around the click point
@@ -5418,6 +5538,8 @@ function goToMainMenu() {
         bgMusic.currentTime = 0;
     }
 
+    if (typeof MusicEngine !== 'undefined') MusicEngine.stop();
+
     if (introMusic && audioUnlocked) {
         introMusic.volume = 0.3;
         introMusic.currentTime = 0;
@@ -5503,11 +5625,10 @@ function startGame() {
         introMusic.currentTime = 0;
     }
 
-    if (bgMusic && audioUnlocked) {
-        bgMusic.volume = 0.3; // 30% Lautstärke
-        bgMusic.currentTime = 0;
-        bgMusic.play().catch(e => console.log('Music error:', e));
-    }
+    // In-game soundtrack is fully procedural now
+    if (bgMusic) bgMusic.pause();
+    SoundManager.resume();
+    if (typeof MusicEngine !== 'undefined') MusicEngine.start();
 }
 
 function togglePause() {
@@ -5519,15 +5640,13 @@ function togglePause() {
         game.status = 'PAUSED';
         game.paused = true;
         showScreen('pauseScreen');
-        // Pause music
-        if (bgMusic) bgMusic.pause();
+        if (typeof MusicEngine !== 'undefined') MusicEngine.stop();
     } else if (game.status === 'PAUSED') {
         game.status = 'PLAYING';
         game.paused = false;
         showScreen('mainMenu');
         document.getElementById('mainMenu').classList.add('hidden');
-        // Resume music
-        if (bgMusic) bgMusic.play().catch(e => console.log('Resume music prevented:', e));
+        if (typeof MusicEngine !== 'undefined') MusicEngine.start();
     }
 }
 
@@ -5563,6 +5682,7 @@ function resetGame() {
     game.objectiveFlash = null;
     game.decals = [];
     game.dying = [];
+    game.blockedTiles = new Set();
     game.stats = { unitsBuilt: 0, unitsLost: 0, unitsKilled: 0, buildingsRazed: 0, oilEarned: 0, bunkersClaimed: 0 };
     game._promoBannerShown = false;
     game._remnantsPingTime = 0;
@@ -5746,6 +5866,26 @@ function setupMenuHandlers() {
         });
     }
 
+    // Audio mixer sliders (persisted between sessions)
+    const mixer = [
+        ['musicVolume', v => typeof MusicEngine !== 'undefined' && MusicEngine.setVolume(v)],
+        ['sfxVolume', v => SoundManager.setSfxVolume(v)],
+        ['voiceVolume', v => typeof VoiceManager !== 'undefined' && VoiceManager.setVolume(v)]
+    ];
+    let savedMix = {};
+    try { savedMix = JSON.parse(localStorage.getItem('xfire_mixer')) || {}; } catch (e) { /* fresh */ }
+    for (const [id, apply] of mixer) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (savedMix[id] !== undefined) el.value = savedMix[id];
+        apply(el.value / 100);
+        el.addEventListener('input', () => {
+            apply(el.value / 100);
+            savedMix[id] = el.value;
+            try { localStorage.setItem('xfire_mixer', JSON.stringify(savedMix)); } catch (e) { /* ignore */ }
+        });
+    }
+
     if (playAgainBtn) playAgainBtn.addEventListener('click', () => {
         resetGame();
         initGame();
@@ -5758,11 +5898,11 @@ function setupMenuHandlers() {
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
         setTimeout(resizeCanvas, 0);
-        // Restart background music
-        const bgMusic = document.getElementById('backgroundMusic');
-        if (bgMusic) {
-            bgMusic.currentTime = 0;
-            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        // Restart the procedural soundtrack
+        SoundManager.resume();
+        if (typeof MusicEngine !== 'undefined') {
+            MusicEngine.stop();
+            MusicEngine.start();
         }
     });
     if (retryBtn) retryBtn.addEventListener('click', () => {
@@ -5777,11 +5917,11 @@ function setupMenuHandlers() {
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
         setTimeout(resizeCanvas, 0);
-        // Restart background music
-        const bgMusic = document.getElementById('backgroundMusic');
-        if (bgMusic) {
-            bgMusic.currentTime = 0;
-            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        // Restart the procedural soundtrack
+        SoundManager.resume();
+        if (typeof MusicEngine !== 'undefined') {
+            MusicEngine.stop();
+            MusicEngine.start();
         }
     });
 

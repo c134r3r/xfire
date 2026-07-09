@@ -1014,3 +1014,23 @@ body {
     border-top: 1px solid #2a2a44;
     padding-top: 4px;
 }
+
+/* Pause-menu audio mixer */
+.mixer-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+}
+
+.mixer-row label {
+    width: 70px;
+    text-align: right;
+    font-size: 13px;
+    color: var(--text-secondary, #aab);
+}
+
+.mixer-row input[type="range"] {
+    flex: 1;
+    accent-color: #ff6b35;
+}
