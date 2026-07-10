@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>IRONCLAD - Desert Assault</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230d0d1a'/><text x='50' y='70' font-size='60' fill='%23ff6b35' text-anchor='middle' font-weight='bold'>I</text></svg>">
 <style>
@@ -167,11 +167,64 @@ html, body {
   display: block;
   background: #050510;
   cursor: crosshair;
+  touch-action: none;
   border: 1px solid rgba(255,107,53,0.2);
   border-radius: 4px;
   box-shadow:
     0 0 60px rgba(255,107,53,0.1),
     inset 0 0 80px rgba(0,0,0,0.7);
+}
+
+/* ---- Touch / mobile ---- */
+#touchPause {
+  position: absolute;
+  top: 8px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: 46px; height: 36px;
+  display: none;
+  background: rgba(10,10,20,0.72);
+  border: 1px solid rgba(255,107,53,0.4);
+  border-radius: 8px;
+  color: #ff8855;
+  font-size: 15px;
+  line-height: 1;
+}
+body.touch #touchPause { display: block; }
+body.touch #gameCanvas { border-radius: 0; }
+body.touch #hud { font-size: 11px; letter-spacing: 1px; }
+
+#rotateHint {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 300;
+  background: #0d0d1a;
+  color: #ff8855;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  font-family: 'Arial Black', 'Verdana', sans-serif;
+  letter-spacing: 2px;
+  font-size: 15px;
+  text-align: center;
+  padding: 24px;
+}
+#rotateHint .phone { font-size: 44px; animation: rotatePhone 1.6s ease-in-out infinite; }
+@keyframes rotatePhone {
+  0%, 25% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(90deg); }
+}
+@media (orientation: portrait) {
+  body.touch #rotateHint { display: flex; }
+}
+
+@media (max-width: 760px) {
+  .panel { padding: 16px 14px; max-height: 96vh; overflow-y: auto; }
+  .title { font-size: 30px; }
+  .controls { font-size: 12px; }
+  .btn { padding: 12px 18px; }
+  #hud { top: 6px; left: 6px; right: 6px; }
 }
 
 .overlay {
@@ -188,6 +241,7 @@ html, body {
 }
 
 .overlay.hidden { display: none; }
+#kbControls.hidden, #touchControls.hidden { display: none; }
 
 .panel {
   background: rgba(10,10,20,0.85);
@@ -389,6 +443,12 @@ html, body {
   </div>
   <div id="powerupHud"></div>
   <div id="waveBanner"></div>
+  <button id="touchPause">| |</button>
+</div>
+
+<div id="rotateHint">
+  <div class="phone">📱</div>
+  <div>ROTATE YOUR DEVICE<br>DESERT ASSAULT PLAYS IN LANDSCAPE</div>
 </div>
 
 <!-- Main Menu -->
@@ -397,9 +457,15 @@ html, body {
     <div class="title">IRONCLAD</div>
     <div class="subtitle">Desert Assault</div>
     <div class="controls">
-      <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> &nbsp; Drive tank</div>
-      <div><span class="key">MOUSE</span> &nbsp; Aim turret &nbsp;·&nbsp; <span class="key">LMB</span> / <span class="key">SPACE</span> &nbsp; Fire</div>
-      <div><span class="key">SHIFT</span> &nbsp; Boost &nbsp;·&nbsp; <span class="key">P</span> &nbsp; Pause</div>
+      <div id="kbControls">
+        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> &nbsp; Drive tank</div>
+        <div><span class="key">MOUSE</span> &nbsp; Aim turret &nbsp;·&nbsp; <span class="key">LMB</span> / <span class="key">SPACE</span> &nbsp; Fire</div>
+        <div><span class="key">SHIFT</span> &nbsp; Boost &nbsp;·&nbsp; <span class="key">P</span> &nbsp; Pause</div>
+      </div>
+      <div id="touchControls" class="hidden">
+        <div><span class="key">LEFT THUMB</span> &nbsp; Drive — push to the edge to BOOST</div>
+        <div><span class="key">RIGHT THUMB</span> &nbsp; Aim turret — auto-fires while held</div>
+      </div>
       <div class="hint">◈ Break line of sight behind rocks to go HIDDEN — hunters lose your trail.
       Watch for mortar target markers: rocks won't save you from arcing shells!</div>
     </div>
@@ -467,16 +533,24 @@ const VIEW_H = 680;
 const WORLD_W = 2400;
 const WORLD_H = 1600;
 
+const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (isTouch) {
+  document.body.classList.add('touch');
+  document.getElementById('kbControls').classList.add('hidden');
+  document.getElementById('touchControls').classList.remove('hidden');
+}
+
 function fitCanvas() {
-  const maxW = Math.min(window.innerWidth - 32, VIEW_W);
-  const ratio = VIEW_H / VIEW_W;
+  const pad = isTouch ? 0 : 32;
+  const scale = Math.min((window.innerWidth - pad) / VIEW_W, (window.innerHeight - pad) / VIEW_H, 1);
   canvas.width = VIEW_W;
   canvas.height = VIEW_H;
-  canvas.style.width = maxW + 'px';
-  canvas.style.height = (maxW * ratio) + 'px';
+  canvas.style.width = (VIEW_W * scale) + 'px';
+  canvas.style.height = (VIEW_H * scale) + 'px';
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', () => setTimeout(fitCanvas, 120));
 
 // ----- Audio: synth SFX + a tiny two-layer sequencer -----
 let audioCtx = null;
@@ -616,6 +690,68 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', () => { mouse.down = true; getAudio(); });
 canvas.addEventListener('mouseup', () => { mouse.down = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ----- Touch: floating twin sticks (CoD-Mobile style) -----
+// Left half of the screen spawns the drive stick under the thumb,
+// right half the aim stick. Aim deflection fires; full drive
+// deflection engages boost.
+const STICK_R = 70;
+const stick = {
+  move: { id: null, ox: 0, oy: 0, x: 0, y: 0 },
+  aim:  { id: null, ox: 0, oy: 0, x: 0, y: 0 }
+};
+
+function touchToCanvas(t) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (t.clientX - r.left) * (canvas.width / r.width),
+    y: (t.clientY - r.top) * (canvas.height / r.height)
+  };
+}
+
+function stickVec(s) {
+  let dx = (s.x - s.ox) / STICK_R, dy = (s.y - s.oy) / STICK_R;
+  const m = Math.hypot(dx, dy);
+  if (m > 1) { dx /= m; dy /= m; }
+  return { x: dx, y: dy, mag: Math.min(1, m) };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  getAudio();
+  for (const t of e.changedTouches) {
+    const p = touchToCanvas(t);
+    const side = p.x < VIEW_W / 2 ? stick.move : stick.aim;
+    if (side.id === null) {
+      side.id = t.identifier;
+      side.ox = p.x; side.oy = p.y;
+      side.x = p.x; side.y = p.y;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const p = touchToCanvas(t);
+    for (const s of [stick.move, stick.aim]) {
+      if (s.id === t.identifier) { s.x = p.x; s.y = p.y; }
+    }
+  }
+}, { passive: false });
+
+function releaseTouches(e) {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    for (const s of [stick.move, stick.aim]) {
+      if (s.id === t.identifier) s.id = null;
+    }
+  }
+}
+canvas.addEventListener('touchend', releaseTouches, { passive: false });
+canvas.addEventListener('touchcancel', releaseTouches, { passive: false });
+
+document.getElementById('touchPause').addEventListener('click', togglePause);
 
 // ----- Helpers -----
 function rand(a, b) { return a + Math.random() * (b - a); }
@@ -1034,17 +1170,30 @@ function applyPickup(type) {
 function updatePlayer() {
   const p = game.player;
 
-  let mx = 0, my = 0;
+  let mx = 0, my = 0, throttle = 1, boosting = false;
   if (keys['w'] || keys['arrowup']) my -= 1;
   if (keys['s'] || keys['arrowdown']) my += 1;
   if (keys['a'] || keys['arrowleft']) mx -= 1;
   if (keys['d'] || keys['arrowright']) mx += 1;
-  const mag = Math.hypot(mx, my);
-  if (mag > 0) { mx /= mag; my /= mag; }
+  let mag = Math.hypot(mx, my);
+  if (mag > 0) { mx /= mag; my /= mag; mag = 1; }
+  if (keys['shift']) boosting = true;
 
-  let speed = p.speed;
+  // drive stick overrides keys: analog throttle, edge push = boost
+  if (stick.move.id !== null) {
+    const v = stickVec(stick.move);
+    if (v.mag > 0.12) {
+      const vm = Math.hypot(v.x, v.y) || 1;
+      mx = v.x / vm; my = v.y / vm;
+      mag = 1;
+      throttle = v.mag;
+      boosting = v.mag > 0.92;
+    }
+  }
+
+  let speed = p.speed * throttle;
   if (game.powerups.overdrive > 0) speed *= 1.45;
-  if (keys['shift'] && p.boost > 0 && mag > 0) {
+  if (boosting && p.boost > 0 && mag > 0) {
     speed *= 1.8;
     p.boost = Math.max(0, p.boost - 0.6);
   } else {
@@ -1071,12 +1220,24 @@ function updatePlayer() {
     }
   }
 
-  // aim with the mouse (world coordinates)
-  const wx = mouse.x + game.cam.x, wy = mouse.y + game.cam.y;
-  p.turretAngle = angleLerp(p.turretAngle, Math.atan2(wy - p.y, wx - p.x), 0.35);
+  // aim: right stick on touch, mouse otherwise
+  let touchFiring = false;
+  if (stick.aim.id !== null) {
+    const v = stickVec(stick.aim);
+    if (v.mag > 0.25) {
+      p.turretAngle = angleLerp(p.turretAngle, Math.atan2(v.y, v.x), 0.4);
+      touchFiring = v.mag > 0.4;
+    }
+  } else if (isTouch) {
+    // no aim input: turret settles toward driving direction
+    if (mag > 0) p.turretAngle = angleLerp(p.turretAngle, p.hullAngle, 0.06);
+  } else {
+    const wx = mouse.x + game.cam.x, wy = mouse.y + game.cam.y;
+    p.turretAngle = angleLerp(p.turretAngle, Math.atan2(wy - p.y, wx - p.x), 0.35);
+  }
 
   if (p.shootCooldown > 0) p.shootCooldown--;
-  const wantsToShoot = mouse.down || keys[' '];
+  const wantsToShoot = touchFiring || (!isTouch && mouse.down) || keys[' '];
   let fireRate = game.powerups.rapidFire > 0 ? 6 : 13;
   if (game.powerups.overdrive > 0) fireRate = Math.max(4, fireRate - 3);
   if (wantsToShoot && p.shootCooldown <= 0) {
@@ -1960,7 +2121,8 @@ function drawBoostBar() {
 }
 
 function drawRadar() {
-  const R = 62, cx = VIEW_W - R - 16, cy = VIEW_H - R - 16;
+  // bottom-right on desktop; top-right on touch, clear of the aim stick
+  const R = 62, cx = VIEW_W - R - 16, cy = isTouch ? R + 58 : VIEW_H - R - 16;
   const scale = R / 700; // radar range 700px
   const p = game.player;
   ctx.save();
@@ -2054,6 +2216,37 @@ function render() {
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
   drawRadar();
+  if (isTouch) drawTouchSticks();
+}
+
+function drawTouchSticks() {
+  const draw = (s, color, hintX, hintY) => {
+    if (s.id !== null) {
+      const v = stickVec(s);
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath();
+      ctx.arc(s.ox, s.oy, STICK_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(s.ox + v.x * STICK_R, s.oy + v.y * STICK_R, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (game.state === 'playing') {
+      // idle hint ring so thumbs know where to land
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(hintX, hintY, STICK_R * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  };
+  draw(stick.move, 'rgba(77,208,225,0.9)', 150, VIEW_H - 130);
+  draw(stick.aim, 'rgba(255,107,53,0.9)', VIEW_W - 150, VIEW_H - 130);
 }
 
 // ----- HUD / loop -----
