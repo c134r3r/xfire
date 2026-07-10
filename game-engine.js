@@ -19,10 +19,22 @@ const SoundManager = {
     init() {
         try {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            // SFX bus (music and voices have their own buses in audio.js)
+            this.sfxGain = this.ctx.createGain();
+            this.sfxGain.gain.value = 1;
+            this.sfxGain.connect(this.ctx.destination);
+            if (typeof MusicEngine !== 'undefined') MusicEngine.init(this.ctx);
+            if (typeof VoiceManager !== 'undefined') VoiceManager.init(this.ctx);
             console.log('[SoundManager] Initialized');
         } catch (e) {
             console.warn('[SoundManager] Web Audio not supported');
             this.enabled = false;
+        }
+    },
+
+    setSfxVolume(v) {
+        if (this.sfxGain) {
+            this.sfxGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
         }
     },
 
@@ -146,7 +158,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         noise.start();
     },
 
@@ -162,7 +174,7 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol * 0.35, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.25);
     },
@@ -178,7 +190,7 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.14);
     },
@@ -195,7 +207,7 @@ const SoundManager = {
         gain.gain.linearRampToValueAtTime(vol, t + 0.015);
         gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start(t);
         osc.stop(t + duration + 0.02);
     },
@@ -211,7 +223,7 @@ const SoundManager = {
             gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime + t);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.15);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(this.sfxGain || ctx.destination);
             osc.start(ctx.currentTime + t);
             osc.stop(ctx.currentTime + t + 0.15);
         });
@@ -230,7 +242,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + duration);
     },
@@ -260,7 +272,7 @@ const SoundManager = {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         noise.start();
     },
 
@@ -277,7 +289,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.05);
     },
@@ -295,7 +307,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.15);
     },
@@ -313,7 +325,7 @@ const SoundManager = {
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.sfxGain || ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.08);
     }
@@ -487,11 +499,11 @@ function generateMap() {
     const sizeMultiplier = mapSize / 64;
 
     // Add hill areas (15% of map = mostly grass)
-    const hillCount = Math.floor((4 + Math.floor(Math.random() * 3)) * sizeMultiplier);
+    const hillCount = Math.floor((2 + Math.floor(Math.random() * 2)) * sizeMultiplier);
     for (let h = 0; h < hillCount; h++) {
         const centerX = 10 + Math.floor(Math.random() * (mapSize - 20));
         const centerY = 10 + Math.floor(Math.random() * (mapSize - 20));
-        const hillSize = 2 + Math.floor(Math.random() * 3);
+        const hillSize = 1 + Math.floor(Math.random() * 2);
 
         for (let y = centerY - hillSize; y <= centerY + hillSize; y++) {
             for (let x = centerX - hillSize; x <= centerX + hillSize; x++) {
@@ -529,6 +541,32 @@ function generateMap() {
                     }
                 }
             }
+        }
+    }
+
+    // Rock-wall ridges: long impassable lines that block shots and
+    // funnel armies through chokepoints
+    const ridgeCount = Math.floor((2 + Math.floor(Math.random() * 2)) * sizeMultiplier);
+    const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    for (let r = 0; r < ridgeCount; r++) {
+        let x = 8 + Math.floor(Math.random() * (mapSize - 16));
+        let y = 8 + Math.floor(Math.random() * (mapSize - 16));
+        let [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+        const len = 4 + Math.floor(Math.random() * 5);
+        for (let i = 0; i < len; i++) {
+            if (x < 2 || x >= mapSize - 2 || y < 2 || y >= mapSize - 2) break;
+            const tile = game.map[y][x];
+            if (tile.type === 'grass' && !tile.oil) {
+                tile.type = 'hill';
+                tile.height = 2;
+                tile.wall = true;
+            }
+            // occasional kink so ridges don't look ruler-straight
+            if (Math.random() < 0.2) {
+                [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+            }
+            x += dx;
+            y += dy;
         }
     }
 
@@ -763,6 +801,118 @@ function buildTerrainCache() {
             drawTileToCache(x, y);
         }
     }
+    // Soft mottling: big feathered light/dark blotches dissolve any
+    // remaining tile seams into continuous ground
+    const blotches = Math.floor(mapSize * mapSize / 14);
+    for (let i = 0; i < blotches; i++) {
+        const bx = tileRandom(i, 7) * mapSize;
+        const by = tileRandom(i, 13) * mapSize;
+        const tile = game.map[by | 0]?.[bx | 0];
+        if (!tile || tile.type !== 'grass') continue;
+        const p = tileCachePos(bx, by);
+        const r = (1.5 + tileRandom(i, 23) * 2.5) * TILE_WIDTH / 2;
+        const light = tileRandom(i, 31) > 0.5;
+        const g = tctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        g.addColorStop(0, light ? 'rgba(190,168,120,0.10)' : 'rgba(52,40,24,0.10)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        tctx.fillStyle = g;
+        tctx.beginPath();
+        tctx.ellipse(p.x, p.y, r, r * 0.5, 0, 0, Math.PI * 2);
+        tctx.fill();
+    }
+
+    // Second pass: raised rock walls over the ground layer
+    for (let y = 0; y < mapSize; y++) {
+        for (let x = 0; x < mapSize; x++) {
+            if (game.map[y]?.[x]?.type === 'hill') drawWallToCache(x, y);
+        }
+    }
+}
+
+// Raised rock outcrop: cliff faces down to the ground, cracked rocky top.
+// Drawn in row order so southern walls naturally overlap northern faces.
+function drawWallToCache(tx, ty) {
+    if (!terrainCache) return;
+    const c = terrainCache.ctx;
+    const pos = tileCachePos(tx, ty);
+    const H = 20; // wall height in px
+    const hw = TILE_WIDTH / 2, hh = TILE_HEIGHT / 2;
+
+    const top = { x: pos.x, y: pos.y - hh - H };
+    const right = { x: pos.x + hw, y: pos.y - H };
+    const bottom = { x: pos.x, y: pos.y + hh - H };
+    const left = { x: pos.x - hw, y: pos.y - H };
+
+    const v = (tileRandom(tx, ty, 5) - 0.5) * 18;
+    const rockTop = `rgb(${Math.floor(132 + v)},${Math.floor(112 + v)},${Math.floor(84 + v)})`;
+    const faceSE = `rgb(${Math.floor(92 + v)},${Math.floor(74 + v)},${Math.floor(52 + v)})`;
+    const faceSW = `rgb(${Math.floor(70 + v)},${Math.floor(56 + v)},${Math.floor(40 + v)})`;
+
+    // south-east cliff face
+    c.fillStyle = faceSE;
+    c.beginPath();
+    c.moveTo(right.x, right.y);
+    c.lineTo(bottom.x, bottom.y);
+    c.lineTo(bottom.x, bottom.y + H);
+    c.lineTo(right.x, right.y + H);
+    c.closePath();
+    c.fill();
+
+    // south-west cliff face
+    c.fillStyle = faceSW;
+    c.beginPath();
+    c.moveTo(bottom.x, bottom.y);
+    c.lineTo(left.x, left.y);
+    c.lineTo(left.x, left.y + H);
+    c.lineTo(bottom.x, bottom.y + H);
+    c.closePath();
+    c.fill();
+
+    // vertical strata cracks on the faces
+    c.strokeStyle = 'rgba(30,22,14,0.4)';
+    c.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        const t = 0.2 + tileRandom(tx, ty, 120 + i) * 0.6;
+        const fx = bottom.x + (right.x - bottom.x) * t;
+        const fy = bottom.y + (right.y - bottom.y) * t;
+        c.beginPath();
+        c.moveTo(fx, fy + 2);
+        c.lineTo(fx + (tileRandom(tx, ty, 130 + i) - 0.5) * 3, fy + H - 2);
+        c.stroke();
+        const gx = left.x + (bottom.x - left.x) * t;
+        const gy = left.y + (bottom.y - left.y) * t;
+        c.beginPath();
+        c.moveTo(gx, gy + 2);
+        c.lineTo(gx + (tileRandom(tx, ty, 140 + i) - 0.5) * 3, gy + H - 2);
+        c.stroke();
+    }
+
+    // rocky top
+    c.fillStyle = rockTop;
+    c.beginPath();
+    c.moveTo(top.x, top.y);
+    c.lineTo(right.x, right.y);
+    c.lineTo(bottom.x, bottom.y);
+    c.lineTo(left.x, left.y);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = 'rgba(40,30,20,0.5)';
+    c.stroke();
+
+    // boulders + cracks on top
+    for (let i = 0; i < 3; i++) {
+        const ox = (tileRandom(tx, ty, 150 + i) - 0.5) * 20;
+        const oy = (tileRandom(tx, ty, 160 + i) - 0.5) * 10 - H;
+        const rw = 2.5 + tileRandom(tx, ty, 170 + i) * 4;
+        c.fillStyle = `rgba(60,46,32,0.55)`;
+        c.beginPath();
+        c.ellipse(pos.x + ox, pos.y + oy, rw, rw * 0.55, 0, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(168,146,112,0.6)';
+        c.beginPath();
+        c.ellipse(pos.x + ox - rw * 0.25, pos.y + oy - rw * 0.3, rw * 0.45, rw * 0.28, 0, 0, Math.PI * 2);
+        c.fill();
+    }
 }
 
 function tileCachePos(tx, ty) {
@@ -781,6 +931,15 @@ function redrawTerrainTile(tx, ty) {
             const x = tx + dx, y = ty + dy;
             if (x >= 0 && x < mapSize && y >= 0 && y < mapSize) {
                 drawTileToCache(x, y);
+            }
+        }
+    }
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const x = tx + dx, y = ty + dy;
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize &&
+                game.map[y]?.[x]?.type === 'hill') {
+                drawWallToCache(x, y);
             }
         }
     }
@@ -848,6 +1007,7 @@ function render() {
     drawTerrain();
     drawOilAnimations();
     drawDecals();
+    drawDying();
     drawBunkers();
 
     // Draw buildings and units together, sorted by isometric depth (x + y).
@@ -969,6 +1129,85 @@ function render() {
 }
 
 // ============================================
+// UNIT COLLISION
+// Soft-body separation via a per-tile spatial hash,
+// plus a push-out from building footprints, so units
+// stop stacking on one spot or driving through bases.
+// ============================================
+
+function unitRadius(type) {
+    return type.size / 34; // tiles (infantry ~0.26, heavy ~0.53)
+}
+
+function resolveUnitCollisions() {
+    const units = game.units;
+    if (units.length < 2 && game.buildings.length === 0) return;
+
+    // spatial hash: bucket units per tile (and stamp an index so each
+    // pair is resolved exactly once without a costly indexOf lookup)
+    const grid = new Map();
+    for (let i = 0; i < units.length; i++) {
+        const u = units[i];
+        u._ci = i;
+        const key = (u.x | 0) + ',' + (u.y | 0);
+        let cell = grid.get(key);
+        if (!cell) grid.set(key, cell = []);
+        cell.push(u);
+    }
+
+    // pairwise separation within the 3x3 neighborhood
+    for (let i = 0; i < units.length; i++) {
+        const u = units[i];
+        const ut = UNIT_TYPES[u.type];
+        if (!ut) continue;
+        const ru = unitRadius(ut);
+        const cx = u.x | 0, cy = u.y | 0;
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+            for (let gx = cx - 1; gx <= cx + 1; gx++) {
+                const cell = grid.get(gx + ',' + gy);
+                if (!cell) continue;
+                for (const v of cell) {
+                    // handle each pair once
+                    if (v._ci <= i) continue;
+                    const vt = UNIT_TYPES[v.type];
+                    if (!vt) continue;
+                    const minD = ru + unitRadius(vt);
+                    let dx = v.x - u.x, dy = v.y - u.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 >= minD * minD) continue;
+                    let d = Math.sqrt(d2);
+                    if (d < 0.001) {
+                        // perfectly stacked: nudge apart in a random direction
+                        const a = Math.random() * Math.PI * 2;
+                        dx = Math.cos(a); dy = Math.sin(a); d = 1;
+                    }
+                    const push = Math.min(0.06, (minD - d) * 0.35);
+                    const nx = dx / d, ny = dy / d;
+                    u.x -= nx * push; u.y -= ny * push;
+                    v.x += nx * push; v.y += ny * push;
+                }
+            }
+        }
+
+        // push out of building footprints
+        for (const b of game.buildings) {
+            const bt = BUILDING_TYPES[b.type];
+            if (!bt) continue;
+            const half = bt.size / 2 + ru * 0.5;
+            const dx = u.x - b.x, dy = u.y - b.y;
+            if (Math.abs(dx) < half && Math.abs(dy) < half) {
+                // exit along the axis with the least penetration
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    u.x = b.x + Math.sign(dx || 1) * Math.min(half, Math.abs(dx) + 0.06);
+                } else {
+                    u.y = b.y + Math.sign(dy || 1) * Math.min(half, Math.abs(dy) + 0.06);
+                }
+            }
+        }
+    }
+}
+
+// ============================================
 // BATTLEFIELD DECALS (wrecks, splats, scorch)
 // Persist for a while after fights, then fade.
 // ============================================
@@ -994,7 +1233,8 @@ function drawDecals() {
             const spr = IsoSprites.wreckSprite(d.role, d.faction, d.dir);
             ctx.drawImage(spr,
                 s.x - spr.anchorX * zoom, s.y - spr.anchorY * zoom,
-                spr.width * zoom, spr.height * zoom);
+                (spr.logicalWidth || spr.width) * zoom,
+                (spr.logicalHeight || spr.height) * zoom);
             // dwindling smoke from fresh wrecks
             if (d.maxLife - d.life < 6 && Math.random() < 0.12) {
                 game.particles.push({
@@ -1034,6 +1274,61 @@ function drawDecals() {
             }
         }
         ctx.globalAlpha = 1;
+    }
+}
+
+// Short death animation before the wreck/splat decal takes over:
+// vehicles flash white and sink, infantry topples over.
+function updateDying(dt) {
+    if (!game.dying) return;
+    for (let i = game.dying.length - 1; i >= 0; i--) {
+        const d = game.dying[i];
+        d.t += dt;
+        const duration = d.infantry ? 0.55 : 0.5;
+        if (d.t >= duration) {
+            if (d.infantry) {
+                addDecal({
+                    type: 'splat', x: d.x, y: d.y, life: 25,
+                    color: d.faction === 'series9' ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
+                    drops: Array.from({ length: 3 }, () => [
+                        (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 9, 1.5 + Math.random() * 2])
+                });
+            } else {
+                addDecal({
+                    type: 'wreck', x: d.x, y: d.y, life: 40,
+                    role: d.role, faction: d.faction, dir: d.dir
+                });
+            }
+            game.dying.splice(i, 1);
+        }
+    }
+}
+
+function drawDying() {
+    if (!game.dying) return;
+    const zoom = getZoom();
+    for (const d of game.dying) {
+        const s = worldToScreen(d.x, d.y);
+        const spr = IsoSprites.unitComposite(d.role, d.faction, d.dir);
+        const w = (spr.logicalWidth || spr.width) * zoom;
+        const h = (spr.logicalHeight || spr.height) * zoom;
+        ctx.save();
+        if (d.infantry) {
+            // topple around the feet
+            const p = Math.min(1, d.t / 0.55);
+            ctx.translate(s.x, s.y);
+            ctx.rotate(p * 1.5);
+            ctx.globalAlpha = 1 - p * 0.7;
+            ctx.drawImage(spr, -spr.anchorX * zoom, -spr.anchorY * zoom, w, h);
+        } else {
+            // white flash, then sink and fade under the fireball
+            const p = Math.min(1, d.t / 0.5);
+            ctx.globalAlpha = 1 - p * 0.8;
+            const sink = p * 4 * zoom;
+            try { if (d.t < 0.14) ctx.filter = 'brightness(2.4) saturate(0.5)'; } catch (e) { /* older engines */ }
+            ctx.drawImage(spr, s.x - spr.anchorX * zoom, s.y - spr.anchorY * zoom + sink, w, h);
+        }
+        ctx.restore();
     }
 }
 
@@ -1219,6 +1514,22 @@ function drawObjectiveGuides() {
     }
 }
 
+// Compact formation grid around a destination: each unit in a group
+// order gets its own slot instead of everyone crowding one point.
+function formationOffsets(n, spacing = 1.05) {
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    const offs = [];
+    for (let i = 0; i < n; i++) {
+        const c = i % cols, r = (i / cols) | 0;
+        offs.push({
+            x: (c - (cols - 1) / 2) * spacing,
+            y: (r - (rows - 1) / 2) * spacing
+        });
+    }
+    return offs;
+}
+
 // Generic minimap pings (bunker claims, raids, dried-up patches)
 function addPing(x, y, color) {
     if (!game.pings) game.pings = [];
@@ -1315,8 +1626,8 @@ function drawBunkers() {
         ctx.drawImage(sprite,
             screen.x - sprite.anchorX * bscale,
             screen.y - sprite.anchorY * bscale,
-            sprite.width * bscale,
-            sprite.height * bscale);
+            (sprite.logicalWidth || sprite.width) * bscale,
+            (sprite.logicalHeight || sprite.height) * bscale);
         // Beckoning pulse while unclaimed
         if (!b.claimed) {
             const pulse = (Date.now() / 1200 + b.x) % 1;
@@ -1388,8 +1699,8 @@ function drawBuildingPreview(buildingType, tx, ty, isValid) {
     ctx.drawImage(sprite,
         screen.x - sprite.anchorX * bscale,
         screen.y - sprite.anchorY * bscale,
-        sprite.width * bscale,
-        sprite.height * bscale);
+        (sprite.logicalWidth || sprite.width) * bscale,
+        (sprite.logicalHeight || sprite.height) * bscale);
     ctx.globalAlpha = 1;
 
     // Range indicator for towers
@@ -1453,8 +1764,9 @@ function drawTileToCache(tx, ty) {
 
     // Smooth large-scale tonal patches + a touch of per-tile grain
     // (kills the checkerboard look of pure per-tile randomness)
-    const variation = (smoothNoise(tx / 5, ty / 5) - 0.5) * 36 +
-                      (tileRandom(tx, ty) - 0.5) * 8;
+    const variation = (smoothNoise(tx / 5, ty / 5) - 0.5) * 34 +
+                      (smoothNoise(tx / 2.2 + 40, ty / 2.2 + 40) - 0.5) * 12 +
+                      (tileRandom(tx, ty) - 0.5) * 2;
     let r = Math.max(0, Math.min(255, base.r + variation));
     let g = Math.max(0, Math.min(255, base.g + variation));
     let b = Math.max(0, Math.min(255, base.b + variation));
@@ -1479,20 +1791,6 @@ function drawTileToCache(tx, ty) {
     c.closePath();
     c.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
     c.fill();
-
-    // Edge shadows for depth
-    c.beginPath();
-    c.moveTo(pos.x, pos.y + tileH / 2);
-    c.lineTo(pos.x - tileW / 2, pos.y);
-    c.strokeStyle = 'rgba(0,0,0,0.3)';
-    c.lineWidth = 1;
-    c.stroke();
-
-    c.beginPath();
-    c.moveTo(pos.x, pos.y + tileH / 2);
-    c.lineTo(pos.x + tileW / 2, pos.y);
-    c.strokeStyle = 'rgba(0,0,0,0.15)';
-    c.stroke();
 
     // Shore foam on water edges that touch land
     if (tile.type === 'water') {
@@ -1676,6 +1974,9 @@ function drawTileDetailsToCache(c, tx, ty, tileType, pos) {
             break;
 
         case 'hill':
+            // (raised wall drawn in the second pass; keep base ground plain)
+            break;
+        case '_hill_unused':
             // Rocky outcrop boulders
             c.fillStyle = 'rgba(80,58,32,0.5)';
             for (let i = 0; i < detailCount; i++) {
@@ -1719,8 +2020,8 @@ function drawBuilding(building) {
     const bscale = zoom * BUILDING_DRAW_SCALE;
     const dx = screen.x - sprite.anchorX * bscale;
     const dy = screen.y - sprite.anchorY * bscale;
-    const dw = sprite.width * bscale;
-    const dh = sprite.height * bscale;
+    const dw = (sprite.logicalWidth || sprite.width) * bscale;
+    const dh = (sprite.logicalHeight || sprite.height) * bscale;
 
     if (building.isUnderConstruction) {
         const progress = building.buildProgress / building.buildTime;
@@ -1746,6 +2047,19 @@ function drawBuilding(building) {
     }
 
     ctx.drawImage(sprite, dx, dy, dw, dh);
+
+    // Rotating tower head
+    if ((building.type === 'tower' || building.type === 'towerHeavy')) {
+        const tdir = IsoSprites.dirFromAngle(building.turretAngle ?? Math.PI / 4);
+        const tur = IsoSprites.turretSprite(building.type, faction, tdir);
+        const mz = IsoSprites.towerTurretMount(building.type, faction) || 20;
+        const ty = screen.y - mz * bscale;
+        ctx.drawImage(tur,
+            screen.x - tur.anchorX * bscale,
+            ty - tur.anchorY * bscale,
+            (tur.logicalWidth || tur.width) * bscale,
+            (tur.logicalHeight || tur.height) * bscale);
+    }
 
     const barY = dy - 2;
 
@@ -1858,7 +2172,10 @@ function drawUnit(unit) {
     const faction = getFaction(unit.playerId);
 
     const dir = IsoSprites.dirFromAngle(unit.angle || 0);
-    const sprite = IsoSprites.unitSprite(unit.type, faction, dir);
+    // Infantry animates a two-frame stride while moving
+    const moving = unit.targetX !== undefined || (unit.path && unit.path.length > 0);
+    const walkFrame = moving ? Math.floor(game.tick / 10 + unit.x * 3) % 2 : 0;
+    const sprite = IsoSprites.unitSprite(unit.type, faction, dir, walkFrame);
 
     const isSelected = game.selection.includes(unit);
 
@@ -1885,8 +2202,24 @@ function drawUnit(unit) {
     ctx.drawImage(sprite,
         screen.x - sprite.anchorX * zoom,
         screen.y - sprite.anchorY * zoom,
-        sprite.width * zoom,
-        sprite.height * zoom);
+        (sprite.logicalWidth || sprite.width) * zoom,
+        (sprite.logicalHeight || sprite.height) * zoom);
+
+    // Rotating turret overlay, mounted on the hull
+    if (type.turret) {
+        const tdir = IsoSprites.dirFromAngle(unit.turretAngle ?? unit.angle ?? 0);
+        const tur = IsoSprites.turretSprite(unit.type, faction, tdir);
+        const m = IsoSprites.turretMount(unit.type, faction);
+        const yaw = unit.angle || 0;
+        const mx = m.ox * Math.cos(yaw), my = m.ox * Math.sin(yaw);
+        const tx = screen.x + (mx - my) * zoom;
+        const ty = screen.y + ((mx + my) / 2 - m.z) * zoom;
+        ctx.drawImage(tur,
+            tx - tur.anchorX * zoom,
+            ty - tur.anchorY * zoom,
+            (tur.logicalWidth || tur.width) * zoom,
+            (tur.logicalHeight || tur.height) * zoom);
+    }
 
     // Health bar (damaged or selected)
     const hpPercent = Math.max(0, unit.hp / type.hp);
@@ -2303,6 +2636,7 @@ function update(dt) {
     game.tick++;
 
     updateUnits(dt);
+    resolveUnitCollisions();
     updateBuildings(dt);
     updateProjectiles(dt);
     updateParticles(dt);
@@ -2319,8 +2653,15 @@ function update(dt) {
     updateUI();
     updateObjectives();
     updateDecals(dt);
+    updateDying(dt);
     updateRemnantsPing();
     updateLowFundsHint();
+
+    // Battle heat decays; the music engine crossfades its layers
+    game.combatHeat = Math.max(0, (game.combatHeat || 0) - dt * 0.08);
+    if (typeof MusicEngine !== 'undefined' && game.tick % 30 === 0) {
+        MusicEngine.setHeat(game.combatHeat);
+    }
 
     // Fade out order feedback markers
     if (game.orderMarkers) {
@@ -2372,7 +2713,7 @@ function findPath(startX, startY, endX, endY) {
     ];
 
     let iterations = 0;
-    const maxIterations = 1500; // Allow longer paths on bigger maps
+    const maxIterations = 3500; // Allow longer detours around bases and ridges
 
     while (openSet.length > 0 && iterations < maxIterations) {
         iterations++;
@@ -2381,8 +2722,8 @@ function findPath(startX, startY, endX, endY) {
         let current = openSet[0];
         let currentIndex = 0;
         for (let i = 1; i < openSet.length; i++) {
-            const currentF = fScore.get(key(openSet[i].x, openSet[i].y)) || Infinity;
-            const bestF = fScore.get(key(current.x, current.y)) || Infinity;
+            const currentF = fScore.get(key(openSet[i].x, openSet[i].y)) ?? Infinity;
+            const bestF = fScore.get(key(current.x, current.y)) ?? Infinity;
             if (currentF < bestF) {
                 current = openSet[i];
                 currentIndex = i;
@@ -2423,13 +2764,29 @@ function findPath(startX, startY, endX, endY) {
             if (tile.type === 'water' || tile.type === 'hill') {
                 continue;
             }
+            // Building footprints block the way (except the goal itself,
+            // so ordering units next to a building still works)
+            if (isTileBlocked(nx, ny) && !(nx === end.x && ny === end.y)) {
+                continue;
+            }
+            // No corner cutting: a diagonal step needs both orthogonal
+            // neighbors free, or the movement clips the obstacle corner
+            if (dir.dx !== 0 && dir.dy !== 0) {
+                const sideA = game.map?.[current.y]?.[nx];
+                const sideB = game.map?.[ny]?.[current.x];
+                const aBad = !sideA || sideA.type === 'water' || sideA.type === 'hill' ||
+                    isTileBlocked(nx, current.y);
+                const bBad = !sideB || sideB.type === 'water' || sideB.type === 'hill' ||
+                    isTileBlocked(current.x, ny);
+                if (aBad || bBad) continue;
+            }
 
             validNeighbors++;
-            const tentativeG = (gScore.get(key(current.x, current.y)) || Infinity) +
+            const tentativeG = (gScore.get(key(current.x, current.y)) ?? Infinity) +
                               (dir.dx !== 0 && dir.dy !== 0 ? 1.414 : 1); // Diagonal cost
 
             const neighborKey = key(nx, ny);
-            const currentG = gScore.get(neighborKey) || Infinity;
+            const currentG = gScore.get(neighborKey) ?? Infinity;
 
             if (tentativeG < currentG) {
                 cameFrom.set(neighborKey, current);
@@ -2453,30 +2810,31 @@ function updateUnits(dt) {
         const unit = game.units[i];
         const type = UNIT_TYPES[unit.type];
 
-        // Death check
+        // Death check: hand the unit over to the dying animation
         if (unit.hp <= 0) {
             createExplosion(unit.x, unit.y);
             SoundManager.play('explosion_small');
             if (unit.playerId === 0) game.stats.unitsLost++;
-            // leave something behind on the battlefield
-            if (type.category === 'armor') {
-                addDecal({
-                    type: 'wreck', x: unit.x, y: unit.y, life: 40,
-                    role: unit.type, faction: getFaction(unit.playerId),
-                    dir: IsoSprites.dirFromAngle(unit.angle || 0)
-                });
-            } else {
-                const faction = getFaction(unit.playerId);
-                addDecal({
-                    type: 'splat', x: unit.x, y: unit.y, life: 25,
-                    color: faction === 'series9' ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
-                    drops: Array.from({ length: 3 }, () => [
-                        (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 9, 1.5 + Math.random() * 2])
-                });
-            }
+            if (!game.dying) game.dying = [];
+            game.dying.push({
+                role: unit.type,
+                faction: getFaction(unit.playerId),
+                dir: IsoSprites.dirFromAngle(unit.angle || 0),
+                x: unit.x, y: unit.y, t: 0,
+                infantry: type.category === 'infantry'
+            });
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
+        }
+
+        // Turret tracking: swing toward the target, else settle forward
+        if (type.turret) {
+            const tgt = unit.attackTarget;
+            const desired = (tgt && tgt.hp > 0)
+                ? Math.atan2(tgt.y - unit.y, tgt.x - unit.x)
+                : unit.angle || 0;
+            unit.turretAngle = rotateToward(unit.turretAngle ?? unit.angle ?? 0, desired, 0.09);
         }
 
         // Attack logic
@@ -2504,11 +2862,16 @@ function updateUnits(dt) {
                 } else {
                     unit.angle = Math.atan2(dy, dx);
 
-                    // Stay at optimal range (75% of max range to have some buffer)
+                    // Rock walls block direct fire: units without overWalls
+                    // must keep advancing until they have a clear line
+                    const losClear = type.overWalls ||
+                        checkLineOfSight(unit.x, unit.y, target.x, target.y) < 0;
+
+                    // Stay at optimal range (with some buffer)
                     const optimalRange = rangeT(type) * 0.9;
                     const backupDistance = rangeT(type) * 0.3; // Only back up if much too close
 
-                    if (dist > optimalRange) {
+                    if (dist > optimalRange || (!losClear && dist > 1.4)) {
                         // Move towards target to get in range
                         const speed = type.speed * dt * 60;
                         const moveX = (dx / dist) * speed;
@@ -2530,8 +2893,11 @@ function updateUnits(dt) {
                         unit.y -= (dy / dist) * speed;
                     }
                     // Otherwise, stay in place if in optimal range
-                    // If in range, attack
-                    if (dist <= rangeT(type) && game.tick - unit.lastAttack > type.attackSpeed / 16) {
+                    // Fire with a clear line and (for turreted units) an aligned turret
+                    const aimed = !type.turret ||
+                        angleDiff(unit.turretAngle ?? unit.angle, Math.atan2(dy, dx)) < 0.35;
+                    if (dist <= rangeT(type) && losClear && aimed &&
+                        game.tick - unit.lastAttack > type.attackSpeed / 16) {
                         fireProjectile(unit, target);
                         unit.lastAttack = game.tick;
                     }
@@ -2543,6 +2909,44 @@ function updateUnits(dt) {
             const dx = unit.targetX - unit.x;
             const dy = unit.targetY - unit.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Stuck watchdog: if the unit hasn't gotten closer to its
+            // destination for a while (wedged on a wall, a building or
+            // other units), find a fresh path on its own. After repeated
+            // failures, nudge the goal; eventually give up gracefully.
+            if ((game.tick + i) % 45 === 0) {
+                const prog = unit._prog;
+                if (prog && prog.tx === unit.targetX && prog.ty === unit.targetY) {
+                    const moved = Math.hypot(unit.x - prog.x, unit.y - prog.y);
+                    if (moved < 0.2 && dist > 1.2) {
+                        prog.fails = (prog.fails || 0) + 1;
+                        if (prog.fails >= 6) {
+                            // hopeless: stop cleanly instead of twitching forever
+                            unit.targetX = undefined;
+                            unit.targetY = undefined;
+                            unit.path = null;
+                            unit._prog = null;
+                        } else {
+                            if (prog.fails >= 3) {
+                                // loosen the goal a little - the exact slot
+                                // may simply be unreachable
+                                unit.targetX += (Math.random() - 0.5) * 2;
+                                unit.targetY += (Math.random() - 0.5) * 2;
+                            }
+                            unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                        }
+                    } else if (moved >= 0.2) {
+                        prog.fails = 0;
+                    }
+                }
+                if (unit.targetX !== undefined) {
+                    unit._prog = {
+                        x: unit.x, y: unit.y,
+                        tx: unit.targetX, ty: unit.targetY,
+                        fails: (unit._prog && unit._prog.fails) || 0
+                    };
+                }
+            }
 
             // Attack-move: engage anything spotted along the way
             if (unit.attackMove && type.damage > 0 && (game.tick + i) % 10 === 0) {
@@ -2622,45 +3026,45 @@ function updateUnits(dt) {
                 const moveX = (dx / dist) * speed;
                 const moveY = (dy / dist) * speed;
                 const nextTile = game.map[Math.floor(unit.y + moveY)]?.[Math.floor(unit.x + moveX)];
+                const nextBlocked = nextTile &&
+                    (nextTile.type === 'hill' || nextTile.type === 'water' ||
+                     isTileBlocked(unit.x + moveX, unit.y + moveY));
 
-                // Check if blocked
-                if (nextTile && (nextTile.type === 'hill' || nextTile.type === 'water')) {
-                    // Blocked - try pathfinding
-                    if (!unit.path || unit.path.length === 0) {
-                        unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
-                        unit.stuckCounter = 0;
-                    }
+                if (unit.path && unit.path.length > 0) {
+                    // Committed to a path: follow it waypoint by waypoint
+                    // instead of abandoning it whenever the direct line
+                    // briefly opens up (that caused endless wall-hugging)
+                    const wp = unit.path[0];
+                    const pdx = wp.x - unit.x;
+                    const pdy = wp.y - unit.y;
+                    const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
 
-                    if (unit.path && unit.path.length > 0) {
-                        const target = unit.path[0];
-                        const pdx = target.x - unit.x;
-                        const pdy = target.y - unit.y;
-                        const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-
-                        if (pdist < 0.5) {
-                            unit.path.shift();
-                        } else {
-                            unit.x += (pdx / pdist) * speed;
-                            unit.y += (pdy / pdist) * speed;
-                            unit.angle = Math.atan2(pdy, pdx);
-                        }
+                    if (pdist < 0.5) {
+                        unit.path.shift();
                     } else {
-                        // No path found - increase stuck counter and try backing up
+                        unit.x += (pdx / pdist) * speed;
+                        unit.y += (pdy / pdist) * speed;
+                        unit.angle = Math.atan2(pdy, pdx);
+                    }
+                } else if (nextBlocked) {
+                    // Blocked with no path: plan one
+                    unit.path = findPath(unit.x, unit.y, unit.targetX, unit.targetY);
+                    if (!unit.path) {
                         unit.stuckCounter = (unit.stuckCounter || 0) + 1;
                         if (unit.stuckCounter > 30) {
-                            // Back up and try different route
+                            // Back up and try a different route
                             unit.x -= (dx / dist) * speed * 0.5;
                             unit.y -= (dy / dist) * speed * 0.5;
-                            unit.path = undefined;
                             unit.stuckCounter = 0;
                         }
+                    } else {
+                        unit.stuckCounter = 0;
                     }
                 } else {
-                    // Direct movement is possible
+                    // Clear line: move directly
                     unit.x += moveX;
                     unit.y += moveY;
                     unit.angle = Math.atan2(dy, dx);
-                    unit.path = undefined;
                     unit.stuckCounter = 0;
                 }
 
@@ -2708,14 +3112,16 @@ function updateUnits(dt) {
             let nearestEnemy = null;
             let nearestDist = Infinity;
 
-            // Check for enemy units in sight range
+            // Check for enemy units in sight range (walls hide targets
+            // from direct-fire units)
             for (const enemy of game.units) {
                 if (enemy.playerId === unit.playerId) continue;
                 const dx = enemy.x - unit.x;
                 const dy = enemy.y - unit.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                if (dist <= sightRange && dist < nearestDist) {
+                if (dist <= sightRange && dist < nearestDist &&
+                    (type.overWalls || checkLineOfSight(unit.x, unit.y, enemy.x, enemy.y) < 0)) {
                     nearestDist = dist;
                     nearestEnemy = enemy;
                 }
@@ -2729,7 +3135,8 @@ function updateUnits(dt) {
                     const dy = building.y - unit.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist <= sightRange && dist < nearestDist) {
+                    if (dist <= sightRange && dist < nearestDist &&
+                        (type.overWalls || checkLineOfSight(unit.x, unit.y, building.x, building.y) < 0)) {
                         nearestDist = dist;
                         nearestEnemy = building;
                     }
@@ -2746,6 +3153,22 @@ function updateUnits(dt) {
 // Convert range/sight stats (pixel-ish values) into tile distances
 function rangeT(type) { return (type.range || 0) / 24; }
 function sightT(type) { return (type.sight || 100) / 24; }
+
+// Rotate an angle toward a target angle by at most `step`, wrap-aware
+function rotateToward(current, target, step) {
+    let diff = target - current;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    if (Math.abs(diff) <= step) return target;
+    return current + Math.sign(diff) * step;
+}
+
+function angleDiff(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return Math.abs(d);
+}
 
 function updateBuildings(dt) {
     for (let i = game.buildings.length - 1; i >= 0; i--) {
@@ -2776,6 +3199,7 @@ function updateBuildings(dt) {
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
             SoundManager.play('explosion_large');
+            blockTilesFor(building, false);
             addDecal({
                 type: 'scorch', x: building.x, y: building.y, life: 60,
                 size: 16 + type.size * 9,
@@ -2790,6 +3214,17 @@ function updateBuildings(dt) {
             continue;
         }
 
+        // Tower head rotation runs every frame (smooth tracking)
+        if (type.damage && !building.isUnderConstruction) {
+            const tgt = building.currentTarget;
+            const valid = tgt && tgt.hp > 0 && game.units.includes(tgt);
+            if (!valid) building.currentTarget = null;
+            const desired = valid
+                ? Math.atan2(tgt.y - building.y, tgt.x - building.x)
+                : Math.PI / 4;
+            building.turretAngle = rotateToward(building.turretAngle ?? Math.PI / 4, desired, 0.06);
+        }
+
         // Turret attack (staggered scan keeps many towers cheap)
         if (type.damage && !building.isUnderConstruction && (game.tick + i) % 6 === 0) {
             // Check if turret is activated (only shoot after activation delay)
@@ -2802,18 +3237,23 @@ function updateBuildings(dt) {
                 for (const unit of game.units) {
                     if (unit.playerId === building.playerId) continue;
 
-                    // Check if enemy is in sight range
+                    // In range and not hidden behind a rock wall
                     const dx = unit.x - building.x;
                     const dy = unit.y - building.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < rangeT(type) && dist < nearestDist) {
+                    if (dist < rangeT(type) && dist < nearestDist &&
+                        checkLineOfSight(building.x, building.y, unit.x, unit.y) < 0) {
                         nearestDist = dist;
                         nearestEnemy = unit;
                     }
                 }
 
-                if (nearestEnemy && nearestEnemy.hp > 0 && game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
+                building.currentTarget = nearestEnemy || null;
+                if (nearestEnemy && nearestEnemy.hp > 0 &&
+                    angleDiff(building.turretAngle ?? Math.PI / 4,
+                        Math.atan2(nearestEnemy.y - building.y, nearestEnemy.x - building.x)) < 0.4 &&
+                    game.tick - (building.lastAttack || 0) > type.attackSpeed / 16) {
                     fireProjectile(building, nearestEnemy, type.damage);
                     building.lastAttack = game.tick;
                 }
@@ -2910,6 +3350,9 @@ function updateBuildings(dt) {
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 if (building.playerId === 0) {
                     SoundManager.play('unit_ready');
+                    if (typeof VoiceManager !== 'undefined') {
+                        VoiceManager.play('ready', getFaction(0));
+                    }
                     game.stats.unitsBuilt++;
                 }
                 // Send to rally point if set
@@ -2950,6 +3393,9 @@ function registerKill(proj, victim) {
                 });
             }
             SoundManager.play('unit_ready');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play('promote', getFaction(0));
+            }
             if (!game._promoBannerShown) {
                 game._promoBannerShown = true;
                 const name = unitDisplayName(shooter.type, getFaction(0));
@@ -3009,6 +3455,10 @@ function updateProjectiles(dt) {
                     }
 
                     proj.target.hp -= finalDamage;
+                    // battle heat feeds the dynamic music layer
+                    if (proj.playerId === 0 || proj.target.playerId === 0) {
+                        game.combatHeat = Math.min(1, (game.combatHeat || 0) + 0.12);
+                    }
                     // Base-under-attack alert (minimap ping + throttled sound + Space jumps there)
                     if (proj.target.playerId === 0) {
                         game.lastAttackAlert = { x: proj.target.x, y: proj.target.y, time: Date.now() };
@@ -3895,6 +4345,26 @@ function spawnUnit(type, playerId, x, y) {
     return newUnit;
 }
 
+// Occupancy grid: tiles covered by building footprints are unwalkable
+// for pathfinding and direct movement.
+function blockTilesFor(building, block) {
+    if (!game.blockedTiles) game.blockedTiles = new Set();
+    const bType = BUILDING_TYPES[building.type];
+    if (!bType) return;
+    const reach = Math.max(0, Math.floor(bType.size / 2));
+    for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+            const key = (Math.floor(building.x) + dx) + ',' + (Math.floor(building.y) + dy);
+            if (block) game.blockedTiles.add(key);
+            else game.blockedTiles.delete(key);
+        }
+    }
+}
+
+function isTileBlocked(x, y) {
+    return game.blockedTiles && game.blockedTiles.has((x | 0) + ',' + (y | 0));
+}
+
 function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     const bType = BUILDING_TYPES[type];
     const buildTimes = {
@@ -3931,6 +4401,7 @@ function createBuilding(type, playerId, x, y, isUnderConstruction = false) {
     }
 
     game.buildings.push(building);
+    blockTilesFor(building, true);
     return building;
 }
 
@@ -4056,8 +4527,9 @@ function fireProjectile(source, target, customDamage) {
         }
     }
 
-    // Check if path is blocked by hills
-    const blockadeIndex = checkLineOfSight(source.x, source.y, target.x, target.y);
+    // Rock walls block direct fire; siege weapons lob over them
+    const blockadeIndex = type.overWalls ? -1 :
+        checkLineOfSight(source.x, source.y, target.x, target.y);
 
     // Add accuracy/inaccuracy - 20% chance to miss
     const hitChance = 0.8;
@@ -4397,17 +4869,21 @@ function initializeEventHandlers() {
         // Attack-move: A then left-click orders an aggressive march
         if (game.attackMoveMode) {
             const world = screenToWorld(x, y);
-            for (const sel of game.selection) {
-                if (!UNIT_TYPES[sel.type] || sel.playerId !== 0) continue;
-                sel.targetX = world.x + (Math.random() - 0.5);
-                sel.targetY = world.y + (Math.random() - 0.5);
+            const fighters = game.selection.filter(s => UNIT_TYPES[s.type] && s.playerId === 0);
+            const slots = formationOffsets(fighters.length, 1.3);
+            fighters.forEach((sel, k) => {
+                sel.targetX = world.x + slots[k].x;
+                sel.targetY = world.y + slots[k].y;
                 sel.attackMove = true;
                 sel.attackTarget = null;
                 sel.path = findPath(sel.x, sel.y, sel.targetX, sel.targetY);
-            }
+            });
             game.attackMoveMode = false;
             addOrderMarker(world.x, world.y, 'attack');
             SoundManager.play('ack_attack');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play('attack', getFaction(0));
+            }
             return;
         }
         if (game.placingBuilding) {
@@ -4455,6 +4931,9 @@ function initializeEventHandlers() {
                 // Directly select unit on mousedown for immediate feedback
                 game.selection = [clickedUnit];
                 SoundManager.play('unit_select');
+                if (typeof VoiceManager !== 'undefined') {
+                    VoiceManager.play('select', getFaction(0));
+                }
             } else if (clickedBuilding) {
                 // Select this building for building from
                 game.selection = [clickedBuilding];
@@ -4533,15 +5012,23 @@ function initializeEventHandlers() {
         }
 
         // Audio-visual confirmation of the order
-        const anyOwnUnits = game.selection.some(s => UNIT_TYPES[s.type] && s.playerId === 0);
-        if (anyOwnUnits) {
+        const movers = game.selection.filter(s => UNIT_TYPES[s.type] && s.playerId === 0);
+        if (movers.length > 0) {
             const isAttackOrder = !!(enemyDirectClick || enemyNearbyClick);
             addOrderMarker(world.x, world.y, isAttackOrder ? 'attack' : 'move');
             SoundManager.play(isAttackOrder ? 'ack_attack' : 'ack_move');
+            if (typeof VoiceManager !== 'undefined') {
+                VoiceManager.play(isAttackOrder ? 'attack' : 'move', getFaction(0));
+            }
         }
+
+        // Group moves spread into a formation grid around the click point
+        const slots = formationOffsets(movers.length);
+        let slotIndex = 0;
 
         for (const sel of game.selection) {
             if (UNIT_TYPES[sel.type] && sel.playerId === 0) {
+                const slot = slots[slotIndex++] || { x: 0, y: 0 };
                 sel.attackMove = false;
                 sel.resumeX = undefined;
                 sel.resumeY = undefined;
@@ -4575,17 +5062,19 @@ function initializeEventHandlers() {
                     sel.attackTarget = null;
                     sel.path = null;
                 } else {
-                    // Calculate path for movement
-                    const path = findPath(sel.x, sel.y, world.x, world.y);
+                    // Move to this unit's formation slot
+                    const gx = world.x + slot.x;
+                    const gy = world.y + slot.y;
+                    const path = findPath(sel.x, sel.y, gx, gy);
                     if (path && path.length > 0) {
                         sel.path = path;
                         sel.pathIndex = 0;
-                        sel.targetX = world.x;
-                        sel.targetY = world.y;
+                        sel.targetX = gx;
+                        sel.targetY = gy;
                     } else {
                         // Fallback to direct movement if no path found
-                        sel.targetX = world.x;
-                        sel.targetY = world.y;
+                        sel.targetX = gx;
+                        sel.targetY = gy;
                         sel.path = null;
                     }
                     sel.attackTarget = null;
@@ -5049,6 +5538,8 @@ function goToMainMenu() {
         bgMusic.currentTime = 0;
     }
 
+    if (typeof MusicEngine !== 'undefined') MusicEngine.stop();
+
     if (introMusic && audioUnlocked) {
         introMusic.volume = 0.3;
         introMusic.currentTime = 0;
@@ -5134,11 +5625,10 @@ function startGame() {
         introMusic.currentTime = 0;
     }
 
-    if (bgMusic && audioUnlocked) {
-        bgMusic.volume = 0.3; // 30% Lautstärke
-        bgMusic.currentTime = 0;
-        bgMusic.play().catch(e => console.log('Music error:', e));
-    }
+    // In-game soundtrack is fully procedural now
+    if (bgMusic) bgMusic.pause();
+    SoundManager.resume();
+    if (typeof MusicEngine !== 'undefined') MusicEngine.start();
 }
 
 function togglePause() {
@@ -5150,15 +5640,13 @@ function togglePause() {
         game.status = 'PAUSED';
         game.paused = true;
         showScreen('pauseScreen');
-        // Pause music
-        if (bgMusic) bgMusic.pause();
+        if (typeof MusicEngine !== 'undefined') MusicEngine.stop();
     } else if (game.status === 'PAUSED') {
         game.status = 'PLAYING';
         game.paused = false;
         showScreen('mainMenu');
         document.getElementById('mainMenu').classList.add('hidden');
-        // Resume music
-        if (bgMusic) bgMusic.play().catch(e => console.log('Resume music prevented:', e));
+        if (typeof MusicEngine !== 'undefined') MusicEngine.start();
     }
 }
 
@@ -5193,6 +5681,8 @@ function resetGame() {
     game.objectives = [];
     game.objectiveFlash = null;
     game.decals = [];
+    game.dying = [];
+    game.blockedTiles = new Set();
     game.stats = { unitsBuilt: 0, unitsLost: 0, unitsKilled: 0, buildingsRazed: 0, oilEarned: 0, bunkersClaimed: 0 };
     game._promoBannerShown = false;
     game._remnantsPingTime = 0;
@@ -5376,6 +5866,26 @@ function setupMenuHandlers() {
         });
     }
 
+    // Audio mixer sliders (persisted between sessions)
+    const mixer = [
+        ['musicVolume', v => typeof MusicEngine !== 'undefined' && MusicEngine.setVolume(v)],
+        ['sfxVolume', v => SoundManager.setSfxVolume(v)],
+        ['voiceVolume', v => typeof VoiceManager !== 'undefined' && VoiceManager.setVolume(v)]
+    ];
+    let savedMix = {};
+    try { savedMix = JSON.parse(localStorage.getItem('xfire_mixer')) || {}; } catch (e) { /* fresh */ }
+    for (const [id, apply] of mixer) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (savedMix[id] !== undefined) el.value = savedMix[id];
+        apply(el.value / 100);
+        el.addEventListener('input', () => {
+            apply(el.value / 100);
+            savedMix[id] = el.value;
+            try { localStorage.setItem('xfire_mixer', JSON.stringify(savedMix)); } catch (e) { /* ignore */ }
+        });
+    }
+
     if (playAgainBtn) playAgainBtn.addEventListener('click', () => {
         resetGame();
         initGame();
@@ -5388,11 +5898,11 @@ function setupMenuHandlers() {
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
         setTimeout(resizeCanvas, 0);
-        // Restart background music
-        const bgMusic = document.getElementById('backgroundMusic');
-        if (bgMusic) {
-            bgMusic.currentTime = 0;
-            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        // Restart the procedural soundtrack
+        SoundManager.resume();
+        if (typeof MusicEngine !== 'undefined') {
+            MusicEngine.stop();
+            MusicEngine.start();
         }
     });
     if (retryBtn) retryBtn.addEventListener('click', () => {
@@ -5407,11 +5917,11 @@ function setupMenuHandlers() {
         document.getElementById('gameContainer').classList.add('game-active');
         document.getElementById('footer').classList.add('game-active');
         setTimeout(resizeCanvas, 0);
-        // Restart background music
-        const bgMusic = document.getElementById('backgroundMusic');
-        if (bgMusic) {
-            bgMusic.currentTime = 0;
-            bgMusic.play().catch(e => console.log('Music autoplay prevented:', e));
+        // Restart the procedural soundtrack
+        SoundManager.resume();
+        if (typeof MusicEngine !== 'undefined') {
+            MusicEngine.stop();
+            MusicEngine.start();
         }
     });
 
