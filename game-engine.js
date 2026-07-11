@@ -1182,6 +1182,28 @@ function resolveUnitCollisions() {
                     let dx = v.x - u.x, dy = v.y - u.y;
                     const d2 = dx * dx + dy * dy;
                     if (d2 >= minD * minD) continue;
+
+                    // Tracked vehicles grind enemy infantry under their
+                    // treads: no polite side-step for these pairs - a moving
+                    // crusher closes in, and once the soldier is under the
+                    // hull he's gone
+                    if (u.playerId !== v.playerId) {
+                        let crusher = null, victim = null;
+                        if (ut.crushes && vt.category === 'infantry') { crusher = u; victim = v; }
+                        else if (vt.crushes && ut.category === 'infantry') { crusher = v; victim = u; }
+                        if (victim && victim.hp > 0) {
+                            const driving = crusher.targetX !== undefined ||
+                                (crusher.path && crusher.path.length > 0) || crusher.attackTarget;
+                            if (driving) {
+                                if (d2 < minD * minD * 0.5) {
+                                    victim.hp = 0;
+                                    victim.crushed = true;
+                                    crusher.kills = (crusher.kills || 0) + 1;
+                                }
+                                continue; // never separate - let the treads do their work
+                            }
+                        }
+                    }
                     let d = Math.sqrt(d2);
                     if (d < 0.001) {
                         // perfectly stacked: nudge apart in a random direction
@@ -2190,19 +2212,54 @@ function drawBuilding(building) {
     }
 }
 
+// Hostile units get a red-shifted copy of their sprite so friend and foe
+// read at a glance even when both sides field the same faction. Cached -
+// the tint is baked once per sprite, not per frame.
+const hostileTintCache = new Map();
+function hostileTinted(sprite, key) {
+    let c = hostileTintCache.get(key);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = sprite.width;
+    c.height = sprite.height;
+    c.logicalWidth = sprite.logicalWidth;
+    c.logicalHeight = sprite.logicalHeight;
+    c.anchorX = sprite.anchorX;
+    c.anchorY = sprite.anchorY;
+    const cc = c.getContext('2d');
+    cc.drawImage(sprite, 0, 0);
+    cc.globalCompositeOperation = 'source-atop';
+    cc.fillStyle = 'rgba(255,42,30,0.24)';
+    cc.fillRect(0, 0, c.width, c.height);
+    hostileTintCache.set(key, c);
+    return c;
+}
+
 function drawUnit(unit) {
     const type = UNIT_TYPES[unit.type];
     const screen = worldToScreen(unit.x, unit.y);
     const zoom = getZoom();
     const faction = getFaction(unit.playerId);
+    const hostile = unit.playerId !== 0;
 
     const dir = IsoSprites.dirFromAngle(unit.angle || 0);
     // Infantry animates a two-frame stride while moving
     const moving = unit.targetX !== undefined || (unit.path && unit.path.length > 0);
     const walkFrame = moving ? Math.floor(game.tick / 10 + unit.x * 3) % 2 : 0;
-    const sprite = IsoSprites.unitSprite(unit.type, faction, dir, walkFrame);
+    let sprite = IsoSprites.unitSprite(unit.type, faction, dir, walkFrame);
+    if (hostile) sprite = hostileTinted(sprite, `u|${unit.type}|${faction}|${dir}|${walkFrame}`);
 
     const isSelected = game.selection.includes(unit);
+
+    // hostile marker: faint red ring under every enemy unit
+    if (hostile && !isSelected) {
+        const rx = (type.size + 4) * zoom, ry = (type.size + 4) * 0.5 * zoom;
+        ctx.strokeStyle = 'rgba(255,55,40,0.4)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.ellipse(screen.x, screen.y + 2 * zoom, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
 
     // Selection: glowing double ring under the unit
     if (isSelected) {
@@ -2233,7 +2290,8 @@ function drawUnit(unit) {
     // Rotating turret overlay, mounted on the hull
     if (type.turret) {
         const tdir = IsoSprites.dirFromAngle(unit.turretAngle ?? unit.angle ?? 0);
-        const tur = IsoSprites.turretSprite(unit.type, faction, tdir);
+        let tur = IsoSprites.turretSprite(unit.type, faction, tdir);
+        if (hostile) tur = hostileTinted(tur, `t|${unit.type}|${faction}|${tdir}`);
         const m = IsoSprites.turretMount(unit.type, faction);
         const yaw = unit.angle || 0;
         const mx = m.ox * Math.cos(yaw), my = m.ox * Math.sin(yaw);
@@ -2837,17 +2895,42 @@ function updateUnits(dt) {
 
         // Death check: hand the unit over to the dying animation
         if (unit.hp <= 0) {
-            createExplosion(unit.x, unit.y);
-            SoundManager.play('explosion_small');
+            if (unit.crushed) {
+                // ground under the treads: instant splat, no fireball
+                addDecal({
+                    type: 'splat', x: unit.x, y: unit.y, life: 30,
+                    color: getFaction(unit.playerId) === 'series9'
+                        ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
+                    drops: Array.from({ length: 4 }, () => [
+                        (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 11, 1.5 + Math.random() * 2])
+                });
+                for (let p = 0; p < 8; p++) {
+                    game.particles.push({
+                        x: unit.x + (Math.random() - 0.5) * 0.6,
+                        y: unit.y + (Math.random() - 0.5) * 0.6,
+                        z: 1,
+                        vx: (Math.random() - 0.5) * 0.25,
+                        vy: (Math.random() - 0.5) * 0.25,
+                        vz: Math.random() * 0.12,
+                        color: p < 5 ? '#7a1e12' : '#8a7a5a',
+                        size: Math.random() * 2 + 1,
+                        life: 0.5
+                    });
+                }
+                SoundManager.play('explosion_small');
+            } else {
+                createExplosion(unit.x, unit.y);
+                SoundManager.play('explosion_small');
+                if (!game.dying) game.dying = [];
+                game.dying.push({
+                    role: unit.type,
+                    faction: getFaction(unit.playerId),
+                    dir: IsoSprites.dirFromAngle(unit.angle || 0),
+                    x: unit.x, y: unit.y, t: 0,
+                    infantry: type.category === 'infantry'
+                });
+            }
             if (unit.playerId === 0) game.stats.unitsLost++;
-            if (!game.dying) game.dying = [];
-            game.dying.push({
-                role: unit.type,
-                faction: getFaction(unit.playerId),
-                dir: IsoSprites.dirFromAngle(unit.angle || 0),
-                x: unit.x, y: unit.y, t: 0,
-                infantry: type.category === 'infantry'
-            });
             game.units.splice(i, 1);
             game.selection = game.selection.filter(s => s !== unit);
             continue;
