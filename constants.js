@@ -23,20 +23,20 @@ const FACTIONS = {
         tagline: 'Steel, oil and gunpowder',
         color: '#4488ff',
         palette: {
-            hull: '#6e7a4e',       // olive drab armor
-            hullDark: '#49532f',
-            hullLight: '#94a06c',
-            metal: '#8d9097',
-            metalDark: '#5a5d63',
-            tread: '#33342e',
+            hull: '#61684a',       // olive drab armor, sun-faded not pastel
+            hullDark: '#3d422c',
+            hullLight: '#848c62',
+            metal: '#7e8187',
+            metalDark: '#4c4f54',
+            tread: '#2f302a',
             accent: '#c8a23c',     // brass
             glow: '#ffd14a',
             skin: '#d8a878',
-            cloth: '#5b6648',
-            base: '#7c7f72',       // concrete pad
-            baseDark: '#5d6055',
-            roof: '#7d8a5a',
-            window: '#9fd4ff'
+            cloth: '#525c42',
+            base: '#6d6f64',       // weathered concrete pad
+            baseDark: '#4e5047',
+            roof: '#666f4c',
+            window: '#7fb9dd'
         },
         unitNames: {
             trooper: 'Machine Gunner',

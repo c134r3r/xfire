@@ -32,21 +32,31 @@ const MusicEngine = {
     STEPS: 16,
     STEP_TIME: 60 / 100 / 4, // 100 BPM, 16th notes
 
-    // calm layer
-    padChords: [
+    // calm layer - two sections (A/B) that alternate every 4 bars, so the
+    // ambience slowly breathes instead of looping one 4-bar phrase forever
+    padChordsA: [
         [0, 2, 4],   // A-D-G stack
         [1, 3, 5],   // C-E-A
         [0, 2, 4],
         [2, 4, 6]    // D-G-C
     ],
-    calmBass: [0, -1, -1, -1, 0, -1, 4, -1, 1, -1, -1, -1, 2, -1, 1, -1],
+    padChordsB: [
+        [1, 3, 5],   // C-E-A
+        [3, 5, 7],   // E-A-D
+        [2, 4, 6],   // D-G-C
+        [0, 2, 4]    // home again
+    ],
+    calmBassA: [0, -1, -1, -1, 0, -1, 4, -1, 1, -1, -1, -1, 2, -1, 1, -1],
+    calmBassB: [1, -1, -1, -1, -1, -1, 3, -1, 2, -1, -1, 5, -1, -1, 0, -1],
 
-    // combat layer
+    // combat layer - lead alternates between two phrases per cycle
     kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-    hat: [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0],
+    hatA: [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0],
+    hatB: [0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1],
     combatBass: [0, 0, -1, 0, 3, -1, 0, 0, 1, 1, -1, 1, 4, -1, 3, 2],
-    lead: [-1, -1, 7, -1, 5, -1, 4, -1, -1, 7, -1, 8, -1, 5, 4, -1],
+    leadA: [-1, -1, 7, -1, 5, -1, 4, -1, -1, 7, -1, 8, -1, 5, 4, -1],
+    leadB: [-1, 4, -1, 5, -1, -1, 7, -1, 8, -1, 7, -1, 5, -1, -1, 4],
 
     init(ctx) {
         this.ctx = ctx;
@@ -109,35 +119,66 @@ const MusicEngine = {
         while (this.nextStepTime < this.ctx.currentTime + 0.12) {
             this._playStep(this.step, this.nextStepTime);
             this.nextStepTime += this.STEP_TIME;
-            this.step = (this.step + 1) % (this.STEPS * 4); // 4-bar loop
+            this.step = (this.step + 1) % (this.STEPS * 8); // 8-bar super-loop
         }
     },
 
     _playStep(globalStep, t) {
         const s = globalStep % this.STEPS;
-        const bar = Math.floor(globalStep / this.STEPS) % 4;
+        const bar8 = Math.floor(globalStep / this.STEPS) % 8; // position in the super-loop
+        const bar = bar8 % 4;
+        const sectionB = bar8 >= 4;
 
         // ---- calm layer ----
-        // pad chord at the start of each bar
-        if (s === 0) {
-            for (const deg of this.padChords[bar]) {
-                this._pad(this.SCALE[deg], t, this.STEP_TIME * this.STEPS * 0.95);
+        // pad chord at the start of each bar; bar 7 rests (breathing space)
+        const chords = sectionB ? this.padChordsB : this.padChordsA;
+        if (s === 0 && bar8 !== 7) {
+            for (const deg of chords[bar]) {
+                this._pad(this.SCALE[deg], t, this.STEP_TIME * this.STEPS * 0.95,
+                    sectionB ? 900 : 700); // section B opens the filter a touch
             }
         }
         // sparse bass
-        const cb = this.calmBass[s];
+        const calmBass = sectionB ? this.calmBassB : this.calmBassA;
+        const cb = calmBass[s];
         if (cb >= 0 && bar % 2 === 0) {
             this._bass(this.SCALE[cb] / 2, t, 0.28, this.calmGain, 0.18);
         }
+        // occasional soft pluck from the current chord - rare and quiet,
+        // just enough that two minutes of calm never sound identical
+        if (s % 2 === 0 && Math.random() < 0.09) {
+            const deg = chords[bar][(Math.random() * 3) | 0];
+            this._pluck(this.SCALE[deg] * 2, t);
+        }
 
         // ---- combat layer ----
+        const fillBar = bar8 === 3 || bar8 === 7; // cycle turnaround
         if (this.kick[s]) this._kick(t);
         if (this.snare[s]) this._snare(t);
-        if (this.hat[s]) this._hat(t, s % 4 === 2 ? 0.05 : 0.03);
+        // drum fill: extra snare stutter into the next cycle
+        if (fillBar && s >= 12 && Math.random() < 0.55) this._snare(t);
+        const hat = sectionB ? this.hatB : this.hatA;
+        if (hat[s]) this._hat(t, s % 4 === 2 ? 0.05 : 0.03);
         const bb = this.combatBass[s];
         if (bb >= 0) this._bass(this.SCALE[bb] / 2, t, 0.14, this.combatGain, 0.22);
-        const ld = this.lead[s];
+        const lead = sectionB ? this.leadB : this.leadA;
+        const ld = lead[s];
         if (ld >= 0 && bar >= 1) this._lead(this.SCALE[ld] * 2, t, 0.16);
+    },
+
+    // soft triangle pluck for the calm layer's sparse ornaments
+    _pluck(freq, t) {
+        const ctx = this.ctx;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        const f = ctx.createBiquadFilter();
+        o.type = 'triangle';
+        o.frequency.value = freq;
+        f.type = 'lowpass';
+        f.frequency.value = 1600;
+        this._env(g, t, 0.005, 0.045, 0.5);
+        o.connect(f); f.connect(g); g.connect(this.calmGain);
+        o.start(t); o.stop(t + 0.6);
     },
 
     _env(gainNode, t, attack, peak, decay) {
@@ -146,7 +187,7 @@ const MusicEngine = {
         gainNode.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
     },
 
-    _pad(freq, t, dur) {
+    _pad(freq, t, dur, cutoff = 700) {
         const ctx = this.ctx;
         for (const det of [-4, 4]) {
             const o = ctx.createOscillator();
@@ -156,7 +197,7 @@ const MusicEngine = {
             o.frequency.value = freq;
             o.detune.value = det;
             f.type = 'lowpass';
-            f.frequency.value = 700;
+            f.frequency.value = cutoff;
             g.gain.setValueAtTime(0.0001, t);
             g.gain.linearRampToValueAtTime(0.05, t + dur * 0.3);
             g.gain.linearRampToValueAtTime(0.0001, t + dur);

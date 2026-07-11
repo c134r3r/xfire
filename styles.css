@@ -161,20 +161,6 @@ body {
     position: relative;
 }
 
-/* GPU-composited vignette + warm grade over the battlefield */
-#vignette {
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: var(--sidebar-width);
-    pointer-events: none;
-    z-index: 2;
-    background:
-        linear-gradient(135deg, rgba(255, 190, 110, 0.05) 0%, rgba(255, 190, 110, 0) 45%),
-        radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 52%, rgba(8, 6, 16, 0.36) 100%);
-}
-
 #canvas {
     border: none;
     border-right: 1px solid var(--border-subtle);
@@ -995,7 +981,6 @@ body.sidebar-collapsed #tcFullscreen { right: 98px; }
 body.touch-device #tcSidebar { display: block; }
 body.sidebar-collapsed #sidebar { display: none; }
 body.sidebar-collapsed #tcSidebar { right: 0; border-radius: 8px 0 0 8px; }
-body.sidebar-collapsed #vignette { right: 0; }
 body.sidebar-collapsed #tcPause { right: 46px; }
 
 /* notch / home-bar safe areas */
@@ -1043,6 +1028,20 @@ body.touch-device #sidebar {
 
 /* short landscape screens (phones): compact menus, keep everything reachable */
 @media (max-height: 520px) {
+    /* desktop anchors the loading bar 200px up - on a phone that lands
+       right on the logo art. Tuck it to the bottom edge on a dim panel. */
+    .loading-container {
+        bottom: max(14px, env(safe-area-inset-bottom));
+        background: rgba(10, 10, 20, 0.6);
+        padding: 12px 24px 16px;
+        border-radius: 10px;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+    .loading-bar-container { width: 240px; }
+    .loading-text { margin-top: 10px; font-size: 11px; }
+    #goButton { margin-top: 12px !important; }  /* beats the inline style */
+
     .fullscreen-overlay {
         overflow-y: auto;
         align-items: center;      /* desktop pins menus low over the art */
@@ -1076,8 +1075,20 @@ body.touch-device #sidebar {
        the rest so everything important fits without scrolling */
     #sidebar .panel:has(#buildMenu) { order: -1; }
     #sidebar .panel:has(#minimap) { order: 3; }
-    .build-btn { min-height: 46px; font-size: 15px; }
+    .build-btn { min-height: 48px; font-size: 15px; }
+    /* let names wrap to two lines instead of "Anacond..." */
+    .build-btn .build-btn-label {
+        white-space: normal;
+        font-size: 10px;
+        line-height: 1.15;
+    }
     #minimap { width: 100%; height: auto; max-width: 104px; }
+    /* last row must clear the home-bar / rounded screen corners */
+    #sidebar {
+        padding-bottom: max(14px, env(safe-area-inset-bottom));
+        -webkit-overflow-scrolling: touch;
+    }
+    .queue-info { font-size: 10px; }
 }
 
 /* ============================================

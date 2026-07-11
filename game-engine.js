@@ -613,7 +613,9 @@ function isTilePassable(x, y) {
     if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) return false;
     const tile = game.map[Math.floor(y)]?.[Math.floor(x)];
     if (!tile) return false;
-    return tile.type === 'grass';
+    // building footprints count as impassable, otherwise spawn/rescue
+    // spots can land units inside a structure
+    return tile.type === 'grass' && !isTileBlocked(x, y);
 }
 
 /**
@@ -757,7 +759,8 @@ function drawFog() {
     ctx.drawImage(fogCanvas, -0.5, -0.5, mapSize, mapSize);
     ctx.restore();
 }
-// (the vignette/warm grade is a zero-cost CSS overlay: #vignette)
+// (the former #vignette overlay was removed - it read as a gray film
+// over the battlefield)
 
 // Faint dust motes drifting across the wasteland
 function drawDust() {
@@ -1193,18 +1196,31 @@ function resolveUnitCollisions() {
             }
         }
 
-        // push out of building footprints
+        // push out of building footprints - but never INTO a neighbouring
+        // one: between two adjacent buildings that ping-pongs the unit
+        // back and forth forever (units visibly "tangled" between them)
         for (const b of game.buildings) {
             const bt = BUILDING_TYPES[b.type];
             if (!bt) continue;
             const half = bt.size / 2 + ru * 0.5;
             const dx = u.x - b.x, dy = u.y - b.y;
             if (Math.abs(dx) < half && Math.abs(dy) < half) {
-                // exit along the axis with the least penetration
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    u.x = b.x + Math.sign(dx || 1) * Math.min(half, Math.abs(dx) + 0.06);
+                const exitX = b.x + Math.sign(dx || 1) * Math.min(half, Math.abs(dx) + 0.06);
+                const exitY = b.y + Math.sign(dy || 1) * Math.min(half, Math.abs(dy) + 0.06);
+                const xFree = !isTileBlocked(exitX, u.y);
+                const yFree = !isTileBlocked(u.x, exitY);
+                if (Math.abs(dx) > Math.abs(dy) && xFree) {
+                    u.x = exitX;
+                } else if (yFree) {
+                    u.y = exitY;
+                } else if (xFree) {
+                    u.x = exitX;
                 } else {
-                    u.y = b.y + Math.sign(dy || 1) * Math.min(half, Math.abs(dy) + 0.06);
+                    // pocketed on both axes: lift the unit to the nearest
+                    // genuinely free tile so it can be ordered away
+                    const p = findValidSpawnPosition(Math.floor(u.x), Math.floor(u.y), 6);
+                    u.x = p.x + 0.5;
+                    u.y = p.y + 0.5;
                 }
             }
         }
@@ -2849,12 +2865,36 @@ function updateUnits(dt) {
         // Attack logic
         if (unit.attackTarget) {
             const target = unit.attackTarget;
+
+            // Leash: units that engaged on their own (base defense or
+            // idle auto-attack) break pursuit and walk back to their post
+            // instead of chasing a retreating raider across the map.
+            // Two break conditions: dragged too far from the post, or the
+            // target has escaped out of sight (it outruns us anyway).
+            if (unit._leash && target.hp > 0) {
+                const ldist = Math.hypot(unit.x - unit._leash.x, unit.y - unit._leash.y);
+                const tdist = Math.hypot(target.x - unit.x, target.y - unit.y);
+                if (ldist > 7 || tdist > sightT(type) * 1.5) {
+                    unit.attackTarget = null;
+                    unit.targetX = unit._leash.x;
+                    unit.targetY = unit._leash.y;
+                    unit.path = null;
+                    unit._leash = null;
+                    continue;
+                }
+            }
+
             if (target.hp <= 0) {
                 unit.attackTarget = null;
                 // Attack-move: resume marching to the ordered destination
                 if (unit.attackMove && unit.resumeX !== undefined) {
                     unit.targetX = unit.resumeX;
                     unit.targetY = unit.resumeY;
+                } else if (unit._leash) {
+                    // threat dealt with: return to the guard post
+                    unit.targetX = unit._leash.x;
+                    unit.targetY = unit._leash.y;
+                    unit._leash = null;
                 }
             } else {
                 const dx = target.x - unit.x;
@@ -3101,9 +3141,10 @@ function updateUnits(dt) {
         unit.y = Math.max(0, Math.min(mapSize - 1, unit.y));
 
         const tileType = game.map[Math.floor(unit.y)]?.[Math.floor(unit.x)]?.type;
-        if (tileType === 'water' || tileType === 'hill') {
-            // Push unit to nearest valid position
-            const validPos = findValidSpawnPosition(Math.floor(unit.x), Math.floor(unit.y), 3);
+        if (tileType === 'water' || tileType === 'hill' || isTileBlocked(unit.x, unit.y)) {
+            // Push unit to nearest valid position (also rescues units
+            // that ended up inside a building footprint)
+            const validPos = findValidSpawnPosition(Math.floor(unit.x), Math.floor(unit.y), 6);
             unit.x = validPos.x + 0.5;
             unit.y = validPos.y + 0.5;
         }
@@ -3154,8 +3195,25 @@ function updateUnits(dt) {
 
             if (nearestEnemy && nearestEnemy.hp > 0) {
                 unit.attackTarget = nearestEnemy;
+                // self-acquired target: remember the post to return to
+                unit._leash = { x: unit.x, y: unit.y };
             }
         }
+    }
+}
+
+// When a building takes a hit, idle combat units of the same player
+// near the base move in to defend. They engage on a leash (see
+// updateUnits) so a hit-and-run raider doesn't drag them away.
+function alertDefenders(building, attacker) {
+    for (const u of game.units) {
+        if (u.playerId !== building.playerId) continue;
+        const t = UNIT_TYPES[u.type];
+        if (!t || t.damage <= 0) continue;
+        if (u.attackTarget || u.targetX !== undefined) continue; // busy
+        if (Math.hypot(u.x - building.x, u.y - building.y) > 14) continue;
+        u.attackTarget = attacker;
+        u._leash = { x: u.x, y: u.y };
     }
 }
 
@@ -3467,6 +3525,11 @@ function updateProjectiles(dt) {
                     // battle heat feeds the dynamic music layer
                     if (proj.playerId === 0 || proj.target.playerId === 0) {
                         game.combatHeat = Math.min(1, (game.combatHeat || 0) + 0.12);
+                    }
+                    // a hit on a building scrambles nearby idle defenders
+                    if (BUILDING_TYPES[proj.target.type] && proj.source &&
+                        proj.source.hp > 0 && game.units.includes(proj.source)) {
+                        alertDefenders(proj.target, proj.source);
                     }
                     // Base-under-attack alert (minimap ping + throttled sound + Space jumps there)
                     if (proj.target.playerId === 0) {
@@ -4235,7 +4298,11 @@ function updateBuildMenu() {
             addHeader('Train Units');
             const queueInfo = document.createElement('div');
             queueInfo.className = 'queue-info';
-            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong> <span style="color:#667;">(Right-click ground: rally point)</span>`;
+            // the rally-point hint talks about right-click - meaningless on
+            // touch, and the long text wraps the narrow mobile sidebar badly
+            const rallyHint = document.body.classList.contains('touch-device')
+                ? '' : ' <span style="color:#667;">(Right-click ground: rally point)</span>';
+            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong>` + rallyHint;
             menu.appendChild(queueInfo);
 
             if (selectedBuilding.productionQueue.length > 0) {
@@ -5041,6 +5108,7 @@ function initializeEventHandlers() {
                 sel.attackMove = false;
                 sel.resumeX = undefined;
                 sel.resumeY = undefined;
+                sel._leash = null; // explicit orders override guard duty
                 if (enemyDirectClick) {
                     // Direct click on enemy - move back slightly while keeping in range
                     const type = UNIT_TYPES[sel.type];
