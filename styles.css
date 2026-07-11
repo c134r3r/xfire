@@ -926,6 +926,91 @@ body.touch-device #footer { display: none !important; }
 /* hover tooltips have no mouseleave on touch - they'd stick open */
 body.touch-device .game-tooltip { display: none !important; }
 
+/* on-screen pause button (touch only) */
+#tcPause {
+    display: none;
+    position: absolute;
+    top: 8px;
+    right: calc(var(--sidebar-width) + 10px);
+    z-index: 30;
+    width: 46px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(20, 20, 38, 0.82);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+}
+body.touch-device #tcPause { display: block; }
+
+/* notch / home-bar safe areas */
+body.touch-device #header {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+}
+body.touch-device #touchCmdBar {
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+}
+body.touch-device #sidebar {
+    padding-right: max(6px, env(safe-area-inset-right));
+}
+
+/* portrait phones: the RTS needs landscape */
+#rotateHint {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: var(--bg-dark);
+    color: var(--accent);
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    font-family: 'Orbitron', 'Arial Black', sans-serif;
+    letter-spacing: 2px;
+    font-size: 15px;
+    text-align: center;
+    padding: 24px;
+}
+#rotateHint .phone {
+    font-size: 46px;
+    animation: xfRotatePhone 1.6s ease-in-out infinite;
+}
+@keyframes xfRotatePhone {
+    0%, 25% { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(90deg); }
+}
+@media (orientation: portrait) {
+    body.touch-device #rotateHint { display: flex; }
+}
+
+/* short landscape screens (phones): compact menus, keep everything reachable */
+@media (max-height: 520px) {
+    .fullscreen-overlay {
+        overflow-y: auto;
+        align-items: center;      /* desktop pins menus low over the art */
+        padding-bottom: 0;        /* - both would push them off-screen here */
+    }
+    .menu-container {
+        padding: 14px 20px;
+        max-height: 94vh;
+        overflow-y: auto;
+    }
+    .menu-title { font-size: 24px; margin-bottom: 8px; }
+    .menu-buttons { gap: 8px; }
+    .menu-btn { padding: 10px 20px; font-size: 14px; }
+    .setting-group { margin-bottom: 6px; }
+    .setting-group label { font-size: 11px; }
+    .settings-panel { max-height: 58vh; overflow-y: auto; }
+}
+
 @media (pointer: coarse) and (max-width: 1000px) {
     #header { padding: 0 8px; }
     #header h1 { font-size: 17px; }

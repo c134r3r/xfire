@@ -333,7 +333,11 @@ const SoundManager = {
 
 // Initialize sound system
 SoundManager.init();
-const dpr = window.devicePixelRatio || 1;
+// Cap the backing-store resolution on touch devices: phone DPRs of 3-4
+// quadruple the pixel load for no visible gain at RTS zoom levels.
+const dpr = window.matchMedia('(pointer: coarse)').matches
+    ? Math.min(window.devicePixelRatio || 1, 2)
+    : (window.devicePixelRatio || 1);
 
 // Resize canvas to match actual display size
 function resizeCanvas() {
@@ -5478,7 +5482,37 @@ if (IS_TOUCH_DEVICE && canvas) {
         game.placingBuilding = null;
         game.placingBuildingFrom = null;
     });
+    const tcPause = document.getElementById('tcPause');
+    if (tcPause) tcPause.addEventListener('click', () => togglePause());
+
+    // battles shouldn't run down the clock while the app is backgrounded
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && game.status === 'PLAYING') togglePause();
+    });
 }
+
+// Best effort on touch: immersive fullscreen + landscape lock once the
+// player starts a match (both APIs require a user gesture and may be
+// unsupported - failures are silently ignored). Exposed on window
+// because this scope is nested while startGame is module-level.
+window.requestMobileImmersion = function requestMobileImmersion() {
+    if (!IS_TOUCH_DEVICE) return;
+    const el = document.documentElement;
+    const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+    const afterFs = () => {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => {});
+        }
+    };
+    if (fs && !document.fullscreenElement) {
+        try {
+            const p = fs.call(el);
+            if (p && p.then) p.then(afterFs, () => {}); else afterFs();
+        } catch (e) { /* unsupported */ }
+    } else {
+        afterFs();
+    }
+};
 
     // Browser-only support (Mobile removed)
 
@@ -5734,6 +5768,7 @@ function goToSettings() {
 function startGame() {
     // Resume audio context on user interaction (required by browsers)
     SoundManager.resume();
+    if (window.requestMobileImmersion) window.requestMobileImmersion();
 
     const timeLimitEl = document.getElementById('timeLimitSelect');
     const difficultyEl = document.getElementById('difficultySelect');
