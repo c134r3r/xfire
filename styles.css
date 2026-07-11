@@ -948,6 +948,34 @@ body.touch-device .game-tooltip { display: none !important; }
 }
 body.touch-device #tcPause { display: block; }
 
+/* collapsible sidebar (touch): tab sits on the sidebar edge, arrow
+   pointing where the panel will go */
+#tcSidebar {
+    display: none;
+    position: absolute;
+    top: 50%;
+    right: var(--sidebar-width);
+    transform: translateY(-50%);
+    z-index: 31;
+    width: 30px;
+    height: 72px;
+    border: 1px solid var(--border-subtle);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    background: rgba(20, 20, 38, 0.85);
+    color: var(--accent);
+    font-size: 13px;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+}
+body.touch-device #tcSidebar { display: block; }
+body.sidebar-collapsed #sidebar { display: none; }
+body.sidebar-collapsed #tcSidebar { right: 0; border-radius: 8px 0 0 8px; }
+body.sidebar-collapsed #vignette { right: 0; }
+body.sidebar-collapsed #tcPause { right: 46px; }
+
 /* notch / home-bar safe areas */
 body.touch-device #header {
     padding-left: max(8px, env(safe-area-inset-left));
