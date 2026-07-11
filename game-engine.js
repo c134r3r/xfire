@@ -1198,6 +1198,7 @@ function resolveUnitCollisions() {
                                 if (d2 < minD * minD * 0.5) {
                                     victim.hp = 0;
                                     victim.crushed = true;
+                                    victim.crushAngle = crusher.angle || 0;
                                     crusher.kills = (crusher.kills || 0) + 1;
                                 }
                                 continue; // never separate - let the treads do their work
@@ -1258,7 +1259,7 @@ function addDecal(decal) {
     if (!game.decals) game.decals = [];
     decal.maxLife = decal.life;
     game.decals.push(decal);
-    if (game.decals.length > 60) game.decals.shift();
+    if (game.decals.length > 110) game.decals.shift();
 }
 
 function drawDecals() {
@@ -1287,10 +1288,15 @@ function drawDecals() {
                 });
             }
         } else if (d.type === 'splat') {
+            const sz = d.size || 7;
             ctx.fillStyle = d.color;
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            if (d.smear) ctx.rotate(d.smear); // tread-smeared pools stretch along the drive line
             ctx.beginPath();
-            ctx.ellipse(s.x, s.y, 7 * zoom, 3.5 * zoom, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, sz * (d.smear !== undefined ? 1.7 : 1) * zoom, sz * 0.5 * zoom, 0, 0, Math.PI * 2);
             ctx.fill();
+            ctx.restore();
             for (const [ox, oy, r] of d.drops) {
                 ctx.beginPath();
                 ctx.ellipse(s.x + ox * zoom, s.y + oy * zoom, r * zoom, r * 0.5 * zoom, 0, 0, Math.PI * 2);
@@ -2896,30 +2902,28 @@ function updateUnits(dt) {
         // Death check: hand the unit over to the dying animation
         if (unit.hp <= 0) {
             if (unit.crushed) {
-                // ground under the treads: instant splat, no fireball
+                // ground under the treads: a smeared pool along the drive
+                // line instead of a fireball
+                const smearAngle = unit.crushAngle !== undefined
+                    ? Math.atan2(Math.sin(unit.crushAngle) * 0.5, Math.cos(unit.crushAngle))
+                    : 0;
                 addDecal({
-                    type: 'splat', x: unit.x, y: unit.y, life: 30,
+                    type: 'splat', x: unit.x, y: unit.y, life: 50, size: 9,
+                    smear: smearAngle,
                     color: getFaction(unit.playerId) === 'series9'
-                        ? 'rgba(30,34,40,0.7)' : 'rgba(84,22,16,0.65)',
-                    drops: Array.from({ length: 4 }, () => [
-                        (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 11, 1.5 + Math.random() * 2])
+                        ? 'rgba(30,34,40,0.75)' : 'rgba(88,18,12,0.75)',
+                    drops: Array.from({ length: 7 }, () => [
+                        (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 14, 1.5 + Math.random() * 2.5])
                 });
-                for (let p = 0; p < 8; p++) {
-                    game.particles.push({
-                        x: unit.x + (Math.random() - 0.5) * 0.6,
-                        y: unit.y + (Math.random() - 0.5) * 0.6,
-                        z: 1,
-                        vx: (Math.random() - 0.5) * 0.25,
-                        vy: (Math.random() - 0.5) * 0.25,
-                        vz: Math.random() * 0.12,
-                        color: p < 5 ? '#7a1e12' : '#8a7a5a',
-                        size: Math.random() * 2 + 1,
-                        life: 0.5
-                    });
-                }
+                createBloodSpray(unit.x, unit.y, getFaction(unit.playerId), true);
                 SoundManager.play('explosion_small');
             } else {
-                createExplosion(unit.x, unit.y);
+                if (type.category === 'infantry') {
+                    // flesh doesn't explode - it bursts
+                    createBloodSpray(unit.x, unit.y, getFaction(unit.playerId), true);
+                } else {
+                    createExplosion(unit.x, unit.y);
+                }
                 SoundManager.play('explosion_small');
                 if (!game.dying) game.dying = [];
                 game.dying.push({
@@ -3235,6 +3239,20 @@ function updateUnits(dt) {
         // Elite veterans (rank 3) slowly patch themselves up
         if (veterancyRank(unit.kills) >= 3 && unit.hp < type.hp && game.tick % 60 === 0) {
             unit.hp = Math.min(type.hp, unit.hp + 3);
+        }
+
+        // Badly wounded infantry leave a blood-drip trail while moving
+        if (type.category === 'infantry' && unit.hp < type.hp * 0.4 &&
+            unit.targetX !== undefined && (game.tick + i) % 22 === 0) {
+            addDecal({
+                type: 'splat',
+                x: unit.x + (Math.random() - 0.5) * 0.3,
+                y: unit.y + (Math.random() - 0.5) * 0.3,
+                life: 10, size: 1.8,
+                color: getFaction(unit.playerId) === 'series9'
+                    ? 'rgba(30,34,40,0.5)' : 'rgba(96,20,14,0.45)',
+                drops: []
+            });
         }
 
         // Auto-attack: Idle units attack nearby enemies (RTS standard behavior)
@@ -3654,8 +3672,13 @@ function updateProjectiles(dt) {
                         }
                         createExplosion(proj.x, proj.y, false);
                     }
-                    // Create impact effect on hit
-                    createImpact(proj.x, proj.y);
+                    // Create impact effect on hit - flesh sprays, metal sparks
+                    const tType = UNIT_TYPES[proj.target.type];
+                    if (tType && tType.category === 'infantry') {
+                        createBloodSpray(proj.x, proj.y, getFaction(proj.target.playerId));
+                    } else {
+                        createImpact(proj.x, proj.y);
+                    }
                     // Show damage number (critical if versus bonus was applied)
                     const isCritical = proj.versus && proj.target.type &&
                         UNIT_TYPES[proj.target.type]?.category === proj.versus;
@@ -4896,6 +4919,46 @@ function createImpact(x, y) {
             color: colors[Math.floor(Math.random() * colors.length)],
             size: Math.random() * 2 + 1,
             life: 0.7
+        });
+    }
+}
+
+// Flesh hit: a spray of blood droplets (Series 9 bleed dark hydraulic
+// oil instead). big=true is the kill burst - more, faster, plus a
+// lasting pool on the ground.
+function createBloodSpray(x, y, faction, big = false) {
+    const oil = faction === 'series9';
+    const colors = oil
+        ? ['#20242c', '#2c313c', '#161a20']
+        : ['#8a1810', '#6e120c', '#a3251a'];
+    const n = big ? 16 : 7;
+    for (let i = 0; i < n; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * (big ? 0.4 : 0.25) + 0.06;
+        game.particles.push({
+            x, y, z: 1 + Math.random() * 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            vz: Math.random() * (big ? 0.4 : 0.25) + 0.08,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: Math.random() * 2 + 0.8,
+            life: big ? 0.8 : 0.55
+        });
+    }
+    if (big) {
+        addDecal({
+            type: 'splat', x, y, life: 45, size: 8,
+            color: oil ? 'rgba(30,34,40,0.7)' : 'rgba(96,20,14,0.7)',
+            drops: Array.from({ length: 5 }, () => [
+                (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 13, 1.5 + Math.random() * 2.5])
+        });
+    } else if (Math.random() < 0.3) {
+        // some hits leave a small stain even without a kill
+        addDecal({
+            type: 'splat', x: x + (Math.random() - 0.5) * 0.6, y: y + (Math.random() - 0.5) * 0.6,
+            life: 14, size: 2.5,
+            color: oil ? 'rgba(30,34,40,0.55)' : 'rgba(96,20,14,0.5)',
+            drops: []
         });
     }
 }
