@@ -95,6 +95,13 @@ const IsoSprites = (() => {
                 const yb = (rot[b.i][0] + rot[b.i][1] + rot[b.j][0] + rot[b.j][1]);
                 return ya - yb;
             });
+            // deterministic per-box pseudo-random for weathering detail
+            let seed = (cx * 73 + cy * 179 + w * 37 + l * 17 + z * 7) | 0;
+            const rnd = () => {
+                seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+                return seed / 0x7fffffff;
+            };
+
             for (const f of faces) {
                 // Back-face cull via signed area in screen space
                 const a = this.p(rot[f.i][0], rot[f.i][1], z);
@@ -110,11 +117,76 @@ const IsoSprites = (() => {
                     [rot[f.j][0], rot[f.j][1], z + h],
                     [rot[f.i][0], rot[f.i][1], z + h]
                 ], tint(color, shade));
+
+                if (opts.weather !== false && h >= 7) {
+                    // ambient occlusion where the wall meets the ground
+                    this.poly([
+                        [rot[f.i][0], rot[f.i][1], z],
+                        [rot[f.j][0], rot[f.j][1], z],
+                        [rot[f.j][0], rot[f.j][1], z + h * 0.22],
+                        [rot[f.i][0], rot[f.i][1], z + h * 0.22]
+                    ], withAlpha('#0e0c08', 0.22));
+                    // grime streaks running down the face
+                    const c = this.ctx;
+                    const streaks = 2 + (rnd() * 3 | 0);
+                    for (let k = 0; k < streaks; k++) {
+                        const u = 0.15 + rnd() * 0.7;
+                        const sx = rot[f.i][0] + (rot[f.j][0] - rot[f.i][0]) * u;
+                        const sy = rot[f.i][1] + (rot[f.j][1] - rot[f.i][1]) * u;
+                        const topP = this.p(sx, sy, z + h * (0.55 + rnd() * 0.35));
+                        const botP = this.p(sx, sy, z + h * 0.08);
+                        c.strokeStyle = withAlpha('#171410', 0.10 + rnd() * 0.12);
+                        c.lineWidth = 0.8 + rnd() * 0.9;
+                        c.beginPath();
+                        c.moveTo(topP.x, topP.y);
+                        c.lineTo(botP.x, botP.y);
+                        c.stroke();
+                    }
+                    // faint horizontal panel seam
+                    if (h >= 12) {
+                        const zSeam = z + h * (0.45 + rnd() * 0.2);
+                        const p1 = this.p(rot[f.i][0], rot[f.i][1], zSeam);
+                        const p2 = this.p(rot[f.j][0], rot[f.j][1], zSeam);
+                        c.strokeStyle = withAlpha('#141210', 0.28);
+                        c.lineWidth = 0.8;
+                        c.beginPath();
+                        c.moveTo(p1.x, p1.y);
+                        c.lineTo(p2.x, p2.y);
+                        c.stroke();
+                    }
+                }
             }
-            // Top face
+            // Top face (kept close to the wall tone - a strongly brightened
+            // roof reads as bare plastic)
             this.poly(rot.map(([x, y]) => [x, y, z + h]),
-                tint(color, opts.topShade !== undefined ? opts.topShade : 20),
+                tint(color, opts.topShade !== undefined ? opts.topShade : 8),
                 opts.edge ? tint(color, -45) : null);
+
+            // roof mottling: sun-bleached and grimy patches (large roofs only -
+            // small greeble boxes stay clean)
+            if (opts.weather !== false && Math.min(w, l) >= 14) {
+                const c = this.ctx;
+                const blot = 3 + (rnd() * 4 | 0);
+                for (let k = 0; k < blot; k++) {
+                    const bx = cx + (rnd() - 0.5) * w * 0.7;
+                    const by = cy + (rnd() - 0.5) * l * 0.7;
+                    const p0 = this.p(bx, by, z + h);
+                    const r = 2 + rnd() * Math.min(w, l) * 0.22;
+                    c.fillStyle = rnd() > 0.45
+                        ? withAlpha('#131009', 0.05 + rnd() * 0.07)
+                        : withAlpha('#f4e6c0', 0.045 + rnd() * 0.05);
+                    c.beginPath();
+                    c.ellipse(p0.x, p0.y, r * 1.4, r * 0.7, 0, 0, Math.PI * 2);
+                    c.fill();
+                }
+                // rust bleed from a roof corner
+                const rc = rot[(rnd() * 4) | 0];
+                const rp = this.p(rc[0], rc[1], z + h);
+                c.fillStyle = withAlpha('#6b3f1d', 0.16);
+                c.beginPath();
+                c.ellipse(rp.x + 1, rp.y + 1.5, 2.6, 1.4, 0.5, 0, Math.PI * 2);
+                c.fill();
+            }
 
             // Roof panel seams + rivets for a machined look
             if (opts.panel) {
@@ -707,8 +779,38 @@ const IsoSprites = (() => {
         // bevel on the south-facing edges
         s.poly([[a, -a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [a + 2, -a - 2, -1.5]], tint(pal.baseDark, -8));
         s.poly([[-a, a, 0], [a, a, 0], [a + 2, a + 2, -1.5], [-a - 2, a + 2, -1.5]], tint(pal.baseDark, -18));
+
+        // weathered concrete: mottled patches + hairline cracks
+        let seed = (ft * 4241 + faction.length * 131) | 0;
+        const rnd = () => {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+            return seed / 0x7fffffff;
+        };
+        for (let i = 0; i < 8; i++) {
+            const px = (rnd() - 0.5) * a * 1.5, py = (rnd() - 0.5) * a * 1.5;
+            s.disc(px, py, 0.4, 3 + rnd() * 7,
+                withAlpha(rnd() > 0.5 ? '#14120c' : '#e8e0c8', 0.05 + rnd() * 0.05));
+        }
+        s.ctx.strokeStyle = withAlpha('#191712', 0.35);
+        s.ctx.lineWidth = 0.8;
+        for (let i = 0; i < 3; i++) {
+            let cx = (rnd() - 0.5) * a, cy = (rnd() - 0.5) * a;
+            s.ctx.beginPath();
+            const c0 = s.p(cx, cy, 0.6);
+            s.ctx.moveTo(c0.x, c0.y);
+            for (let k = 0; k < 3; k++) {
+                cx += (rnd() - 0.5) * a * 0.6;
+                cy += (rnd() - 0.5) * a * 0.6;
+                const cp = s.p(cx, cy, 0.6);
+                s.ctx.lineTo(cp.x, cp.y);
+            }
+            s.ctx.stroke();
+        }
+        // old oil stain near the south corner
+        s.disc(a * 0.35, a * 0.5, 0.4, 5 + rnd() * 3, withAlpha('#0c0a06', 0.22));
+
         // Soft contact shadow so structures sit into the plate
-        s.disc(0, 0, 0.5, a * 0.72, 'rgba(0,0,0,0.15)');
+        s.disc(0, 0, 0.5, a * 0.72, 'rgba(0,0,0,0.2)');
         if (faction === 'evolved') {
             // organic splatter
             for (let i = 0; i < 5; i++) {
@@ -725,7 +827,36 @@ const IsoSprites = (() => {
             s.ctx.moveTo(p1.x, p1.y); s.ctx.lineTo(p2.x, p2.y);
             s.ctx.moveTo(p3.x, p3.y); s.ctx.lineTo(p4.x, p4.y);
             s.ctx.stroke();
+            // hazard chevrons on the south corner - industrial signature
+            const hx = a * 0.82, hy = a * 0.82;
+            for (let i = 0; i < 3; i++) {
+                const off = i * 5;
+                s.ctx.strokeStyle = withAlpha(i % 2 ? '#191712' : '#c8a23c', 0.55);
+                s.ctx.lineWidth = 2;
+                const h1 = s.p(hx - off, hy - off + 8, 0.8);
+                const h2 = s.p(hx - off + 8, hy - off, 0.8);
+                s.ctx.beginPath();
+                s.ctx.moveTo(h1.x, h1.y);
+                s.ctx.lineTo(h2.x, h2.y);
+                s.ctx.stroke();
+            }
         }
+    }
+
+    // shared props: clutter that makes yards look lived-in
+    function barrels(s, x, y, pal, n = 3) {
+        for (let i = 0; i < n; i++) {
+            const bx = x + (i % 2) * 7 - 3, by = y + ((i / 2) | 0) * 6 - 2;
+            const col = i % 3 === 0 ? '#7a3b28' : pal.metal;
+            s.cyl(bx, by, 0, 3, 7, col, { edge: true });
+            // fluid ring on the lid
+            s.disc(bx, by, 7.3, 1.6, withAlpha('#0e0c08', 0.5));
+        }
+    }
+
+    function crates(s, x, y, pal) {
+        s.box(x, y, 0, 9, 9, 7, 0.2, tint(pal.cloth || pal.hull, 12), { edge: true, weather: false });
+        s.box(x + 6, y + 7, 0, 7, 7, 5, -0.15, tint(pal.cloth || pal.hull, -6), { edge: true, weather: false });
     }
 
     function teamFlag(s, x, y, z, teamColor) {
@@ -792,6 +923,9 @@ const IsoSprites = (() => {
                 s.disc(-a * 0.45, a * 0.3, 48, 6, pal.metal, { stretchY: 2.2, edge: tint(pal.metalDark, -10) });
                 s.glowDot(-a * 0.45, a * 0.3, 53, 1.8, '#ff5533');
                 teamFlag(s, a * 0.4, -a * 0.45, 38, teamColor);
+                // supply yard clutter
+                barrels(s, a * 0.52, a * 0.34, pal, 3);
+                crates(s, -a * 0.15, a * 0.52, pal);
             }
         },
 
@@ -831,6 +965,7 @@ const IsoSprites = (() => {
                 // pipe to pad
                 s.rod(0, 0, 8, a * 0.42, a * 0.42, 2, 3, pal.metalDark);
                 s.glowDot(-a * 0.5, a * 0.15, 36, 1.6, '#ff7733');
+                barrels(s, -a * 0.2, a * 0.5, pal, 2);
             }
         },
 
@@ -913,6 +1048,7 @@ const IsoSprites = (() => {
                     s.disc(-a * 0.45 + i * 9, a * 0.5, 1.5, 3.2, tint(pal.base, -8));
                 }
                 teamFlag(s, a * 0.48, -a * 0.3, 22, teamColor);
+                crates(s, a * 0.52, a * 0.42, pal);
             }
         },
 
