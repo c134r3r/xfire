@@ -1,5 +1,5 @@
 /* XFire - Global Styles */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700&display=swap');
+/* Local font stacks only - no external requests */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -887,6 +887,56 @@ body {
     .menu-container {
         padding: 24px 32px;
     }
+}
+
+/* ============================================
+   TOUCH DEVICES (phones / tablets)
+   ============================================ */
+
+#touchCmdBar {
+    display: none;
+    position: absolute;
+    left: 10px;
+    bottom: 12px;
+    z-index: 30;
+    gap: 10px;
+}
+body.touch-device #touchCmdBar { display: flex; }
+
+#touchCmdBar button {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: rgba(20, 20, 38, 0.82);
+    color: var(--text-primary);
+    font-size: 22px;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+}
+#touchCmdBar button:active {
+    background: rgba(255, 140, 60, 0.35);
+    border-color: var(--accent);
+}
+
+body.touch-device #canvas { touch-action: none; }
+body.touch-device #footer { display: none !important; }
+/* hover tooltips have no mouseleave on touch - they'd stick open */
+body.touch-device .game-tooltip { display: none !important; }
+
+@media (pointer: coarse) and (max-width: 1000px) {
+    #header { padding: 0 8px; }
+    #header h1 { font-size: 17px; }
+    #gameStatus { gap: 8px; }
+    .status-bar { font-size: 11px; }
+    #resources { gap: 8px; font-size: 12px; }
+    #sidebar { width: 178px; padding: 6px; gap: 5px; }
+    .panel { padding: 6px; }
+    .panel h3 { font-size: 10px; margin-bottom: 4px; }
+    #minimap { width: 100%; height: auto; }
+    #selectionInfo { font-size: 11px; }
 }
 
 /* ============================================

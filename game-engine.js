@@ -5300,6 +5300,186 @@ canvas.addEventListener('wheel', (e) => {
     }
 }, { passive: false });
 
+// ============================================
+// TOUCH CONTROLS (mobile / tablet)
+// Tap = select; tap with selection = command (move/attack/rally);
+// drag = pan camera; long-press then drag = box select;
+// pinch = zoom; double-tap = select all of type.
+// Synthesizes the existing mouse events so all command logic
+// stays in one place.
+// ============================================
+const IS_TOUCH_DEVICE = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (IS_TOUCH_DEVICE) {
+    document.body.classList.add('touch-device');
+    // phones start closer in - units are hard to tap at 1.0
+    gameSettings.zoom = Math.max(gameSettings.zoom, 1.25);
+}
+
+if (IS_TOUCH_DEVICE && canvas) {
+    let touchState = null;   // { mode: 'tap'|'pan'|'box'|'ghost', ... }
+    let pinch = null;        // { d0, zoom0, mx, my, camX, camY }
+    let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+
+    const touchPos = (t) => {
+        const r = canvas.getBoundingClientRect();
+        return { x: t.clientX - r.left, y: t.clientY - r.top, cx: t.clientX, cy: t.clientY };
+    };
+    const fakeMouse = (type, button, cx, cy) => {
+        canvas.dispatchEvent(new MouseEvent(type, { button, clientX: cx, clientY: cy, bubbles: true }));
+    };
+    const ownEntityAt = (x, y) => {
+        const near = (ent, radius) => {
+            const s = worldToScreen(ent.x, ent.y);
+            return Math.hypot(s.x - x, s.y - y) < radius;
+        };
+        return game.units.find(u => u.playerId === 0 && near(u, 30)) ||
+               game.buildings.find(b => b.playerId === 0 && near(b, 34));
+    };
+
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (game.status !== 'PLAYING') return;
+        if (e.touches.length === 2) {
+            if (touchState) clearTimeout(touchState.longPressTimer);
+            touchState = null;
+            game.selectionBox = null;
+            const a = touchPos(e.touches[0]), b = touchPos(e.touches[1]);
+            pinch = {
+                d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)),
+                zoom0: gameSettings.zoom,
+                mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2,
+                camX: game.camera.x, camY: game.camera.y
+            };
+            return;
+        }
+        if (e.touches.length !== 1 || pinch) return;
+        const p = touchPos(e.touches[0]);
+        touchState = {
+            mode: 'tap',
+            startX: p.x, startY: p.y, cx: p.cx, cy: p.cy,
+            camX: game.camera.x, camY: game.camera.y,
+            moved: false, longPressTimer: null
+        };
+        if (game.placingBuilding) fakeMouse('mousemove', 0, p.cx, p.cy);
+        touchState.longPressTimer = setTimeout(() => {
+            if (touchState && !touchState.moved && !game.placingBuilding && !game.attackMoveMode) {
+                touchState.mode = 'box';
+                game.selectionBox = { x1: touchState.startX, y1: touchState.startY, x2: touchState.startX, y2: touchState.startY };
+                if (navigator.vibrate) navigator.vibrate(20);
+            }
+        }, 350);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (game.status !== 'PLAYING') return;
+        if (pinch && e.touches.length >= 2) {
+            const a = touchPos(e.touches[0]), b = touchPos(e.touches[1]);
+            const d = Math.hypot(a.x - b.x, a.y - b.y);
+            gameSettings.zoom = Math.max(gameSettings.minZoom,
+                Math.min(gameSettings.maxZoom, pinch.zoom0 * d / pinch.d0));
+            const zoom = getZoom();
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            game.camera.x = pinch.camX - (mx - pinch.mx) / zoom;
+            game.camera.y = pinch.camY - (my - pinch.my) / zoom;
+            return;
+        }
+        if (!touchState || e.touches.length !== 1) return;
+        const p = touchPos(e.touches[0]);
+        const dx = p.x - touchState.startX, dy = p.y - touchState.startY;
+        if (!touchState.moved && Math.hypot(dx, dy) > 12) {
+            touchState.moved = true;
+            clearTimeout(touchState.longPressTimer);
+            if (touchState.mode === 'tap') {
+                touchState.mode = game.placingBuilding ? 'ghost' : 'pan';
+            }
+        }
+        if (touchState.mode === 'pan') {
+            const zoom = getZoom();
+            game.camera.x = touchState.camX - dx / zoom;
+            game.camera.y = touchState.camY - dy / zoom;
+        } else if (touchState.mode === 'box' && game.selectionBox) {
+            game.selectionBox.x2 = p.x;
+            game.selectionBox.y2 = p.y;
+        } else if (touchState.mode === 'ghost') {
+            // drag positions the building ghost before committing
+            fakeMouse('mousemove', 0, p.cx, p.cy);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (pinch) {
+            if (e.touches.length < 2) pinch = null;
+            return;
+        }
+        if (!touchState) return;
+        clearTimeout(touchState.longPressTimer);
+        const st = touchState;
+        touchState = null;
+        if (game.status !== 'PLAYING') return;
+
+        if (st.mode === 'box') {
+            // mouseup consumes game.selectionBox regardless of event coords
+            fakeMouse('mouseup', 0, st.cx, st.cy);
+            return;
+        }
+        if (st.mode === 'pan' || st.mode === 'ghost') return;
+
+        // plain tap
+        const now = Date.now();
+        const isDouble = now - lastTapTime < 320 &&
+            Math.hypot(st.startX - lastTapX, st.startY - lastTapY) < 30;
+        lastTapTime = now; lastTapX = st.startX; lastTapY = st.startY;
+        if (isDouble) {
+            fakeMouse('dblclick', 0, st.cx, st.cy);
+            return;
+        }
+        if (game.placingBuilding || game.attackMoveMode) {
+            fakeMouse('mousemove', 0, st.cx, st.cy);
+            fakeMouse('mousedown', 0, st.cx, st.cy);
+            fakeMouse('mouseup', 0, st.cx, st.cy);
+            return;
+        }
+        // own entity under the finger -> select; otherwise with a
+        // commandable selection the tap is an order (right-click)
+        const own = ownEntityAt(st.startX, st.startY);
+        const canCommand = game.selection.some(s => s.playerId === 0 && UNIT_TYPES[s.type]) ||
+            (game.selection.length === 1 && game.selection[0].playerId === 0 &&
+             BUILDING_TYPES[game.selection[0].type] &&
+             BUILDING_TYPES[game.selection[0].type].produces.length > 0);
+        if (!own && canCommand) {
+            fakeMouse('mousedown', 2, st.cx, st.cy);
+            fakeMouse('mouseup', 2, st.cx, st.cy);
+        } else {
+            fakeMouse('mousedown', 0, st.cx, st.cy);
+            fakeMouse('mouseup', 0, st.cx, st.cy);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', () => {
+        if (touchState) clearTimeout(touchState.longPressTimer);
+        touchState = null;
+        pinch = null;
+        game.selectionBox = null;
+    });
+
+    // floating command buttons (attack-move / deselect)
+    const tcAttack = document.getElementById('tcAttack');
+    const tcDeselect = document.getElementById('tcDeselect');
+    if (tcAttack) tcAttack.addEventListener('click', () => {
+        if (game.selection.some(s => s.playerId === 0 && UNIT_TYPES[s.type])) {
+            game.attackMoveMode = true;
+        }
+    });
+    if (tcDeselect) tcDeselect.addEventListener('click', () => {
+        game.selection = [];
+        game.attackMoveMode = false;
+        game.placingBuilding = null;
+        game.placingBuildingFrom = null;
+    });
+}
+
     // Browser-only support (Mobile removed)
 
     // Minimap click
