@@ -2289,6 +2289,14 @@ requestAnimationFrame(loop);
 
 // ----- Screens -----
 function startGame() {
+  // immersive fullscreen + landscape lock on touch (best effort,
+  // both APIs need a user gesture and may be unsupported)
+  if (isTouch && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen()
+      .then(() => screen.orientation && screen.orientation.lock &&
+        screen.orientation.lock('landscape').catch(() => {}))
+      .catch(() => {});
+  }
   newGame();
   buildDesert();
   game.state = 'playing';
@@ -2327,6 +2335,10 @@ function togglePause() {
 }
 
 document.getElementById('startBtn').addEventListener('click', startGame);
+// don't let the wave chew through the tank while the app is backgrounded
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && game.state === 'playing') togglePause();
+});
 document.getElementById('retryBtn').addEventListener('click', startGame);
 document.getElementById('resumeBtn').addEventListener('click', togglePause);
 document.getElementById('quitFromPauseBtn').addEventListener('click', () => {
