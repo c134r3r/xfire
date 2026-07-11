@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d1a">
 <title>IRONCLAD - Desert Assault</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230d0d1a'/><text x='50' y='70' font-size='60' fill='%23ff6b35' text-anchor='middle' font-weight='bold'>I</text></svg>">
 <style>
@@ -191,6 +195,20 @@ html, body {
   line-height: 1;
 }
 body.touch #touchPause { display: block; }
+#touchFullscreen {
+  position: absolute;
+  top: 8px; left: calc(50% + 34px);
+  z-index: 6;
+  width: 46px; height: 36px;
+  display: none;
+  background: rgba(10,10,20,0.72);
+  border: 1px solid rgba(255,107,53,0.4);
+  border-radius: 8px;
+  color: #ff8855;
+  font-size: 17px;
+  line-height: 1;
+}
+body.touch #touchFullscreen { display: block; }
 body.touch #gameCanvas { border-radius: 0; }
 body.touch #hud { font-size: 11px; letter-spacing: 1px; }
 
@@ -444,6 +462,7 @@ body.touch #hud { font-size: 11px; letter-spacing: 1px; }
   <div id="powerupHud"></div>
   <div id="waveBanner"></div>
   <button id="touchPause">| |</button>
+  <button id="touchFullscreen">&#x26F6;</button>
 </div>
 
 <div id="rotateHint">
@@ -752,6 +771,16 @@ canvas.addEventListener('touchend', releaseTouches, { passive: false });
 canvas.addEventListener('touchcancel', releaseTouches, { passive: false });
 
 document.getElementById('touchPause').addEventListener('click', togglePause);
+document.getElementById('touchFullscreen').addEventListener('click', () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  } else if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen()
+      .then(() => screen.orientation && screen.orientation.lock &&
+        screen.orientation.lock('landscape').catch(() => {}))
+      .catch(() => {});
+  }
+});
 
 // ----- Helpers -----
 function rand(a, b) { return a + Math.random() * (b - a); }

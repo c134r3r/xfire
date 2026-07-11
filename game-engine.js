@@ -5490,6 +5490,17 @@ if (IS_TOUCH_DEVICE && canvas) {
     const tcPause = document.getElementById('tcPause');
     if (tcPause) tcPause.addEventListener('click', () => togglePause());
 
+    // manual fullscreen toggle - startGame already tries, but the
+    // browser may deny it or the player may have exited since
+    const tcFullscreen = document.getElementById('tcFullscreen');
+    if (tcFullscreen) tcFullscreen.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        } else {
+            window.requestMobileImmersion();
+        }
+    });
+
     // collapsible sidebar: more battlefield on small screens
     const tcSidebar = document.getElementById('tcSidebar');
     if (tcSidebar) tcSidebar.addEventListener('click', () => {
