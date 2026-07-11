@@ -1043,6 +1043,20 @@ body.touch-device #sidebar {
 
 /* short landscape screens (phones): compact menus, keep everything reachable */
 @media (max-height: 520px) {
+    /* desktop anchors the loading bar 200px up - on a phone that lands
+       right on the logo art. Tuck it to the bottom edge on a dim panel. */
+    .loading-container {
+        bottom: max(14px, env(safe-area-inset-bottom));
+        background: rgba(10, 10, 20, 0.6);
+        padding: 12px 24px 16px;
+        border-radius: 10px;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+    .loading-bar-container { width: 240px; }
+    .loading-text { margin-top: 10px; font-size: 11px; }
+    #goButton { margin-top: 12px !important; }  /* beats the inline style */
+
     .fullscreen-overlay {
         overflow-y: auto;
         align-items: center;      /* desktop pins menus low over the art */
