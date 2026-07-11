@@ -1786,12 +1786,17 @@ function drawTileToCache(tx, ty) {
         b *= 0.85;
     }
 
-    // Draw isometric tile base
+    // Draw isometric tile base, expanded ~1px so neighbours overlap.
+    // Exact-fit diamonds leave antialiased subpixel gaps against the
+    // black cache background - invisible at zoom 1.0 but they surface
+    // as a dark grid when the cache is blitted at fractional zoom.
+    const bleedX = tileW / 2 + 1.2;
+    const bleedY = tileH / 2 + 0.8;
     c.beginPath();
-    c.moveTo(pos.x, pos.y - tileH / 2);
-    c.lineTo(pos.x + tileW / 2, pos.y);
-    c.lineTo(pos.x, pos.y + tileH / 2);
-    c.lineTo(pos.x - tileW / 2, pos.y);
+    c.moveTo(pos.x, pos.y - bleedY);
+    c.lineTo(pos.x + bleedX, pos.y);
+    c.lineTo(pos.x, pos.y + bleedY);
+    c.lineTo(pos.x - bleedX, pos.y);
     c.closePath();
     c.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
     c.fill();
@@ -5484,6 +5489,25 @@ if (IS_TOUCH_DEVICE && canvas) {
     });
     const tcPause = document.getElementById('tcPause');
     if (tcPause) tcPause.addEventListener('click', () => togglePause());
+
+    // manual fullscreen toggle - startGame already tries, but the
+    // browser may deny it or the player may have exited since
+    const tcFullscreen = document.getElementById('tcFullscreen');
+    if (tcFullscreen) tcFullscreen.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        } else {
+            window.requestMobileImmersion();
+        }
+    });
+
+    // collapsible sidebar: more battlefield on small screens
+    const tcSidebar = document.getElementById('tcSidebar');
+    if (tcSidebar) tcSidebar.addEventListener('click', () => {
+        const collapsed = document.body.classList.toggle('sidebar-collapsed');
+        tcSidebar.innerHTML = collapsed ? '&#9664;' : '&#9654;';
+        resizeCanvas(); // canvas gains/loses the sidebar width
+    });
 
     // battles shouldn't run down the clock while the app is backgrounded
     document.addEventListener('visibilitychange', () => {

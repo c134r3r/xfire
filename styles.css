@@ -948,6 +948,56 @@ body.touch-device .game-tooltip { display: none !important; }
 }
 body.touch-device #tcPause { display: block; }
 
+/* fullscreen toggle, sits left of the pause button */
+#tcFullscreen {
+    display: none;
+    position: absolute;
+    top: 8px;
+    right: calc(var(--sidebar-width) + 62px);
+    z-index: 30;
+    width: 46px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(20, 20, 38, 0.82);
+    color: var(--accent);
+    font-size: 17px;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+}
+body.touch-device #tcFullscreen { display: block; }
+body.sidebar-collapsed #tcFullscreen { right: 98px; }
+
+/* collapsible sidebar (touch): tab sits on the sidebar edge, arrow
+   pointing where the panel will go */
+#tcSidebar {
+    display: none;
+    position: absolute;
+    top: 50%;
+    right: var(--sidebar-width);
+    transform: translateY(-50%);
+    z-index: 31;
+    width: 30px;
+    height: 72px;
+    border: 1px solid var(--border-subtle);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    background: rgba(20, 20, 38, 0.85);
+    color: var(--accent);
+    font-size: 13px;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+}
+body.touch-device #tcSidebar { display: block; }
+body.sidebar-collapsed #sidebar { display: none; }
+body.sidebar-collapsed #tcSidebar { right: 0; border-radius: 8px 0 0 8px; }
+body.sidebar-collapsed #vignette { right: 0; }
+body.sidebar-collapsed #tcPause { right: 46px; }
+
 /* notch / home-bar safe areas */
 body.touch-device #header {
     padding-left: max(8px, env(safe-area-inset-left));
@@ -1020,8 +1070,14 @@ body.touch-device #sidebar {
     #sidebar { width: 178px; padding: 6px; gap: 5px; }
     .panel { padding: 6px; }
     .panel h3 { font-size: 10px; margin-bottom: 4px; }
-    #minimap { width: 100%; height: auto; }
-    #selectionInfo { font-size: 11px; }
+    #selectionInfo { font-size: 11px; min-height: 28px; }
+
+    /* the build menu is what you reach for - put it on top and shrink
+       the rest so everything important fits without scrolling */
+    #sidebar .panel:has(#buildMenu) { order: -1; }
+    #sidebar .panel:has(#minimap) { order: 3; }
+    .build-btn { min-height: 46px; font-size: 15px; }
+    #minimap { width: 100%; height: auto; max-width: 104px; }
 }
 
 /* ============================================
@@ -1087,6 +1143,7 @@ body.touch-device #sidebar {
    ============================================ */
 
 .build-section-header {
+    grid-column: 1 / -1;   /* section label spans the button grid */
     padding: 6px 8px;
     font-size: 11px;
     color: var(--text-muted);
