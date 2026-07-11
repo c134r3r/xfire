@@ -759,7 +759,8 @@ function drawFog() {
     ctx.drawImage(fogCanvas, -0.5, -0.5, mapSize, mapSize);
     ctx.restore();
 }
-// (the vignette/warm grade is a zero-cost CSS overlay: #vignette)
+// (the former #vignette overlay was removed - it read as a gray film
+// over the battlefield)
 
 // Faint dust motes drifting across the wasteland
 function drawDust() {
@@ -4297,7 +4298,11 @@ function updateBuildMenu() {
             addHeader('Train Units');
             const queueInfo = document.createElement('div');
             queueInfo.className = 'queue-info';
-            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong> <span style="color:#667;">(Right-click ground: rally point)</span>`;
+            // the rally-point hint talks about right-click - meaningless on
+            // touch, and the long text wraps the narrow mobile sidebar badly
+            const rallyHint = document.body.classList.contains('touch-device')
+                ? '' : ' <span style="color:#667;">(Right-click ground: rally point)</span>';
+            queueInfo.innerHTML = `Queue: <strong>${selectedBuilding.productionQueue.length}/10</strong>` + rallyHint;
             menu.appendChild(queueInfo);
 
             if (selectedBuilding.productionQueue.length > 0) {
