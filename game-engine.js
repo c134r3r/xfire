@@ -972,6 +972,119 @@ function drawTerrain() {
     }
 }
 
+// ============================================
+// BURNING OIL FIELDS
+// Shoot an oil patch and it catches fire: the blaze
+// hurts anything standing in it, halts the derrick's
+// pumping, and creeps across adjacent patch tiles.
+// ============================================
+
+function igniteOilTile(tx, ty) {
+    const tile = game.map[ty]?.[tx];
+    if (!tile || !tile.oil) return;
+    if (tile.oilAmount !== undefined && tile.oilAmount <= 0) return; // dry patches don't burn
+    if (!game.burningOil) game.burningOil = new Map();
+    const key = tx + ',' + ty;
+    if (game.burningOil.has(key)) return;
+    game.burningOil.set(key, { t: 900 + Math.random() * 300 }); // ~15-20s blaze
+    // ignition whoosh
+    for (let i = 0; i < 14; i++) {
+        game.particles.push({
+            x: tx + 0.2 + Math.random() * 0.6, y: ty + 0.2 + Math.random() * 0.6,
+            z: 0.5,
+            vx: (Math.random() - 0.5) * 0.1, vy: (Math.random() - 0.5) * 0.1,
+            vz: 0.15 + Math.random() * 0.25,
+            color: ['#ff5511', '#ff8822', '#ffcc33'][i % 3],
+            size: 2.5 + Math.random() * 3, life: 0.8 + Math.random() * 0.5,
+            type: 'explosion'
+        });
+    }
+    SoundManager.play('explosion_small');
+}
+
+function updateBurningOil() {
+    if (!game.burningOil || game.burningOil.size === 0) return;
+    for (const [key, fire] of game.burningOil) {
+        fire.t--;
+        const [tx, ty] = key.split(',').map(Number);
+        if (fire.t <= 0) {
+            game.burningOil.delete(key);
+            addDecal({
+                type: 'scorch', x: tx + 0.5, y: ty + 0.5, life: 60, size: 14,
+                rubble: Array.from({ length: 3 }, () => [
+                    (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 8, 1.5 + Math.random() * 2, Math.random() * 3])
+            });
+            continue;
+        }
+        // rolling flames + oily smoke
+        if (game.tick % 4 === 0) {
+            const fx = tx + 0.15 + Math.random() * 0.7, fy = ty + 0.15 + Math.random() * 0.7;
+            game.particles.push({
+                x: fx, y: fy, z: 0.3,
+                vx: (Math.random() - 0.5) * 0.05, vy: (Math.random() - 0.5) * 0.05,
+                vz: 0.12 + Math.random() * 0.18,
+                color: ['#ff5511', '#ff8822', '#ffcc33', '#ff3300'][(Math.random() * 4) | 0],
+                size: 2 + Math.random() * 3.5, life: 0.6 + Math.random() * 0.5,
+                type: 'explosion'
+            });
+            if (Math.random() < 0.4) {
+                game.particles.push({
+                    x: fx, y: fy, z: 3,
+                    vx: (Math.random() - 0.5) * 0.04, vy: (Math.random() - 0.5) * 0.04,
+                    vz: 0.2 + Math.random() * 0.15,
+                    color: '#1c1a16', size: 3.5 + Math.random() * 3,
+                    life: 1.2 + Math.random() * 0.8, type: 'smoke'
+                });
+            }
+        }
+        // the blaze creeps across the patch
+        if (game.tick % 100 === 0 && Math.random() < 0.4) {
+            const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+            const [dx, dy] = dirs[(Math.random() * 4) | 0];
+            igniteOilTile(tx + dx, ty + dy);
+        }
+        // fire hurts: units in the flames, and any building sitting on them
+        if (game.tick % 15 === 0) {
+            const cx = tx + 0.5, cy = ty + 0.5;
+            for (const u of game.units) {
+                if (Math.hypot(u.x - cx, u.y - cy) < 1.05) {
+                    const infantry = UNIT_TYPES[u.type]?.category === 'infantry';
+                    u.hp -= infantry ? 3 : 1.5;
+                }
+            }
+            for (const b of game.buildings) {
+                const bt = BUILDING_TYPES[b.type];
+                if (bt && Math.abs(b.x - cx) < bt.size / 2 + 0.5 &&
+                    Math.abs(b.y - cy) < bt.size / 2 + 0.5) {
+                    b.hp -= 1;
+                }
+            }
+        }
+    }
+}
+
+// Flickering ground glow under each burning tile
+function drawBurningOil() {
+    if (!game.burningOil || game.burningOil.size === 0) return;
+    const zoom = getZoom();
+    const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    for (const [key, fire] of game.burningOil) {
+        const [tx, ty] = key.split(',').map(Number);
+        const s = worldToScreen(tx + 0.5, ty + 0.5);
+        if (s.x < -80 || s.x > cw + 80 || s.y < -80 || s.y > ch + 80) continue;
+        const flicker = 0.55 + 0.2 * Math.sin(game.tick * 0.3 + tx * 7 + ty * 13);
+        const r = 26 * zoom;
+        const g = ctx.createRadialGradient(s.x, s.y, 2, s.x, s.y, r);
+        g.addColorStop(0, `rgba(255,140,40,${0.5 * flicker})`);
+        g.addColorStop(0.5, `rgba(255,70,10,${0.3 * flicker})`);
+        g.addColorStop(1, 'rgba(60,20,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y, r, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 // Animated oil bubbles on live patches (drawn over the static cache)
 function drawOilAnimations() {
     if (!game.oilTiles) return;
@@ -1014,6 +1127,7 @@ function render() {
     drawTerrain();
     drawOilAnimations();
     drawDecals();
+    drawBurningOil();
     drawDying();
     drawBunkers();
 
@@ -2743,6 +2857,7 @@ function update(dt) {
     updateObjectives();
     updateDecals(dt);
     updateDying(dt);
+    updateBurningOil();
     updateRemnantsPing();
     updateLowFundsHint();
 
@@ -3692,6 +3807,14 @@ function updateProjectiles(dt) {
                 createImpact(proj.x, proj.y);
             }
 
+            // Any round landing on a live oil patch sets it ablaze
+            // (check both where it stopped and what it was aimed at -
+            // the stop position can drift into a neighbouring tile)
+            igniteOilTile(Math.floor(proj.x), Math.floor(proj.y));
+            if (dist < 1) {
+                igniteOilTile(Math.floor(proj.targetX), Math.floor(proj.targetY));
+            }
+
             game.projectiles.splice(i, 1);
         }
     }
@@ -4146,7 +4269,9 @@ function updateResources() {
                 building.oilStart = Math.max(1, building.oilLeft);
             }
 
-            if (building.oilLeft > 0) {
+            const burnKey = Math.floor(building.x) + ',' + Math.floor(building.y);
+            const patchBurning = game.burningOil && game.burningOil.has(burnKey);
+            if (building.oilLeft > 0 && !patchBurning) {
                 const psType = BUILDING_TYPES.powerStation;
                 const boost = 1 + Math.min(stationCounts[building.playerId], psType.maxBoostCount) * psType.incomeBoost;
                 const pumped = Math.min((type.pumpRate * boost) / 60, building.oilLeft);
