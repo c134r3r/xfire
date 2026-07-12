@@ -5189,48 +5189,46 @@ function initializeEventHandlers() {
             return;
         }
 
-        // Check if clicking on enemy - with different distance thresholds
+        // Check if clicking on enemy. Sprites stand ON their ground anchor,
+        // so the visible body sits above that point - test a lifted center
+        // with a zoom-scaled radius, and always take the CLOSEST candidate.
+        // (The old first-match-within-40px picked arbitrary neighbours and
+        // clicks on a drawn tank hull could miss entirely.)
         let enemyDirectClick = null;
         let enemyNearbyClick = null;
+        const zoomHit = getZoom();
 
-        // First check units
-        const clickedUnit = game.units.find(u => {
-            if (u.playerId === 0) return false;
-            const screen = worldToScreen(u.x, u.y);
-            const dx = screen.x - x;
-            const dy = screen.y - y;
-            return Math.sqrt(dx * dx + dy * dy) < 40;
-        });
-
-        if (clickedUnit) {
-            const screen = worldToScreen(clickedUnit.x, clickedUnit.y);
-            const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
-            if (dist < 15) {
-                enemyDirectClick = clickedUnit;
-            } else {
-                enemyNearbyClick = clickedUnit;
-            }
-        }
-
-        // If no unit clicked, check buildings
-        if (!clickedUnit) {
-            const clickedBuilding = game.buildings.find(b => {
-                if (b.playerId === 0) return false;
-                const screen = worldToScreen(b.x, b.y);
-                const dx = screen.x - x;
-                const dy = screen.y - y;
-                return Math.sqrt(dx * dx + dy * dy) < 40;
-            });
-
-            if (clickedBuilding) {
-                const screen = worldToScreen(clickedBuilding.x, clickedBuilding.y);
-                const dist = Math.sqrt((screen.x - x) ** 2 + (screen.y - y) ** 2);
-                if (dist < 20) {
-                    enemyDirectClick = clickedBuilding;
-                } else {
-                    enemyNearbyClick = clickedBuilding;
+        const pickHostile = (list, isUnit) => {
+            let direct = null, near = null, dBest = Infinity, nBest = Infinity;
+            for (const ent of list) {
+                if (ent.playerId === 0 || ent.hp <= 0) continue;
+                const et = isUnit ? UNIT_TYPES[ent.type] : BUILDING_TYPES[ent.type];
+                if (!et) continue;
+                const sc = worldToScreen(ent.x, ent.y);
+                const lift = isUnit
+                    ? (et.size + 4) * 0.55 * zoomHit   // hull center above the anchor
+                    : (et.size * 9) * zoomHit;         // building mass center
+                const r = isUnit
+                    ? Math.max(20, (et.size + 12) * zoomHit)
+                    : Math.max(30, et.size * 15 * zoomHit);
+                const dist = Math.hypot(sc.x - x, (sc.y - lift) - y);
+                if (dist < r) {
+                    if (dist < dBest) { dBest = dist; direct = ent; }
+                } else if (dist < r + 26 && dist < nBest) {
+                    nBest = dist; near = ent;
                 }
             }
+            return { direct, near };
+        };
+
+        const uPick = pickHostile(game.units, true);
+        if (uPick.direct || uPick.near) {
+            enemyDirectClick = uPick.direct;
+            enemyNearbyClick = uPick.direct ? null : uPick.near;
+        } else {
+            const bPick = pickHostile(game.buildings, false);
+            enemyDirectClick = bPick.direct;
+            enemyNearbyClick = bPick.direct ? null : bPick.near;
         }
 
         // Audio-visual confirmation of the order
@@ -6190,27 +6188,40 @@ function updateGameTimer() {
 }
 
 function checkTimeLimit() {
-    const playerUnits = game.units.filter(u => u.playerId === 0).length;
-    const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
-    const enemyUnits = game.units.filter(u => u.playerId === 1).length;
-    const enemyBuildings = game.buildings.filter(b => b.playerId === 1).length;
+    // Value-weighted force totals: what each side has left on the field,
+    // priced in oil (units + buildings at build cost)
+    const forceValue = (pid) =>
+        game.units.filter(u => u.playerId === pid)
+            .reduce((sum, u) => sum + (UNIT_TYPES[u.type]?.cost || 0), 0) +
+        game.buildings.filter(b => b.playerId === pid)
+            .reduce((sum, b) => sum + (BUILDING_TYPES[b.type]?.cost || 300), 0);
 
-    // Compare total forces to determine winner
-    const playerScore = playerUnits + playerBuildings * 2;
-    const enemyScore = enemyUnits + enemyBuildings * 2;
+    const playerValue = forceValue(0);
+    const enemyValue = forceValue(1);
+    const pu = game.units.filter(u => u.playerId === 0).length;
+    const eu = game.units.filter(u => u.playerId === 1).length;
 
-    if (playerScore > enemyScore) {
+    const comparison =
+        `<div style="margin-bottom:10px;line-height:1.5;">Time limit reached - remaining forces decide:<br>` +
+        `<strong>You:</strong> ${pu} units, ${playerValue} oil worth &nbsp;vs&nbsp; ` +
+        `<strong>Enemy:</strong> ${eu} units, ${enemyValue} oil worth</div>`;
+
+    if (playerValue >= enemyValue) {
         game.status = 'WON';
         SoundManager.play('victory');
         showScreen('victoryScreen');
+        const info = document.getElementById('victoryInfo');
+        if (info) info.textContent = 'Time is up - your army holds the stronger field!';
         const statsEl = document.getElementById('victoryStats');
-        if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - your forces prevail!</div>' + buildStatsHTML();
+        if (statsEl) statsEl.innerHTML = comparison + buildStatsHTML();
     } else {
         game.status = 'LOST';
         SoundManager.play('defeat');
         showScreen('defeatScreen');
+        const info = document.getElementById('defeatInfo');
+        if (info) info.textContent = 'Time is up - the enemy fields the stronger army.';
         const statsEl = document.getElementById('defeatStats');
-        if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - the enemy holds the field.</div>' + buildStatsHTML();
+        if (statsEl) statsEl.innerHTML = comparison + buildStatsHTML();
     }
 }
 
@@ -6242,9 +6253,9 @@ function checkWinCondition() {
     if (enemyUnits.length === 0 && enemyBuildings.length === 0) {
         game.status = 'WON';
         SoundManager.play('victory');
-        const playerUnits = game.units.filter(u => u.playerId === 0).length;
-        const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
         showScreen('victoryScreen');
+        const vInfo = document.getElementById('victoryInfo');
+        if (vInfo) vInfo.textContent = 'You have defeated all enemy forces!';
         const statsEl = document.getElementById('victoryStats');
         if (statsEl) statsEl.innerHTML = buildStatsHTML();
     }
@@ -6258,6 +6269,8 @@ function checkLoseCondition() {
         game.status = 'LOST';
         SoundManager.play('defeat');
         showScreen('defeatScreen');
+        const dInfo = document.getElementById('defeatInfo');
+        if (dInfo) dInfo.textContent = 'All your forces have been eliminated.';
         const statsEl = document.getElementById('defeatStats');
         if (statsEl) statsEl.innerHTML = buildStatsHTML();
     }
