@@ -1201,6 +1201,8 @@ function issueMove(unit, x, y, attackMove = false) {
     unit.closeTarget = null;
     unit._defend = null;
     unit._repairing = null;
+    unit._hunt = false;
+    unit._opp = null;
     if (!attackMove) { unit.resumeX = undefined; unit.resumeY = undefined; }
 }
 
@@ -1216,6 +1218,8 @@ function issueAttack(unit, target) {
     unit._leash = null;
     unit._defend = null;
     unit._repairing = null;
+    unit._hunt = false;
+    unit._opp = null;
     unit._chaseFails = 0;
     unit._explicitTarget = true;
 }
@@ -1233,6 +1237,8 @@ function stopUnit(unit) {
     unit._leash = null;
     unit._defend = null;
     unit._repairing = null;
+    unit._hunt = false;
+    unit._opp = null;
 }
 
 // ============================================
@@ -1370,7 +1376,8 @@ function updateUnits(dt) {
 
         // Turret tracking: swing toward the target, else settle forward
         if (type.turret) {
-            const tgt = unit.attackTarget;
+            let tgt = unit.attackTarget;
+            if (isAlive(unit._opp) && isAlive(tgt) && edgeDistance(unit, tgt) > rangeT(type)) tgt = unit._opp;
             const desired = isAlive(tgt)
                 ? Math.atan2(tgt.y - unit.y, tgt.x - unit.x)
                 : unit.angle || 0;
@@ -1502,6 +1509,16 @@ function updateUnitAttack(unit, type, speed) {
         if (unit.attackMove && unit.resumeX !== undefined) {
             unit.targetX = unit.resumeX;
             unit.targetY = unit.resumeY;
+        } else if (unit._explicitTarget || unit._hunt) {
+            // ordered target destroyed: keep clearing the area around it
+            // on our own (anchored, so a chain of kills can't wander off)
+            if (!unit._hunt) unit._huntAnchor = { x: target.x, y: target.y };
+            const a = unit._huntAnchor;
+            const next = findTarget({ x: a.x, y: a.y, type: unit.type, playerId: unit.playerId }, type, HUNT_RADIUS);
+            unit._explicitTarget = false;
+            unit._opp = null;
+            if (next) { unit.attackTarget = next; unit._hunt = true; unit._chaseFails = 0; }
+            else unit._hunt = false;
         } else if (unit._defend) {
             // raiders left in reach of the zone? take the next one
             const next = nextDefenseTarget(unit);
@@ -1560,6 +1577,7 @@ function updateUnitAttack(unit, type, speed) {
 
     if (clear) {
         // in range with a clear line: stand and fire
+        unit._opp = null;
         unit.path = null;
         unit._navGoal = null;
         unit._chaseFails = 0;
@@ -1573,6 +1591,10 @@ function updateUnitAttack(unit, type, speed) {
         }
         return;
     }
+
+    // Ordered attack: shoot targets of opportunity on the way, but keep
+    // driving toward the clicked target
+    if (unit._explicitTarget || unit._hunt) snapShot(unit, type, target);
 
     // Close in: path to the target, re-planning as it moves. Out of
     // range only because a wall blocks the line? Same thing - drive
@@ -1588,6 +1610,33 @@ function updateUnitAttack(unit, type, speed) {
             unit._chaseFails = 0;
         }
     }
+}
+
+// After an ordered target dies, units hunt for more enemies within
+// this many tiles of where it stood before going idle
+const HUNT_RADIUS = 8;
+
+// Fire at whatever enemy is in range while driving, without turning
+// toward it: turrets swing freely, fixed guns only take shots that line
+// up with the direction of travel.
+function snapShot(unit, type, main) {
+    if (game.tick - (unit.lastAttack || 0) < type.attackSpeed / 16) return;
+    const range = rangeT(type);
+    let opp = unit._opp;
+    if (!isAlive(opp) || edgeDistance(unit, opp) > range) {
+        opp = unit._opp = null;
+        if ((game.tick + unit.id) % 8 !== 0) return;
+        opp = findTarget(unit, type, range);
+        if (!opp || opp === main) return;
+        unit._opp = opp;
+    }
+    const desired = Math.atan2(opp.y - unit.y, opp.x - unit.x);
+    const aim = type.turret ? (unit.turretAngle ?? unit.angle) : unit.angle;
+    const tol = type.category === 'infantry' ? 0.7 : 0.35;
+    if (angleDiff(aim || 0, desired) >= tol) return;
+    if (!type.overWalls && !hasLineOfFire(unit.x, unit.y, opp.x, opp.y)) { unit._opp = null; return; }
+    fireProjectile(unit, opp);
+    unit.lastAttack = game.tick;
 }
 
 function updateUnitMove(unit, type, speed, i) {
@@ -1768,7 +1817,7 @@ function alertDefenders(building, attacker) {
         const t = UNIT_TYPES[u.type];
         if (!t || t.damage <= 0 || u._repairing) continue;
         if (u.targetX !== undefined) continue;                    // on an order
-        if (u.attackTarget && (u._explicitTarget || u._defend)) continue; // already fighting
+        if (u.attackTarget && (u._explicitTarget || u._hunt || u._defend)) continue; // already fighting
         if (Math.hypot(u.x - building.x, u.y - building.y) > DEFENSE_RECRUIT_RADIUS) continue;
         u._leash = null;
         u._defend = null;
@@ -1813,7 +1862,7 @@ function updateRepairRetreat(unit, type) {
     }
     if (unit.hp >= type.hp * REPAIR_RETREAT_HP) return;
     if (unit.attackMove || unit.targetX !== undefined) return;
-    if (unit.attackTarget && unit._explicitTarget) return;
+    if (unit.attackTarget && (unit._explicitTarget || unit._hunt)) return;
     // only in a defensive fight: engaged on its own or shot recently
     const fighting = (unit.attackTarget && !unit._explicitTarget) ||
         game.tick - (unit._hurtTick || -9999) < 180;

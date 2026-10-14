@@ -106,6 +106,12 @@ screen made everything except movement run 2.4x faster).
   can dodge them, and a ground marker shows where a shell will land.
 - **Retaliation**: idle units fire back when shot and nearby squad mates
   join in; units on a move order keep moving (a retreat stays a retreat).
+- **Attack orders**: every selected unit attacks the clicked target from
+  its own range (artillery stays back, flamers close in). On the way they
+  shoot whatever comes into range - turrets swing freely, fixed guns take
+  shots in their direction of travel - but never stop driving toward the
+  clicked target. Once it is destroyed they hunt further enemies (units
+  first, then buildings) within 8 tiles of where it stood, then hold.
 - **Base defense**: when a building is hit, idle combat units within 16
   tiles move in. Near defense towers they fight only from inside the
   towers' reach (one tile short of tower range), so every raider that
