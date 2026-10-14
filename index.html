@@ -19,7 +19,7 @@
         // that (bump XFIRE_VERSION and the ?v= values on each release); if
         // startup still fails, reload once (revalidates the cache), then
         // show the error instead of hanging on the loading screen.
-        window.XFIRE_VERSION = '20261014d';
+        window.XFIRE_VERSION = '20261014e';
         window.addEventListener('error', function (e) {
             if (window.__xfireBooted) return;
             var key = 'xfire_boot_retry';
@@ -37,16 +37,16 @@
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show); else show();
         });
     </script>
-    <link rel="stylesheet" href="styles.css?v=20261014d">
-    <script src="constants.js?v=20261014d"></script>
-    <script src="audio.js?v=20261014d"></script>
-    <script src="sfx.js?v=20261014d"></script>
-    <script src="spriteGenerator.js?v=20261014d"></script>
+    <link rel="stylesheet" href="styles.css?v=20261014e">
+    <script src="constants.js?v=20261014e"></script>
+    <script src="audio.js?v=20261014e"></script>
+    <script src="sfx.js?v=20261014e"></script>
+    <script src="spriteGenerator.js?v=20261014e"></script>
     <!-- pre-rendered 3D asset pack (tools/asset-baker); optional - the game
          falls back to procedural sprites if these are missing -->
-    <script src="assets/sprites/survivors.bundle.js?v=20261014d" defer></script>
-    <script src="assets/sprites/evolved.bundle.js?v=20261014d" defer></script>
-    <script src="assets/sprites/series9.bundle.js?v=20261014d" defer></script>
+    <script src="assets/sprites/survivors.bundle.js?v=20261014e" defer></script>
+    <script src="assets/sprites/evolved.bundle.js?v=20261014e" defer></script>
+    <script src="assets/sprites/series9.bundle.js?v=20261014e" defer></script>
     <script>
         // Preload background image before initializing game
         window.addEventListener('DOMContentLoaded', () => {
@@ -302,19 +302,19 @@
         <div>ROTATE YOUR DEVICE<br>XFIRE PLAYS IN LANDSCAPE</div>
     </div>
 
-    <script defer src="terrain.js?v=20261014d"></script>
-    <script defer src="render.js?v=20261014d"></script>
-    <script defer src="game-engine.js?v=20261014d"></script>
+    <script defer src="terrain.js?v=20261014e"></script>
+    <script defer src="render.js?v=20261014e"></script>
+    <script defer src="game-engine.js?v=20261014e"></script>
     <script>
         // Menu background FX: spots in image pixels of mainmenu-bg.png
         // (1536x1024); styles.css maps them onto the cover background.
         (function () {
             var S = [
-                // left tank: muzzle (450,557), tracer to (630,532)
-                ['halo',  450, 557, 70, '--t:2.1s'],
-                ['beam',  450, 557, 0,  '--len:182;--a:-7.9deg;--w:10;--t:1.3s'],
-                ['fire',  450, 557, 20, '--t:1.5s'],
-                ['shot',  452, 556, 46, '--t:4.6s;--d:0.8s'],
+                // left tank: muzzle (450,550), tracer to (630,525)
+                ['halo',  450, 550, 70, '--t:2.1s'],
+                ['beam',  450, 550, 0,  '--len:182;--a:-7.9deg;--w:10;--t:1.3s'],
+                ['fire',  450, 550, 20, '--t:1.5s'],
+                ['shot',  452, 549, 46, '--t:4.6s;--d:0.8s'],
                 // mech cannon: muzzle (1014,441), tracer to (855,401)
                 ['halo',  1014, 441, 72, '--t:2.6s;--d:0.4s'],
                 ['beam',  1014, 441, 0,  '--len:166;--a:-165.9deg;--w:11;--t:0.9s;--d:0.2s'],
