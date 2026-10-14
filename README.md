@@ -311,6 +311,15 @@ A standalone top-down tank shooter, linked from the main menu.
 - Twin-stick touch controls with aim assist, compact phone HUD, and an
   adaptive particle budget for slow devices.
 
+## Releasing
+
+GitHub Pages lets browsers cache files for 10 minutes, so right after a
+deploy a browser can combine the new `index.html` with old scripts. Every
+local script and stylesheet in `index.html` therefore carries a `?v=`
+version: **bump `XFIRE_VERSION` and all `?v=` values together on every
+release.** If startup still fails, a boot guard reloads once and then
+shows the error on the loading screen.
+
 ## Files
 
 - `index.html` / `styles.css` — UI shell, menus, HUD, sidebar
