@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="constants.js"></script>
     <script src="audio.js"></script>
+    <script src="sfx.js"></script>
     <script src="spriteGenerator.js"></script>
     <!-- pre-rendered 3D asset pack (tools/asset-baker); optional - the game
          falls back to procedural sprites if these are missing -->
@@ -229,6 +230,10 @@
                     <label for="voiceVolume">Voices</label>
                     <input type="range" id="voiceVolume" min="0" max="100" value="55">
                 </div>
+                <label class="toggle-setting">
+                    <input type="checkbox" id="announcerToggle" checked>
+                    <span>Announcer voice</span>
+                </label>
                 <label class="toggle-setting">
                     <input type="checkbox" id="combatSoundToggle" checked>
                     <span>Combat Sounds</span>

@@ -106,6 +106,24 @@ screen made everything except movement run 2.4x faster).
   can dodge them, and a ground marker shows where a shell will land.
 - **Retaliation**: idle units fire back when shot and nearby squad mates
   join in; units on a move order keep moving (a retreat stays a retreat).
+- **Attack orders**: every selected unit attacks the clicked target from
+  its own range (artillery stays back, flamers close in). On the way they
+  shoot whatever comes into range - turrets swing freely, fixed guns take
+  shots in their direction of travel - but never stop driving toward the
+  clicked target. Once it is destroyed they hunt further enemies (units
+  first, then buildings) within 8 tiles of where it stood, then hold.
+- **Base defense**: when a building is hit, idle combat units within 16
+  tiles move in. Near defense towers they fight only from inside the
+  towers' reach (one tile short of tower range), so every raider that
+  trades shots with them also takes tower fire; targets that can't be
+  hit from there are left to the towers. Without towers they defend
+  within 9 tiles of the struck building. Afterwards they return to their
+  post. Units on a player order are never pulled away.
+- **Repair retreat**: with a Repair Bay, vehicles below 20% HP that are
+  defending (fighting without a player order) fall back to the nearest
+  bay, get patched up and return to their post (green cross on the
+  health bar). Vehicles sent on an attack by the player keep fighting.
+  Infantry can't be repaired and never retreat.
 - **Target priority**: auto-targeting prefers threats already in range
   and targets the weapon is good against.
 - Population cap of 70 (AI cap scales with difficulty).
@@ -126,16 +144,33 @@ their surroundings; ground you have scouted but no longer watch falls
 back under a dark veil, and hostile units or buildings are only shown
 (on the map and the minimap) while they are inside your line of sight.
 
-## Procedural audio
+## Sound
 
-The entire soundtrack is synthesized in code: a chiptune step-sequencer
-plays an original score whose **combat layer (drums, driving bass, lead)
-crossfades in when battle heat rises** and fades back to calm pads when
-the fighting stops. Units answer orders with wordless per-faction radio
-chatter - Survivors babble through a band-passed radio with a squelch
-click, the Evolved growl, Series 9 responds in data-link beeps - throttled
-so fast clicking never spams. The pause menu has a mixer with separate
-music / effects / voice sliders (persisted between sessions).
+All sound effects are synthesized from layered, physically motivated
+recipes and baked into a sound bank at load (`sfx.js`, ~1-2 s in the
+background via OfflineAudioContext), each in several variations so
+repeated shots never sound identical:
+
+- **Weapons**: rifle and heavy-MG reports (supersonic crack, muzzle body,
+  low thump, rolling tail, action click), cannon (sub boom, blast, breech
+  clank, long rumble), artillery with an incoming shell whistle before
+  impact, rocket launch whoosh, flamethrower roar with crackle, and arc /
+  plasma discharges for Series 9.
+- **Impacts and deaths**: metal pings, dirt and gravel hits, ricochets,
+  flesh hits, multi-stage explosions with debris rattle, building
+  collapses, human / beast cries and robot power-downs.
+- **Spatial mix**: stereo pan from screen position, distance falloff with
+  air absorption (far battles sound muffled), an outdoor reverb with rock
+  slap-back, per-sound voice limits and a master compressor.
+- **Voices**: units answer over a field radio (squelch, band-limited
+  speech-like chatter per faction: human, mutant growl, vocoded machine),
+  and a spoken announcer reports key events ("Unit ready", "Our base is
+  under attack", ...) - toggle in the pause menu.
+- **Ambience**: looping desert wind under the battle.
+
+The soundtrack is still the procedural step-sequencer from `audio.js`:
+its combat layer (drums, driving bass, lead) crossfades in when battle
+heat rises. The pause menu has a mixer for music / effects / voices.
 
 ## Atmosphere & battlefield persistence
 
@@ -253,6 +288,29 @@ On desktop, resting the mouse on a unit, building or tech bunker shows a
 German info card: what it is, what it is good for, strengths and
 weaknesses, live HP and production status.
 
+## IRONCLAD - Desert Assault (`ironclad.html`)
+
+A standalone top-down tank shooter, linked from the main menu.
+
+- **Fast**: 60 Hz fixed timestep, ~260 px/s tank with inertia, boost to
+  ram and crush light vehicles, camera leads toward the aim.
+- **13 enemy types + Warlord boss** (every 5th wave, 4 attack patterns,
+  enrages at 50%): buggies, raiders, armored cars, kamikaze bombers,
+  chargers, tanks, snipers (laser sight), dozers, mortars, APCs that
+  split, mine layers, rocket trucks, gunships (fly over rocks). Waves
+  arrive in squads; ground units path around rocks via a flow field.
+- **12 power-ups**: Rapid, Spread, Rail, homing Rockets, Laser, gun
+  Drones, Shield, Overdrive, Repair, Airstrike, Bullet Time, Nuke.
+  Timed ones stack and combine (laser + spread = triple beam).
+- **Explosions** are layered (flash, light, fireball, shockwave, sparks,
+  burning debris, smoke, embers) and burn scorch marks into the sand;
+  wrecks burn out and stay as husks. Red barrels chain-react, crates
+  always drop a power-up.
+- Combo multiplier up to x8 with callouts, hit-stop and screen shake on
+  big hits, off-screen arrows, radar, slow-motion death cam.
+- Twin-stick touch controls with aim assist, compact phone HUD, and an
+  adaptive particle budget for slow devices.
+
 ## Files
 
 - `index.html` / `styles.css` — UI shell, menus, HUD, sidebar
@@ -263,5 +321,7 @@ weaknesses, live HP and production status.
 - `render.js` — battlefield renderer, particles and effects, overlays
 - `assets/sprites/` — baked 3D sprite pack (WebP sheets + bundles)
 - `tools/asset-baker/` — 3D models and the offline renderer for the pack
+- `sfx.js` — sound design: baked SFX bank, spatial mix, radio voices, announcer
+- `audio.js` — procedural soundtrack
 - `game-engine.js` — simulation (fixed timestep), navigation, combat,
   economy, AI, input, HUD logic

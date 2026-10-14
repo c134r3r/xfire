@@ -379,7 +379,7 @@ const BUILDING_DESC = {
     barracks: 'Trains infantry: cheap riflemen, anti-infantry flamers and anti-tank rocketeers.',
     factory: 'Builds vehicles: scout bikes, tanks and artillery - the backbone of your army.',
     researchLab: 'Researches Tech Level 2 and 3, unlocking advanced units, the Repair Bay and heavy towers.',
-    repairBay: 'Automatically repairs your vehicles parked nearby (costs a little oil per tick).',
+    repairBay: 'Repairs vehicles nearby (costs a little oil). Defending vehicles below 20% HP fall back here automatically.',
     tower: 'Rapid-fire defense turret. Shreds infantry, weak against armor.',
     towerHeavy: 'Heavy anti-armor cannon tower. Outranges battle tanks - the wall against vehicle pushes.'
 };
@@ -417,9 +417,9 @@ const BUILDING_INFO_DE = {
     barracks: { role: 'Produktion · Kaserne', desc: 'Bildet Infanterie aus.', use: 'Gewehrschützen, Flammenwerfer und Raketenschützen. Mehrere Kasernen bilden parallel aus.' },
     factory: { role: 'Produktion · Fabrik', desc: 'Baut Fahrzeuge.', use: 'Aufklärer, Kampfwagen, Panzer, Artillerie und schwere Angriffspanzer.' },
     researchLab: { role: 'Forschung · Labor', desc: 'Erforscht Tech-Stufe 2 und 3.', use: 'Schaltet stärkere Einheiten, die Reparaturstation und schwere Türme frei.' },
-    repairBay: { role: 'Unterstützung · Reparaturstation', desc: 'Repariert Fahrzeuge in der Nähe.', use: 'Beschädigte Fahrzeuge hier parken – kostet ein wenig Öl pro Reparaturschritt.' },
-    tower: { role: 'Verteidigung · Wachturm', desc: 'Automatischer Schnellfeuer-Turm.', use: 'Stark gegen Infanterie-Angriffe, schwach gegen Panzerung.' },
-    towerHeavy: { role: 'Verteidigung · Kanonenturm', desc: 'Schwerer Panzerabwehrturm.', use: 'Hat mehr Reichweite als Kampfpanzer – die Mauer gegen Fahrzeug-Vorstöße.' }
+    repairBay: { role: 'Unterstützung · Reparaturstation', desc: 'Repariert Fahrzeuge in der Nähe.', use: 'Fahrzeuge unter 20 % Leben fahren bei der Verteidigung automatisch hierher (nicht bei befohlenen Angriffen). Kostet ein wenig Öl pro Reparaturschritt.' },
+    tower: { role: 'Verteidigung · Wachturm', desc: 'Automatischer Schnellfeuer-Turm.', use: 'Stark gegen Infanterie-Angriffe, schwach gegen Panzerung. Verteidiger bleiben in seiner Reichweite.' },
+    towerHeavy: { role: 'Verteidigung · Kanonenturm', desc: 'Schwerer Panzerabwehrturm.', use: 'Hat mehr Reichweite als Kampfpanzer – die Mauer gegen Fahrzeug-Vorstöße. Verteidiger bleiben in seiner Reichweite.' }
 };
 
 const ARMOR_DE = { infantry: 'Infanterie', armor: 'Fahrzeuge', building: 'Gebäude' };
