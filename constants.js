@@ -154,49 +154,49 @@ const FACTION_KEYS = Object.keys(FACTIONS);
 // ============================================
 const UNIT_TYPES = {
     trooper: {
-        name: 'Trooper', tech: 1, cost: 100, hp: 55, speed: 0.015,
-        range: 50, damage: 9, attackSpeed: 600, sight: 120, size: 9,
+        name: 'Trooper', tech: 1, cost: 100, hp: 60, speed: 0.018,
+        range: 68, damage: 9, attackSpeed: 600, sight: 140, size: 9,
         category: 'infantry', buildTime: 240
     },
     flamer: {
-        // short-ranged but brutal against infantry
-        name: 'Flamer', tech: 2, cost: 190, hp: 75, speed: 0.013,
-        range: 32, damage: 26, attackSpeed: 900, sight: 110, size: 10,
-        category: 'infantry', versus: 'infantry', splash: 0.8, buildTime: 300
+        // short-ranged but brutal against infantry (splash)
+        name: 'Flamer', tech: 2, cost: 190, hp: 80, speed: 0.016,
+        range: 44, damage: 18, attackSpeed: 700, sight: 120, size: 10,
+        category: 'infantry', splash: 0.9, buildTime: 300
     },
     rocketeer: {
         // slow projectile cadence, long reach, melts armor
-        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.013,
-        range: 85, damage: 34, attackSpeed: 1600, sight: 130, size: 10,
-        category: 'infantry', versus: 'armor', buildTime: 330
+        name: 'Rocketeer', tech: 2, cost: 230, hp: 65, speed: 0.016,
+        range: 100, damage: 30, attackSpeed: 1800, sight: 150, size: 10,
+        category: 'infantry', buildTime: 330
     },
     bike: {
         // fastest unit in the game: scouting and harassment
-        name: 'Scout Bike', tech: 1, cost: 200, hp: 95, speed: 0.045,
-        range: 45, damage: 9, attackSpeed: 450, sight: 200, size: 11,
+        name: 'Scout Bike', tech: 1, cost: 200, hp: 100, speed: 0.05,
+        range: 56, damage: 9, attackSpeed: 450, sight: 210, size: 11,
         category: 'armor', buildTime: 300
     },
     buggy: {
-        name: 'Light Vehicle', tech: 1, cost: 320, hp: 170, speed: 0.032,
-        range: 60, damage: 16, attackSpeed: 650, sight: 150, size: 13,
+        name: 'Light Vehicle', tech: 1, cost: 320, hp: 180, speed: 0.036,
+        range: 76, damage: 15, attackSpeed: 600, sight: 160, size: 13,
         category: 'armor', buildTime: 420
     },
     tank: {
-        name: 'Battle Tank', tech: 2, cost: 480, hp: 320, speed: 0.023,
-        range: 85, damage: 42, attackSpeed: 1400, sight: 140, size: 15,
+        name: 'Battle Tank', tech: 2, cost: 480, hp: 340, speed: 0.026,
+        range: 104, damage: 42, attackSpeed: 1400, sight: 160, size: 15,
         category: 'armor', turret: true, crushes: true, buildTime: 600
     },
     heavy: {
-        // outranges everything except artillery; lobs shells over rock walls
-        name: 'Heavy Assault', tech: 3, cost: 800, hp: 560, speed: 0.015,
-        range: 95, damage: 65, attackSpeed: 1700, sight: 130, size: 18,
+        // slow siege brawler; lobs shells over rock walls
+        name: 'Heavy Assault', tech: 3, cost: 800, hp: 600, speed: 0.017,
+        range: 116, damage: 65, attackSpeed: 1700, sight: 160, size: 18,
         category: 'armor', splash: 0.9, overWalls: true, turret: true, crushes: true, buildTime: 900
     },
     artillery: {
-        // siege weapon: huge range, fragile, fires over rock walls
-        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.012,
-        range: 175, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
-        category: 'armor', splash: 1.7, overWalls: true, crushes: true, buildTime: 780
+        // siege weapon: huge range (needs spotters), fragile, fires over rock walls
+        name: 'Artillery', tech: 3, cost: 640, hp: 150, speed: 0.015,
+        range: 200, damage: 80, attackSpeed: 5000, sight: 190, size: 14,
+        category: 'armor', splash: 1.6, overWalls: true, crushes: true, buildTime: 780
     }
 };
 
@@ -208,7 +208,7 @@ const UNIT_TYPES = {
 // ============================================
 const BUILDING_TYPES = {
     hq: {
-        name: 'HQ', tech: 1, cost: 0, hp: 1600, size: 3, sight: 150,
+        name: 'HQ', tech: 1, cost: 0, hp: 2200, size: 3, sight: 150,
         produces: []
     },
     powerStation: {
@@ -240,12 +240,12 @@ const BUILDING_TYPES = {
     tower: {
         // rapid anti-infantry fire, decent reach
         name: 'Tower', tech: 1, cost: 400, hp: 420, size: 1, sight: 200,
-        produces: [], range: 130, damage: 18, attackSpeed: 650
+        produces: [], range: 140, damage: 16, attackSpeed: 550
     },
     towerHeavy: {
         // anti-armor cannon, outranges battle tanks
         name: 'Heavy Tower', tech: 2, cost: 680, hp: 520, size: 1, sight: 230,
-        produces: [], range: 160, damage: 48, attackSpeed: 1400, versus: 'armor', splash: 1.0
+        produces: [], range: 168, damage: 48, attackSpeed: 1400, splash: 0.8
     }
 };
 
@@ -269,6 +269,16 @@ const TECH_UPGRADES = {
     3: { cost: 1400, time: 1400, label: 'Tech Level 3', unlocks: 'Heavy Assault, Artillery' }
 };
 const MAX_TECH_LEVEL = 3;
+
+// Population cap (units per side). Keeps battles readable and the
+// frame rate stable; the AI's cap scales with difficulty.
+const UNIT_CAP = 70;
+const AI_UNIT_CAP = { easy: 30, normal: 45, hard: 65 };
+
+function unitCapFor(playerId) {
+    if (playerId === 1 && typeof gameSettings !== 'undefined') return AI_UNIT_CAP[gameSettings.difficulty] || 45;
+    return UNIT_CAP;
+}
 
 // Veterancy (KKnD2-style experience): kills needed per rank,
 // each rank adds a damage bonus.
@@ -314,12 +324,50 @@ const BUNKER_REWARDS = [
 // mg = ballistic tracer, flame = fire stream, rocket = missile,
 // cannon = shell, arty = arcing siege shell.
 const WEAPON_CLASS = {
-    trooper: 'mg', bike: 'mg', buggy: 'mg', tower: 'mg',
+    trooper: 'mg', tower: 'mg',
+    bike: 'hmg', buggy: 'hmg',
     flamer: 'flame',
     rocketeer: 'rocket',
     tank: 'cannon', heavy: 'cannon', towerHeavy: 'cannon',
     artillery: 'arty'
 };
+
+// Damage multiplier per weapon class against each armor class
+// (infantry / armor = vehicles / building). This is the rock-paper-
+// scissors of the game: rifles shred infantry but plink off armor,
+// rockets and cannons crack vehicles, artillery levels bases.
+const WEAPON_VS = {
+    mg:     { infantry: 1.0, armor: 0.4,  building: 0.3 },
+    hmg:    { infantry: 1.0, armor: 0.7,  building: 0.45 },
+    flame:  { infantry: 1.5, armor: 0.45, building: 0.8 },
+    rocket: { infantry: 0.5, armor: 1.5,  building: 1.0 },
+    cannon: { infantry: 0.6, armor: 1.2,  building: 0.85 },
+    arty:   { infantry: 1.0, armor: 0.9,  building: 1.4 }
+};
+
+// Ballistics per weapon class: projectile speed (tiles/s) and base
+// chance to hit a unit (buildings are always hit; artillery has no
+// hit roll - its shells land where the target WAS, so moving units
+// can dodge them).
+const WEAPON_BALLISTICS = {
+    mg:     { speed: 24, accuracy: 0.85, vsInfantry: 0.85 },
+    hmg:    { speed: 24, accuracy: 0.85, vsInfantry: 0.85 },
+    flame:  { speed: 10, accuracy: 1.0,  vsInfantry: 1.0 },
+    rocket: { speed: 10, accuracy: 0.92, vsInfantry: 0.65 },
+    cannon: { speed: 17, accuracy: 0.92, vsInfantry: 0.7 },
+    arty:   { speed: 0,  accuracy: 1.0,  vsInfantry: 1.0 }
+};
+
+function armorClass(entity) {
+    const ut = UNIT_TYPES[entity.type];
+    if (ut) return ut.category === 'infantry' ? 'infantry' : 'armor';
+    return 'building';
+}
+
+function weaponMultiplier(weapon, entity) {
+    const row = WEAPON_VS[weapon] || WEAPON_VS.mg;
+    return row[armorClass(entity)] ?? 1;
+}
 
 // ============================================
 // TOOLTIP DESCRIPTIONS (what is it for?)
@@ -332,17 +380,46 @@ const BUILDING_DESC = {
     factory: 'Builds vehicles: scout bikes, tanks and artillery - the backbone of your army.',
     researchLab: 'Researches Tech Level 2 and 3, unlocking advanced units, the Repair Bay and heavy towers.',
     repairBay: 'Automatically repairs your vehicles parked nearby (costs a little oil per tick).',
-    tower: 'Automatic defense turret with rapid fire. Great against infantry rushes.',
+    tower: 'Rapid-fire defense turret. Shreds infantry, weak against armor.',
     towerHeavy: 'Heavy anti-armor cannon tower. Outranges battle tanks - the wall against vehicle pushes.'
 };
 
 const UNIT_DESC = {
-    trooper: 'Cheap all-round infantry. Numbers win early fights.',
+    trooper: 'Cheap rifle infantry. Shreds infantry, nearly useless against vehicles and buildings.',
     flamer: 'Very short range, burns groups of infantry with splash. Weak against vehicles.',
     rocketeer: 'Anti-tank infantry with long reach but slow rockets. Escort them.',
     bike: 'Fastest unit in the game: scouting, grabbing tech bunkers, harassment.',
-    buggy: 'Light fighting vehicle. Good early escort and raider.',
-    tank: 'Main battle tank - solid armor and punch, the core of any army.',
+    buggy: 'Fast heavy-MG vehicle. Good raider and escort, decent against everything light.',
+    tank: 'Main battle tank - strong vs vehicles and buildings, runs infantry over.',
     heavy: 'Slow assault monster with splash damage that fires OVER rock walls. Breaks bases.',
-    artillery: 'Extreme-range siege gun with big splash that fires OVER rock walls. Fragile - protect it.'
+    artillery: 'Extreme-range siege gun that fires OVER rock walls. Needs other units to spot targets. Moving units can dodge its shells.'
 };
+
+// ============================================
+// GERMAN MOUSE-OVER TEXTS (desktop hover info on the battlefield)
+// role: generic class, desc: what it is, use: what it brings you
+// ============================================
+const UNIT_INFO_DE = {
+    trooper: { role: 'Infanterie · Maschinengewehr', desc: 'Günstiger Gewehrschütze, schnell ausgebildet.', use: 'Zerlegt feindliche Infanterie. Gegen Fahrzeuge und Gebäude fast wirkungslos – in Masse die Antwort auf frühe Angriffe.' },
+    flamer: { role: 'Infanterie · Flammenwerfer', desc: 'Nahkämpfer mit Flammenstrahl und Flächenschaden.', use: 'Verbrennt dicht stehende Infanterie-Gruppen. Sehr kurze Reichweite, schwach gegen Panzerung.' },
+    rocketeer: { role: 'Infanterie · Panzerabwehr', desc: 'Raketenschütze mit großer Reichweite und langsamer Nachladezeit.', use: 'Knackt Fahrzeuge und Panzer. Trifft Infanterie schlecht – braucht Begleitschutz.' },
+    bike: { role: 'Fahrzeug · Aufklärer', desc: 'Schnellste Einheit im Spiel.', use: 'Aufklären, Tech-Bunker einsammeln, Ölpumpen überfallen. Hält im offenen Kampf wenig aus.' },
+    buggy: { role: 'Fahrzeug · Leichter Kampfwagen', desc: 'Schnelles Fahrzeug mit schwerem MG.', use: 'Vielseitiger Raider und Begleitschutz – solide gegen alles Leichte, unterlegen gegen Panzer.' },
+    tank: { role: 'Fahrzeug · Kampfpanzer', desc: 'Gepanzertes Rückgrat jeder Armee mit drehbarem Turm.', use: 'Stark gegen Fahrzeuge und Gebäude und überrollt feindliche Infanterie. Anfällig für Raketenschützen.' },
+    heavy: { role: 'Fahrzeug · Schwerer Angriffspanzer', desc: 'Langsamer Koloss mit Flächenschaden.', use: 'Bricht Verteidigungslinien und schießt ÜBER Felswände hinweg. Teuer – schütze ihn vor Raketen.' },
+    artillery: { role: 'Fahrzeug · Artillerie', desc: 'Belagerungsgeschütz mit riesiger Reichweite, feuert über Felswände.', use: 'Zerstört Basen aus sicherer Entfernung. Braucht Späher, sieht selbst nicht so weit wie sie schießt. Bewegliche Ziele können ausweichen; im Nahkampf hilflos.' }
+};
+
+const BUILDING_INFO_DE = {
+    hq: { role: 'Hauptquartier', desc: 'Deine Kommandozentrale.', use: 'Verlierst du alle Gebäude und Einheiten, ist die Schlacht verloren. Gut verteidigen!' },
+    powerStation: { role: 'Wirtschaft · Kraftwerk', desc: 'Raffiniert Rohöl.', use: 'Jedes Kraftwerk steigert die Förderung ALLER Ölpumpen um 25 % (max. 2 zählen). Voraussetzung für fast alles.' },
+    derrick: { role: 'Wirtschaft · Ölpumpe', desc: 'Steht auf einem dunklen Ölfleck und fördert automatisch.', use: 'Deine Einnahmequelle. Wenn das Feld versiegt, auf ein neues Ölfeld ausweichen.' },
+    barracks: { role: 'Produktion · Kaserne', desc: 'Bildet Infanterie aus.', use: 'Gewehrschützen, Flammenwerfer und Raketenschützen. Mehrere Kasernen bilden parallel aus.' },
+    factory: { role: 'Produktion · Fabrik', desc: 'Baut Fahrzeuge.', use: 'Aufklärer, Kampfwagen, Panzer, Artillerie und schwere Angriffspanzer.' },
+    researchLab: { role: 'Forschung · Labor', desc: 'Erforscht Tech-Stufe 2 und 3.', use: 'Schaltet stärkere Einheiten, die Reparaturstation und schwere Türme frei.' },
+    repairBay: { role: 'Unterstützung · Reparaturstation', desc: 'Repariert Fahrzeuge in der Nähe.', use: 'Beschädigte Fahrzeuge hier parken – kostet ein wenig Öl pro Reparaturschritt.' },
+    tower: { role: 'Verteidigung · Wachturm', desc: 'Automatischer Schnellfeuer-Turm.', use: 'Stark gegen Infanterie-Angriffe, schwach gegen Panzerung.' },
+    towerHeavy: { role: 'Verteidigung · Kanonenturm', desc: 'Schwerer Panzerabwehrturm.', use: 'Hat mehr Reichweite als Kampfpanzer – die Mauer gegen Fahrzeug-Vorstöße.' }
+};
+
+const ARMOR_DE = { infantry: 'Infanterie', armor: 'Fahrzeuge', building: 'Gebäude' };

@@ -1,0 +1,582 @@
+{
+ "version": 1,
+ "out": 2,
+ "sprites": {
+  "unit|trooper|survivors": {
+   "file": "survivors/unit-trooper",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|flamer|survivors": {
+   "file": "survivors/unit-flamer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|rocketeer|survivors": {
+   "file": "survivors/unit-rocketeer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|bike|survivors": {
+   "file": "survivors/unit-bike",
+   "w": 76,
+   "h": 66,
+   "ax": 38,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|buggy|survivors": {
+   "file": "survivors/unit-buggy",
+   "w": 86,
+   "h": 74,
+   "ax": 43,
+   "ay": 48,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|tank|survivors": {
+   "file": "survivors/unit-tank",
+   "w": 100,
+   "h": 84,
+   "ax": 50,
+   "ay": 54,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|heavy|survivors": {
+   "file": "survivors/unit-heavy",
+   "w": 124,
+   "h": 104,
+   "ax": 62,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|artillery|survivors": {
+   "file": "survivors/unit-artillery",
+   "w": 116,
+   "h": 104,
+   "ax": 58,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|tank|survivors": {
+   "file": "survivors/turret-tank",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|heavy|survivors": {
+   "file": "survivors/turret-heavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|tower|survivors": {
+   "file": "survivors/turret-tower",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|towerHeavy|survivors": {
+   "file": "survivors/turret-towerHeavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "building|hq|survivors": {
+   "file": "survivors/building-hq",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|powerStation|survivors": {
+   "file": "survivors/building-powerStation",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|derrick|survivors": {
+   "file": "survivors/building-derrick",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|barracks|survivors": {
+   "file": "survivors/building-barracks",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|factory|survivors": {
+   "file": "survivors/building-factory",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|researchLab|survivors": {
+   "file": "survivors/building-researchLab",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|repairBay|survivors": {
+   "file": "survivors/building-repairBay",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|tower|survivors": {
+   "file": "survivors/building-tower",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|towerHeavy|survivors": {
+   "file": "survivors/building-towerHeavy",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "unit|trooper|evolved": {
+   "file": "evolved/unit-trooper",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|flamer|evolved": {
+   "file": "evolved/unit-flamer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|rocketeer|evolved": {
+   "file": "evolved/unit-rocketeer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|bike|evolved": {
+   "file": "evolved/unit-bike",
+   "w": 76,
+   "h": 66,
+   "ax": 38,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 4
+  },
+  "unit|buggy|evolved": {
+   "file": "evolved/unit-buggy",
+   "w": 86,
+   "h": 74,
+   "ax": 43,
+   "ay": 48,
+   "dirs": 16,
+   "frames": 4
+  },
+  "unit|tank|evolved": {
+   "file": "evolved/unit-tank",
+   "w": 100,
+   "h": 84,
+   "ax": 50,
+   "ay": 54,
+   "dirs": 16,
+   "frames": 4
+  },
+  "unit|heavy|evolved": {
+   "file": "evolved/unit-heavy",
+   "w": 124,
+   "h": 104,
+   "ax": 62,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 4
+  },
+  "unit|artillery|evolved": {
+   "file": "evolved/unit-artillery",
+   "w": 116,
+   "h": 104,
+   "ax": 58,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 4
+  },
+  "turret|tank|evolved": {
+   "file": "evolved/turret-tank",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|heavy|evolved": {
+   "file": "evolved/turret-heavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|tower|evolved": {
+   "file": "evolved/turret-tower",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|towerHeavy|evolved": {
+   "file": "evolved/turret-towerHeavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "building|hq|evolved": {
+   "file": "evolved/building-hq",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|powerStation|evolved": {
+   "file": "evolved/building-powerStation",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|derrick|evolved": {
+   "file": "evolved/building-derrick",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|barracks|evolved": {
+   "file": "evolved/building-barracks",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|factory|evolved": {
+   "file": "evolved/building-factory",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|researchLab|evolved": {
+   "file": "evolved/building-researchLab",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|repairBay|evolved": {
+   "file": "evolved/building-repairBay",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|tower|evolved": {
+   "file": "evolved/building-tower",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|towerHeavy|evolved": {
+   "file": "evolved/building-towerHeavy",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "unit|trooper|series9": {
+   "file": "series9/unit-trooper",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|flamer|series9": {
+   "file": "series9/unit-flamer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|rocketeer|series9": {
+   "file": "series9/unit-rocketeer",
+   "w": 60,
+   "h": 60,
+   "ax": 30,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 5
+  },
+  "unit|bike|series9": {
+   "file": "series9/unit-bike",
+   "w": 76,
+   "h": 66,
+   "ax": 38,
+   "ay": 44,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|buggy|series9": {
+   "file": "series9/unit-buggy",
+   "w": 86,
+   "h": 74,
+   "ax": 43,
+   "ay": 48,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|tank|series9": {
+   "file": "series9/unit-tank",
+   "w": 100,
+   "h": 84,
+   "ax": 50,
+   "ay": 54,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|heavy|series9": {
+   "file": "series9/unit-heavy",
+   "w": 124,
+   "h": 104,
+   "ax": 62,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 1
+  },
+  "unit|artillery|series9": {
+   "file": "series9/unit-artillery",
+   "w": 116,
+   "h": 104,
+   "ax": 58,
+   "ay": 64,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|tank|series9": {
+   "file": "series9/turret-tank",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|heavy|series9": {
+   "file": "series9/turret-heavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|tower|series9": {
+   "file": "series9/turret-tower",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "turret|towerHeavy|series9": {
+   "file": "series9/turret-towerHeavy",
+   "w": 96,
+   "h": 84,
+   "ax": 48,
+   "ay": 52,
+   "dirs": 16,
+   "frames": 1
+  },
+  "building|hq|series9": {
+   "file": "series9/building-hq",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|powerStation|series9": {
+   "file": "series9/building-powerStation",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|derrick|series9": {
+   "file": "series9/building-derrick",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|barracks|series9": {
+   "file": "series9/building-barracks",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|factory|series9": {
+   "file": "series9/building-factory",
+   "w": 232,
+   "h": 192,
+   "ax": 116,
+   "ay": 132,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|researchLab|series9": {
+   "file": "series9/building-researchLab",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|repairBay|series9": {
+   "file": "series9/building-repairBay",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|tower|series9": {
+   "file": "series9/building-tower",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|towerHeavy|series9": {
+   "file": "series9/building-towerHeavy",
+   "w": 104,
+   "h": 128,
+   "ax": 52,
+   "ay": 100,
+   "dirs": 1,
+   "frames": 2
+  },
+  "building|bunker|survivors": {
+   "file": "survivors/building-bunker",
+   "w": 168,
+   "h": 160,
+   "ax": 84,
+   "ay": 116,
+   "dirs": 1,
+   "frames": 2
+  }
+ }
+}

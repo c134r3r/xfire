@@ -72,18 +72,43 @@ rocketeers, battle tanks, heavy assaults, artillery, the Repair Bay and
 heavy towers. Units gain **veterancy** (chevrons) from kills: +15% damage
 per rank.
 
-## Animation & movement
+## Movement & pathfinding
 
-Tanks, heavy assaults and both defense towers have **rotating turrets**
-that track their targets independently of the hull (they only fire once
-aligned); infantry animates a two-frame walk cycle; and units die with a
-short animation - vehicles flash and sink under the fireball before
-leaving a wreck, infantry topples over. Units have **soft collision**:
-they push each other apart instead of stacking, can't drive through
-buildings, and group move orders spread into a **formation grid** so an
-army arrives as a line, not a blob. Pathfinding routes around buildings,
-walls and ridges, and a stuck watchdog re-plans automatically whenever a
-unit stops making progress toward its ordered destination.
+Units plan routes with A* over the tile grid (binary heap, no corner
+cutting) and then **string-pull** the result, so they drive straight
+lines instead of tile zig-zags. If a destination is blocked (water, a
+cliff, a building) they head for the closest reachable point instead of
+refusing the order. Units **slide along walls** instead of freezing on
+contact, vehicles swing their hull round before accelerating, busy units
+shove idle ones aside, and a progress watchdog re-plans or calls a
+crowded formation slot "arrived". Group orders spread into a formation
+that faces the direction of travel, with slots assigned so units don't
+cross each other's paths. **Shift + right-click** queues waypoints.
+
+The simulation runs on a **fixed 60 Hz timestep**, so fire rates, build
+times and movement stay in sync on any monitor (previously a 144 Hz
+screen made everything except movement run 2.4x faster).
+
+## Combat model
+
+- **Ranges are measured to the target's hull/footprint**, so short-range
+  units (flamers!) can actually hit big buildings.
+- Units **chase with pathfinding**: a target behind a wall or around a
+  building is approached properly instead of grinding into the obstacle.
+- **Rock-paper-scissors damage table** (weapon vs. infantry / vehicles /
+  buildings): rifles shred infantry but plink off armor, rockets and
+  cannons crack vehicles, artillery levels bases. Damage numbers show it:
+  yellow = effective, grey = shrugged off. Tooltips and the selection
+  panel list each unit's strong/weak matchups.
+- **Ballistics**: rounds that hit track their target; misses land beside
+  it and kick up dirt. Small, fast infantry are hard to hit with rockets
+  and shells. Artillery shells land where the target *was* - moving units
+  can dodge them, and a ground marker shows where a shell will land.
+- **Retaliation**: idle units fire back when shot and nearby squad mates
+  join in; units on a move order keep moving (a retreat stays a retreat).
+- **Target priority**: auto-targeting prefers threats already in range
+  and targets the weapon is good against.
+- Population cap of 70 (AI cap scales with difficulty).
 
 ## Rock walls & line of sight
 
@@ -149,29 +174,94 @@ never attacks in the opening minutes.
 
 ## Controls
 
-| Input                  | Action                                     |
-| ---------------------- | ------------------------------------------ |
-| Left click / drag      | Select / box-select                        |
-| Double-click           | Select all units of the same type          |
-| Right click            | Move / attack / set rally point            |
-| **A** + left click     | Attack-move                                |
-| **S** or **X**         | Stop                                       |
-| **H**                  | Select & center HQ                         |
-| **Space**              | Jump to the last attack on your base       |
-| **1-9**                | Recall control group (double-tap: center)  |
-| **Ctrl/Cmd + 1-9**     | Assign control group                       |
-| Arrows / screen edge   | Scroll the map                             |
-| Mouse wheel / trackpad | Scroll; Ctrl+wheel or +/- to zoom          |
-| Middle-drag            | Pan the camera                             |
-| **P**                  | Pause                                      |
-| **Esc**                | Cancel placement / clear selection         |
-| **F1**                 | Controls overlay                           |
-| Right-click unit button | Cancel last queued unit (refund)          |
+| Input                      | Action                                         |
+| -------------------------- | ---------------------------------------------- |
+| Left click / drag          | Select / box-select (Shift adds)               |
+| Double-click               | Select all units of that type on screen        |
+| Right click                | Move / attack the target under the cursor / set rally point |
+| **Shift** + right click    | Queue a waypoint                               |
+| **A** + left click         | Attack-move                                    |
+| **S** or **X**             | Stop                                           |
+| **Q** / **F2** / Ctrl+A    | Select idle army / whole army                  |
+| **Ctrl+1-9** / **1-9**     | Assign / recall group (double-tap: center); Shift+1-9 adds |
+| **H** / **Space**          | Go to HQ / to the last attack                  |
+| Mouse wheel / pinch, +/-   | Zoom toward the cursor                         |
+| Arrows / screen edge / middle-drag | Scroll                              |
+| Minimap left / right click | Jump camera / send the selected units there    |
+| **Tab**, **W E R T D F G C V** | Sidebar tabs / sidebar button hotkeys      |
+| Right-click a unit button  | Cancel one queued unit (refund)                |
+| **Shift** while placing    | Place several structures                       |
+| **Alt** (hold)             | Show all health bars                           |
+| **P** / **Esc**            | Pause / cancel                                 |
+| **F1**                     | Controls overlay                               |
+
+The cursor always tells you what a click will do (move, attack, can't
+go there, rally point), and the footer spells out the current mouse
+actions.
+
+## Graphics
+
+Everything is still procedural (no image assets besides the menu art),
+but rebuilt from scratch:
+
+- **Terrain**: a noise-painted wasteland texture (sand, dirt, rust,
+  wet shores, rubble around cliffs) with organic water bodies, foam and
+  depth, scattered boulders / scrub / bones / scrap / tire tracks, glossy
+  oil pools, and rock ridges as depth-sorted 3D outcrops (units behind a
+  cliff are hidden by it). Tiles are now drawn exactly where the game
+  logic places them (the old renderer was offset by half a tile).
+- **Units & buildings**: modelled from lit 3D primitives (sloped armor,
+  real wheels and tracks with road wheels, turrets with mantlets and
+  muzzle brakes, walk cycles for infantry and beasts), with **team colors**
+  painted on every unit and structure so friend and foe read instantly.
+  Rendered supersampled and stored at 2x for crisp zoom and HiDPI.
+- **Effects**: additive glow sprites instead of slow canvas shadows -
+  fireballs, smoke columns, sparks, debris, shockwaves, ground light,
+  muzzle flashes, recoil, hit flashes, craters, tracer streaks.
+- **HUD**: top bar with oil + income/s, population, tech and time; an
+  always-available tabbed build sidebar (units are routed to the least
+  busy producer automatically, with progress wipes and queue badges);
+  a selection panel with portraits and counter info; an isometric
+  minimap that matches the camera orientation.
+
+## 3D asset pack
+
+`assets/sprites/` holds a pre-rendered sprite pack: every unit (16
+directions, walk/stride frames), every turret and every building of all
+three factions, rendered from real 3D models (three.js, soft shadow-mapped
+sun, sky light, PBR materials, edge highlights). Each sheet comes with a
+team mask, so one render is tinted for any player color at load time.
+The game loads the pack during the loading screen and falls back to the
+procedural sprites for anything missing; *Skirmish Setup → Graphics*
+switches between the two.
+
+Rebuild the pack after changing a model:
+
+```
+cd tools/asset-baker && npm install        # three.js
+node tools/asset-baker/bake.mjs            # all sheets (~5 min); --only tank, --faction evolved
+python3 tools/asset-baker/pack.py          # WebP sheets + per-faction bundles
+```
+
+Models live in `tools/asset-baker/lib/models.js` (same coordinates as the
+procedural builders, so mounts and anchors line up), the modelling kit in
+`lib/kit.js`, the iso renderer in `lib/iso.js`.
+
+## Hover info
+
+On desktop, resting the mouse on a unit, building or tech bunker shows a
+German info card: what it is, what it is good for, strengths and
+weaknesses, live HP and production status.
 
 ## Files
 
-- `index.html` / `styles.css` — UI shell, menus, sidebar
-- `constants.js` — factions, unit/building stats, tech tree
+- `index.html` / `styles.css` — UI shell, menus, HUD, sidebar
+- `constants.js` — factions, unit/building stats, weapon tables, tech tree
 - `spriteGenerator.js` — procedural isometric sprite factory (16-direction
-  units, animated buildings, sidebar icons)
-- `game-engine.js` — game loop, rendering, economy, AI, input
+  units with team colors, animated buildings, sidebar icons)
+- `terrain.js` — terrain painter, water, props, rock-wall sprites
+- `render.js` — battlefield renderer, particles and effects, overlays
+- `assets/sprites/` — baked 3D sprite pack (WebP sheets + bundles)
+- `tools/asset-baker/` — 3D models and the offline renderer for the pack
+- `game-engine.js` — simulation (fixed timestep), navigation, combat,
+  economy, AI, input, HUD logic
