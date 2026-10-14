@@ -314,8 +314,11 @@ A standalone top-down tank shooter, linked from the main menu.
 ## IRONCLAD - Underworks (`underworks.html`)
 
 A dark SNES-style run-and-gun platformer set in the same world, linked
-from the Ironclad menu. Level 1 "The Pit" has five sections, each with
-its own mechanic:
+from the Ironclad menu. Three levels, each harder than the last (tougher
+troops, faster fire, faster shots); finishing a level unlocks the next
+in the menu, and NEXT LEVEL carries the score on.
+
+**Level 1 - The Pit**
 
 1. **Crash Site** - surface run at dusk. A 5 s intro shows the pilot
    climbing out of the burning Ironclad tank (chiptune jingle, skippable).
@@ -328,16 +331,45 @@ its own mechanic:
 5. **The Warden** - two-phase boss (the mech from the XFire menu art);
    in phase 2 the floor melts and it hovers over moving platforms.
 
+**Level 2 - Cryo Vault** (ice)
+
+1. **Frozen Docks** - slippery ice sheets, freezing brine, icicles that
+   drop when you pass under, cryo vents and snipers (they paint you with
+   a laser sight, lock on, then fire one fast round).
+2. **Freight Lift** - ride a lift up a shaft; it halts three times and
+   only moves on once the boarding wave is dead.
+3. **The Vault** - presses on ice, a stomp hatch into a low vault and
+   two lockdowns (the second has three waves).
+4. **Cryo Sentinel** - fires shard fans, raises ice spikes under you and
+   rams across the room at shoulder height (duck or dash). Phase 2
+   freezes the floor and brings down icicle hail.
+
+**Level 3 - Reactor** (toxic)
+
+1. **Acid Works** - acid pools crossed on moving platforms, timed
+   zapper gates, toxic vents, leaping mutants and grenadiers.
+2. **Sludge Canal** - faster hoverbike chase with zapper gates to time.
+3. **Reactor Ring** - the hardest run: zapper rows on a reverse
+   conveyor, a long acid cascade, sniper towers, two lockdowns.
+4. **The Overseer** - homing plasma orbs (shoot them), claw slams with
+   shockwaves, and a live floor that forces you onto the platforms.
+   Phase 2 adds a beam sweep and summons mutants.
+
 - **Shoot, then smash**: enemies reel (★) at low health; a SMASH
   finisher sends them flying (Battletoads-style oversized fist, hit-stop)
-  and drops armor. Shield troopers only break to a smash; the boss
-  staggers after enough damage.
+  and drops armor. Shield troopers only break to a smash; bosses
+  stagger after enough damage.
 - Movement: variable jump with coyote time and buffering, wall cling and
   wall jump, dash with i-frames, stomp, drop through platforms.
-- Fair difficulty: checkpoints per section, pits and lava cost armor and
-  put you back on safe ground.
+- Fair difficulty: checkpoints per section, pits and liquids cost armor
+  and put you back on safe ground.
 - 480x270 pixel rendering with a darkness layer lit by muzzle flashes,
-  lava, lamps and explosions; synthesized chiptune music and effects.
+  lava, lamps and explosions; glowing enemy eyes, white hit flashes,
+  per-area weather (snow, embers, spores), foreground parallax, color
+  grading and soft scanlines.
+- Synthesized sound: chiptune with pulse-width leads, vibrato and echo;
+  a reverb sized per area; looping ambience (wind, hum, rumble);
+  footsteps by surface.
 - Touch: floating stick plus slide-able JUMP / FIRE / SMASH / DASH.
 
 ## Releasing
