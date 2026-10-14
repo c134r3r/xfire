@@ -8,8 +8,13 @@ const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 let canvas, ctx, minimapCanvas, minimapCtx;
 
 // Sound system: see sfx.js (SoundManager, VoiceManager)
-// Initialize sound system
-SoundManager.init();
+// Initialize sound system - audio trouble must never block the game
+try {
+    SoundManager.init();
+} catch (e) {
+    console.error('[SoundManager] init failed, continuing without sound:', e);
+    SoundManager.enabled = false;
+}
 // Cap the backing-store resolution on touch devices: phone DPRs of 3-4
 // quadruple the pixel load for no visible gain at RTS zoom levels.
 const dpr = window.matchMedia('(pointer: coarse)').matches

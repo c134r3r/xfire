@@ -564,8 +564,11 @@ const SOUND_ALIASES = {
 };
 
 // Outdoor impulse response: a few slap-back echoes off rock and
-// structures, then a short, dark diffuse tail
+// structures, then a short, dark diffuse tail. Built at the context's own
+// sample rate: a ConvolverNode rejects buffers of any other rate (Firefox
+// enforces this; many systems run at 48 kHz).
 function makeIR(ctx) {
+    const SR = ctx.sampleRate;
     const len = Math.floor(SR * 1.8);
     const ir = ctx.createBuffer(2, len, SR);
     const rnd = makeRng(99);
@@ -622,8 +625,15 @@ const SoundManager = {
         this.sfxGain = ctx.createGain();
         this.sfxGain.gain.value = 1;
         this.sfxGain.connect(this.master);
-        this.reverb = ctx.createConvolver();
-        this.reverb.buffer = makeIR(ctx);
+        try {
+            this.reverb = ctx.createConvolver();
+            this.reverb.buffer = makeIR(ctx);
+        } catch (e) {
+            // no reverb is better than no game
+            console.warn('[SoundManager] reverb unavailable:', e.message);
+            this.reverb = ctx.createGain();
+            this.reverb.gain.value = 0;
+        }
         this.reverbGain = ctx.createGain();
         this.reverbGain.gain.value = 0.9;
         this.reverb.connect(this.reverbGain);
