@@ -126,16 +126,33 @@ their surroundings; ground you have scouted but no longer watch falls
 back under a dark veil, and hostile units or buildings are only shown
 (on the map and the minimap) while they are inside your line of sight.
 
-## Procedural audio
+## Sound
 
-The entire soundtrack is synthesized in code: a chiptune step-sequencer
-plays an original score whose **combat layer (drums, driving bass, lead)
-crossfades in when battle heat rises** and fades back to calm pads when
-the fighting stops. Units answer orders with wordless per-faction radio
-chatter - Survivors babble through a band-passed radio with a squelch
-click, the Evolved growl, Series 9 responds in data-link beeps - throttled
-so fast clicking never spams. The pause menu has a mixer with separate
-music / effects / voice sliders (persisted between sessions).
+All sound effects are synthesized from layered, physically motivated
+recipes and baked into a sound bank at load (`sfx.js`, ~1-2 s in the
+background via OfflineAudioContext), each in several variations so
+repeated shots never sound identical:
+
+- **Weapons**: rifle and heavy-MG reports (supersonic crack, muzzle body,
+  low thump, rolling tail, action click), cannon (sub boom, blast, breech
+  clank, long rumble), artillery with an incoming shell whistle before
+  impact, rocket launch whoosh, flamethrower roar with crackle, and arc /
+  plasma discharges for Series 9.
+- **Impacts and deaths**: metal pings, dirt and gravel hits, ricochets,
+  flesh hits, multi-stage explosions with debris rattle, building
+  collapses, human / beast cries and robot power-downs.
+- **Spatial mix**: stereo pan from screen position, distance falloff with
+  air absorption (far battles sound muffled), an outdoor reverb with rock
+  slap-back, per-sound voice limits and a master compressor.
+- **Voices**: units answer over a field radio (squelch, band-limited
+  speech-like chatter per faction: human, mutant growl, vocoded machine),
+  and a spoken announcer reports key events ("Unit ready", "Our base is
+  under attack", ...) - toggle in the pause menu.
+- **Ambience**: looping desert wind under the battle.
+
+The soundtrack is still the procedural step-sequencer from `audio.js`:
+its combat layer (drums, driving bass, lead) crossfades in when battle
+heat rises. The pause menu has a mixer for music / effects / voices.
 
 ## Atmosphere & battlefield persistence
 
@@ -263,5 +280,7 @@ weaknesses, live HP and production status.
 - `render.js` — battlefield renderer, particles and effects, overlays
 - `assets/sprites/` — baked 3D sprite pack (WebP sheets + bundles)
 - `tools/asset-baker/` — 3D models and the offline renderer for the pack
+- `sfx.js` — sound design: baked SFX bank, spatial mix, radio voices, announcer
+- `audio.js` — procedural soundtrack
 - `game-engine.js` — simulation (fixed timestep), navigation, combat,
   economy, AI, input, HUD logic

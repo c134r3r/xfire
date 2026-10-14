@@ -7,330 +7,7 @@ const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
 let canvas, ctx, minimapCanvas, minimapCtx;
 
-// ============================================
-// SOUND SYSTEM - Web Audio API
-// ============================================
-const SoundManager = {
-    ctx: null,
-    enabled: true,
-    combatEnabled: true,  // Toggle for combat sounds (shooting, explosions)
-    volume: 0.3,
-
-    init() {
-        try {
-            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-            // SFX bus (music and voices have their own buses in audio.js)
-            this.sfxGain = this.ctx.createGain();
-            this.sfxGain.gain.value = 1;
-            this.sfxGain.connect(this.ctx.destination);
-            if (typeof MusicEngine !== 'undefined') MusicEngine.init(this.ctx);
-            if (typeof VoiceManager !== 'undefined') VoiceManager.init(this.ctx);
-            console.log('[SoundManager] Initialized');
-        } catch (e) {
-            console.warn('[SoundManager] Web Audio not supported');
-            this.enabled = false;
-        }
-    },
-
-    setSfxVolume(v) {
-        if (this.sfxGain) {
-            this.sfxGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
-        }
-    },
-
-    resume() {
-        if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume();
-        }
-    },
-
-    // Play a synthetic sound effect
-    play(type, options = {}) {
-        if (!this.enabled || !this.ctx) return;
-        this.resume();
-
-        const vol = (options.volume || 1) * this.volume;
-
-        // Combat sounds check
-        const isCombatSound = type.startsWith('shoot_') || type.startsWith('explosion_');
-        if (isCombatSound && !this.combatEnabled) return;
-
-        switch (type) {
-            case 'shoot_light':
-                this._playShoot(800, 0.08, vol * 0.4);
-                break;
-            case 'shoot_heavy':
-                this._playShoot(200, 0.15, vol * 0.6);
-                break;
-            case 'shoot_artillery':
-                this._playShoot(100, 0.25, vol * 0.8);
-                break;
-            case 'explosion_small':
-                this._playExplosion(0.15, vol * 0.5);
-                break;
-            case 'explosion_large':
-                this._playExplosion(0.3, vol * 0.7);
-                break;
-            case 'ui_click':
-                this._playClick(vol * 0.3);
-                break;
-            case 'ui_build':
-                this._playBuild(vol * 0.4);
-                break;
-            case 'unit_select':
-                this._playSelect(vol * 0.25);
-                break;
-            case 'alert':
-                this._playAlert(vol * 0.7);
-                break;
-            case 'shoot_flame':
-                this._playFlame(vol * 0.5);
-                break;
-            case 'shoot_rocket':
-                this._playRocket(vol * 0.5);
-                break;
-            case 'shoot_zap':
-                this._playZap(vol * 0.45);
-                break;
-            case 'ack_move':
-                // soft confirmation blip for movement orders
-                this._tone(520, 0.05, 'sine', vol * 0.22);
-                this._tone(700, 0.06, 'sine', vol * 0.18, 0.05);
-                break;
-            case 'ack_attack':
-                // aggressive double blip for attack orders
-                this._tone(300, 0.06, 'square', vol * 0.22);
-                this._tone(240, 0.08, 'square', vol * 0.22, 0.06);
-                break;
-            case 'unit_ready':
-                this._tone(620, 0.07, 'sine', vol * 0.3);
-                this._tone(930, 0.11, 'sine', vol * 0.26, 0.08);
-                break;
-            case 'construction_complete':
-                this._tone(440, 0.09, 'sine', vol * 0.32);
-                this._tone(660, 0.13, 'sine', vol * 0.28, 0.1);
-                break;
-            case 'research_complete':
-                this._tone(523, 0.1, 'sine', vol * 0.3);
-                this._tone(659, 0.1, 'sine', vol * 0.3, 0.11);
-                this._tone(784, 0.16, 'sine', vol * 0.32, 0.22);
-                break;
-            case 'bonus':
-                // treasure jingle for bunker rewards
-                this._tone(587, 0.08, 'sine', vol * 0.3);
-                this._tone(740, 0.08, 'sine', vol * 0.3, 0.09);
-                this._tone(880, 0.08, 'sine', vol * 0.3, 0.18);
-                this._tone(1175, 0.18, 'sine', vol * 0.32, 0.27);
-                break;
-            case 'denied':
-                this._tone(170, 0.13, 'sawtooth', vol * 0.28);
-                break;
-            case 'warn':
-                this._tone(220, 0.11, 'square', vol * 0.32);
-                this._tone(185, 0.13, 'square', vol * 0.28, 0.12);
-                break;
-            case 'victory':
-                [523, 659, 784, 1047].forEach((f, i) => this._tone(f, i === 3 ? 0.4 : 0.14, 'sine', vol * 0.35, i * 0.15));
-                break;
-            case 'defeat':
-                [392, 330, 262, 196].forEach((f, i) => this._tone(f, i === 3 ? 0.5 : 0.18, 'sine', vol * 0.35, i * 0.2));
-                break;
-        }
-    },
-
-    // Flame thrower: soft filtered-noise whoosh
-    _playFlame(vol) {
-        const ctx = this.ctx;
-        const dur = 0.35;
-        const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < data.length; i++) {
-            data[i] = (Math.random() * 2 - 1) * Math.sin((i / data.length) * Math.PI);
-        }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(750, ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + dur);
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        noise.start();
-    },
-
-    // Rocket launch: noise burst + rising whistle
-    _playRocket(vol) {
-        const ctx = this.ctx;
-        this._playExplosion(0.12, vol * 0.5);
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(280, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(950, ctx.currentTime + 0.22);
-        gain.gain.setValueAtTime(vol * 0.35, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-    },
-
-    // Series 9 energy weapons: descending zap
-    _playZap(vol) {
-        const ctx = this.ctx;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(1500, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(210, ctx.currentTime + 0.13);
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.14);
-    },
-
-    // Single enveloped tone, optionally delayed (building block for jingles)
-    _tone(freq, duration, type, vol, delay = 0) {
-        const ctx = this.ctx;
-        const t = ctx.currentTime + delay;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, t);
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.linearRampToValueAtTime(vol, t + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start(t);
-        osc.stop(t + duration + 0.02);
-    },
-
-    _playAlert(vol) {
-        const ctx = this.ctx;
-        // Two urgent descending beeps
-        [0, 0.18].forEach((t, i) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(i === 0 ? 880 : 660, ctx.currentTime + t);
-            gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime + t);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.15);
-            osc.connect(gain);
-            gain.connect(this.sfxGain || ctx.destination);
-            osc.start(ctx.currentTime + t);
-            osc.stop(ctx.currentTime + t + 0.15);
-        });
-    },
-
-    _playShoot(freq, duration, vol) {
-        const ctx = this.ctx;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, ctx.currentTime + duration);
-
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + duration);
-    },
-
-    _playExplosion(duration, vol) {
-        const ctx = this.ctx;
-        const bufferSize = ctx.sampleRate * duration;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        // White noise with decay
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-        }
-
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1000, ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + duration);
-
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        noise.start();
-    },
-
-    _playClick(vol) {
-        const ctx = this.ctx;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05);
-
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.05);
-    },
-
-    _playBuild(vol) {
-        const ctx = this.ctx;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
-
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-    },
-
-    _playSelect(vol) {
-        const ctx = this.ctx;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, ctx.currentTime);
-        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.03);
-
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-
-        osc.connect(gain);
-        gain.connect(this.sfxGain || ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.08);
-    }
-};
-
+// Sound system: see sfx.js (SoundManager, VoiceManager)
 // Initialize sound system
 SoundManager.init();
 // Cap the backing-store resolution on touch devices: phone DPRs of 3-4
@@ -961,7 +638,7 @@ function updateObjectives() {
     if (obj.check()) {
         obj.done = true;
         game.objectiveFlash = { text: obj.text, until: Date.now() + 3000 };
-        SoundManager.play('construction_complete');
+        SoundManager.play('research_complete', { volume: 0.7 });
     }
 }
 
@@ -1757,6 +1434,14 @@ function updateUnits(dt) {
     }
 }
 
+// Death cry by faction: humans, mutant beasts, machines
+function deathSound(unit) {
+    const f = getFaction(unit.playerId);
+    if (f === 'series9') return 'death_robot';
+    if (f === 'evolved') return UNIT_TYPES[unit.type].category === 'infantry' ? 'death_human' : 'death_beast';
+    return 'death_human';
+}
+
 // Remove a dead unit: death effects, wreck/splat, bookkeeping
 function killUnit(unit, type) {
     unit.dead = true;
@@ -1774,14 +1459,16 @@ function killUnit(unit, type) {
                 (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 14, 1.5 + Math.random() * 2.5])
         });
         createBloodSpray(unit.x, unit.y, getFaction(unit.playerId), true);
-        SoundManager.play('explosion_small');
+        SoundManager.play('impact_flesh', { x: unit.x, y: unit.y, volume: 1.4 });
+        SoundManager.play(deathSound(unit), { x: unit.x, y: unit.y });
     } else {
         if (type.category === 'infantry') {
             createBloodSpray(unit.x, unit.y, getFaction(unit.playerId), true);
         } else {
             createExplosion(unit.x, unit.y, type.size >= 15);
         }
-        SoundManager.play(type.category === 'infantry' ? 'explosion_small' : 'explosion_large');
+        if (type.category === 'infantry') SoundManager.play(deathSound(unit), { x: unit.x, y: unit.y });
+        else SoundManager.play(type.size >= 15 ? 'explosion_large' : 'explosion_small', { x: unit.x, y: unit.y });
         if (!game.dying) game.dying = [];
         game.dying.push({
             role: unit.type,
@@ -1985,6 +1672,7 @@ function updateBuildings(dt) {
                 }
                 if (building.playerId === 0) {
                     SoundManager.play('construction_complete');
+                    if (typeof VoiceManager !== 'undefined') VoiceManager.say('Construction complete', 4000);
                 }
             } else {
                 // Construction in progress - keep hp at 1
@@ -1995,7 +1683,7 @@ function updateBuildings(dt) {
         // Death check
         if (building.hp <= 0 && !building.isUnderConstruction) {
             createExplosion(building.x, building.y, true);
-            SoundManager.play('explosion_large');
+            SoundManager.play('building_collapse', { x: building.x, y: building.y });
             blockTilesFor(building, false);
             addDecal({
                 type: 'scorch', x: building.x, y: building.y, life: 60,
@@ -2059,6 +1747,7 @@ function updateBuildings(dt) {
                 building.researching = null;
                 if (building.playerId === 0) {
                     SoundManager.play('research_complete');
+                    if (typeof VoiceManager !== 'undefined') VoiceManager.say('Research complete');
                     setBanner(`Research complete: Tech Level ${player.techLevel} unlocked!`, 5, '#cc66ff');
                 }
             }
@@ -2107,6 +1796,7 @@ function updateBuildings(dt) {
                 const newUnit = spawnUnit(current.type, building.playerId, spawnX, spawnY);
                 if (building.playerId === 0) {
                     SoundManager.play('unit_ready');
+                    if (typeof VoiceManager !== 'undefined') VoiceManager.say('Unit ready', 7000);
                     if (typeof VoiceManager !== 'undefined') {
                         VoiceManager.play('ready', getFaction(0));
                     }
@@ -2211,6 +1901,11 @@ function updateProjectiles(dt) {
             } else {
                 // a miss kicks up dirt where it lands
                 createDustPuff(proj.aimX, proj.aimY);
+                if (proj.weapon === 'mg' || proj.weapon === 'hmg') {
+                    SoundManager.play(Math.random() < 0.12 ? 'ricochet' : 'impact_dirt', { x: proj.aimX, y: proj.aimY });
+                } else if (proj.weapon === 'cannon' || proj.weapon === 'rocket') {
+                    SoundManager.play('explosion_small', { x: proj.aimX, y: proj.aimY, volume: 0.6 });
+                }
             }
             game.projectiles.splice(i, 1);
             continue;
@@ -2240,6 +1935,7 @@ function dealDamage(victim, dmg, proj) {
         if (!game._lastAlertSound || Date.now() - game._lastAlertSound > 12000) {
             game._lastAlertSound = Date.now();
             SoundManager.play('alert');
+            if (typeof VoiceManager !== 'undefined') VoiceManager.say(BUILDING_TYPES[victim.type] ? 'Our base is under attack' : 'Our units are under attack', 15000);
             if (BUILDING_TYPES[victim.type]) setBanner('Our base is under attack! (Space: jump there)', 4, '#ff5533');
             else setBanner('Our units are under attack! (Space: jump there)', 3, '#ff8855');
         }
@@ -2273,8 +1969,12 @@ function applyHit(proj, target, ix, iy) {
     }
     if (armorClass(target) === 'infantry') {
         createBloodSpray(ix, iy, getFaction(target.playerId));
+        if (proj.weapon === 'cannon' || proj.weapon === 'rocket') SoundManager.play('explosion_small', { x: ix, y: iy, volume: 0.7 });
+        else SoundManager.play('impact_flesh', { x: ix, y: iy });
     } else {
         createImpact(ix, iy, proj.weapon);
+        if (proj.weapon === 'cannon' || proj.weapon === 'rocket') SoundManager.play('explosion_small', { x: ix, y: iy, volume: 0.75 });
+        else if (proj.weapon !== 'flame') SoundManager.play(Math.random() < 0.08 ? 'ricochet' : 'impact_metal', { x: ix, y: iy });
     }
 }
 
@@ -2298,6 +1998,7 @@ function splashDamage(proj, x, y, radius, skip, scale = 1) {
 
 // Artillery shell lands: the blast hurts whatever is there NOW
 function detonateShell(proj) {
+    SoundManager.play('explosion_small', { x: proj.aimX, y: proj.aimY, volume: 1.2 });
     createExplosion(proj.aimX, proj.aimY, false);
     addDecal({ type: 'crater', x: proj.aimX, y: proj.aimY, life: 40, size: 10 + Math.random() * 4 });
     splashDamage(proj, proj.aimX, proj.aimY, proj.splash || 1, null, 1);
@@ -2506,6 +2207,8 @@ function executeAIStrategy(ai, aiUnits, aiBuildings, playerUnits, playerBuilding
         if (!game._lastWaveBanner || Date.now() - game._lastWaveBanner > 45000) {
             game._lastWaveBanner = Date.now();
             setBanner('WARNING: Enemy attack wave incoming!', 4, '#ff5533');
+            SoundManager.play('warn');
+            if (typeof VoiceManager !== 'undefined') VoiceManager.say('Warning. Enemy forces approaching', 30000);
         }
         attackPlayerBase(playerBuildings, playerUnits, aiUnits);
     }
@@ -2638,9 +2341,11 @@ function updateBunkers() {
         if (claimer.playerId === 0) {
             setBanner(rewardText, 5, '#66e0ff');
             SoundManager.play('bonus');
+            if (typeof VoiceManager !== 'undefined') VoiceManager.say('Tech bunker secured');
         } else {
             setBanner('The enemy secured a tech bunker!', 4, '#ff7755');
             SoundManager.play('warn');
+            if (typeof VoiceManager !== 'undefined') VoiceManager.say('The enemy has captured a tech bunker');
         }
         addPing(bunker.x, bunker.y, '#66e0ff');
     }
@@ -2677,6 +2382,7 @@ function updateLowFundsHint() {
     game._lowFundsTime = Date.now();
     setBanner('Low on funds! Build Oil Derricks on the dark oil patches.', 6, '#cfae3a');
     SoundManager.play('warn');
+    if (typeof VoiceManager !== 'undefined') VoiceManager.say('Insufficient funds', 30000);
 }
 
 // Roaming scavenger packs keep the wasteland dangerous
@@ -2711,6 +2417,7 @@ function updateScavengers() {
     }
     setBanner('Scavengers spotted in the wasteland!', 4, '#cfae3a');
     SoundManager.play('warn');
+    if (typeof VoiceManager !== 'undefined') VoiceManager.say('Scavengers detected');
     addPing(start.x, start.y, '#cfae3a');
 }
 
@@ -2757,6 +2464,7 @@ function updateResources() {
                         if (building.playerId === 0) {
                             setBanner('An oil patch has run dry - expand to a new field!', 5, '#cfae3a');
                             SoundManager.play('warn');
+                            if (typeof VoiceManager !== 'undefined') VoiceManager.say('Oil field depleted');
                             addPing(building.x, building.y, '#cfae3a');
                         }
                     }
@@ -3564,19 +3272,15 @@ function fireProjectile(source, target, customDamage) {
     const bal = WEAPON_BALLISTICS[weapon] || WEAPON_BALLISTICS.mg;
     const faction = getFaction(source.playerId);
 
-    // only audible when the shot happens on (or near) the screen
-    let audible = true;
-    if (canvas) {
-        const sp = worldToScreen(source.x, source.y);
-        audible = sp.x > -150 && sp.x < canvas.offsetWidth + 150 && sp.y > -150 && sp.y < canvas.offsetHeight + 150;
-    }
-    if (audible) {
-        if (weapon === 'arty') SoundManager.play('shoot_artillery');
-        else if (weapon === 'cannon') SoundManager.play(faction === 'series9' ? 'shoot_zap' : 'shoot_heavy');
-        else if (weapon === 'rocket') SoundManager.play('shoot_rocket');
-        else if (weapon === 'flame') SoundManager.play('shoot_flame');
-        else SoundManager.play(faction === 'series9' ? 'shoot_zap' : 'shoot_light', { volume: weapon === 'hmg' ? 1.2 : 0.8 });
-    }
+    // positional firing sound (pan, distance, air absorption in SoundManager)
+    const at = { x: source.x, y: source.y };
+    const s9 = faction === 'series9';
+    if (weapon === 'arty') SoundManager.play('artillery', at);
+    else if (weapon === 'cannon') SoundManager.play(s9 ? 'plasma' : 'cannon', at);
+    else if (weapon === 'rocket') SoundManager.play('rocket', at);
+    else if (weapon === 'flame') SoundManager.play('flame', at);
+    else if (weapon === 'hmg') SoundManager.play(s9 ? 'gun_zap' : 'gun_hmg', at);
+    else SoundManager.play(s9 ? 'gun_zap' : 'gun_rifle', { ...at, volume: BUILDING_TYPES[source.type] ? 1.1 : 0.9 });
 
     // Muzzle: in front of the hull (towers fire from their head)
     const isUnit = !!UNIT_TYPES[source.type];
@@ -3621,6 +3325,8 @@ function fireProjectile(source, target, customDamage) {
         const sa = Math.random() * Math.PI * 2, sr = Math.random() * scatter;
         const aimX = target.x + Math.cos(sa) * sr, aimY = target.y + Math.sin(sa) * sr;
         const T = Math.round(60 * (0.9 + dist * 0.07));
+        // incoming whistle in the last second of the flight, at the impact point
+        SoundManager.play('shell_whistle', { x: aimX, y: aimY, delay: Math.max(0, T / 60 - 1.0) });
         game.projectiles.push(Object.assign(base, {
             arc: true, x: mx, y: my, aimX, aimY, t: 0, T, apex: 26 + dist * 7,
             vx: 0, vy: 0, life: T + 5, progress: 0
@@ -4851,12 +4557,14 @@ function checkTimeLimit() {
     if (playerScore > enemyScore) {
         game.status = 'WON';
         SoundManager.play('victory');
+        if (typeof VoiceManager !== 'undefined') VoiceManager.say('Mission accomplished', 0);
         showScreen('victoryScreen');
         const statsEl = document.getElementById('victoryStats');
         if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - your forces prevail!</div>' + buildStatsHTML();
     } else {
         game.status = 'LOST';
         SoundManager.play('defeat');
+        if (typeof VoiceManager !== 'undefined') VoiceManager.say('Mission failed', 0);
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
         if (statsEl) statsEl.innerHTML = '<div style="margin-bottom:8px;">Time limit reached - the enemy holds the field.</div>' + buildStatsHTML();
@@ -4891,6 +4599,7 @@ function checkWinCondition() {
     if (enemyUnits.length === 0 && enemyBuildings.length === 0) {
         game.status = 'WON';
         SoundManager.play('victory');
+        if (typeof VoiceManager !== 'undefined') VoiceManager.say('Mission accomplished', 0);
         const playerUnits = game.units.filter(u => u.playerId === 0).length;
         const playerBuildings = game.buildings.filter(b => b.playerId === 0).length;
         showScreen('victoryScreen');
@@ -4906,6 +4615,7 @@ function checkLoseCondition() {
     if (playerUnits.length === 0 && playerBuildings.length === 0) {
         game.status = 'LOST';
         SoundManager.play('defeat');
+        if (typeof VoiceManager !== 'undefined') VoiceManager.say('Mission failed', 0);
         showScreen('defeatScreen');
         const statsEl = document.getElementById('defeatStats');
         if (statsEl) statsEl.innerHTML = buildStatsHTML();
@@ -4962,6 +4672,11 @@ function setupMenuHandlers() {
     if (quitBtn) quitBtn.addEventListener('click', goToMainMenu);
 
     // Combat sound toggle in pause menu
+    const announcerToggle = document.getElementById('announcerToggle');
+    if (announcerToggle && typeof VoiceManager !== 'undefined') {
+        announcerToggle.checked = VoiceManager.announcer;
+        announcerToggle.addEventListener('change', (e) => VoiceManager.setAnnouncer(e.target.checked));
+    }
     const combatSoundToggle = document.getElementById('combatSoundToggle');
     if (combatSoundToggle) {
         combatSoundToggle.addEventListener('change', (e) => {
