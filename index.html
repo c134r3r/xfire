@@ -16,6 +16,11 @@
     <script src="constants.js"></script>
     <script src="audio.js"></script>
     <script src="spriteGenerator.js"></script>
+    <!-- pre-rendered 3D asset pack (tools/asset-baker); optional - the game
+         falls back to procedural sprites if these are missing -->
+    <script src="assets/sprites/survivors.bundle.js" defer></script>
+    <script src="assets/sprites/evolved.bundle.js" defer></script>
+    <script src="assets/sprites/series9.bundle.js" defer></script>
     <script>
         // Preload background image before initializing game
         window.addEventListener('DOMContentLoaded', () => {
@@ -183,6 +188,13 @@
                         <option value="5000" selected>5000</option>
                         <option value="8000">8000</option>
                         <option value="12000">12000</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Graphics:</label>
+                    <select id="graphicsSelect">
+                        <option value="pack" selected>Rendered 3D sprites</option>
+                        <option value="procedural">Procedural (lightweight)</option>
                     </select>
                 </div>
                 <div class="setting-group">

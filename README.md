@@ -224,6 +224,35 @@ but rebuilt from scratch:
   a selection panel with portraits and counter info; an isometric
   minimap that matches the camera orientation.
 
+## 3D asset pack
+
+`assets/sprites/` holds a pre-rendered sprite pack: every unit (16
+directions, walk/stride frames), every turret and every building of all
+three factions, rendered from real 3D models (three.js, soft shadow-mapped
+sun, sky light, PBR materials, edge highlights). Each sheet comes with a
+team mask, so one render is tinted for any player color at load time.
+The game loads the pack during the loading screen and falls back to the
+procedural sprites for anything missing; *Skirmish Setup → Graphics*
+switches between the two.
+
+Rebuild the pack after changing a model:
+
+```
+cd tools/asset-baker && npm install        # three.js
+node tools/asset-baker/bake.mjs            # all sheets (~5 min); --only tank, --faction evolved
+python3 tools/asset-baker/pack.py          # WebP sheets + per-faction bundles
+```
+
+Models live in `tools/asset-baker/lib/models.js` (same coordinates as the
+procedural builders, so mounts and anchors line up), the modelling kit in
+`lib/kit.js`, the iso renderer in `lib/iso.js`.
+
+## Hover info
+
+On desktop, resting the mouse on a unit, building or tech bunker shows a
+German info card: what it is, what it is good for, strengths and
+weaknesses, live HP and production status.
+
 ## Files
 
 - `index.html` / `styles.css` — UI shell, menus, HUD, sidebar
@@ -232,5 +261,7 @@ but rebuilt from scratch:
   units with team colors, animated buildings, sidebar icons)
 - `terrain.js` — terrain painter, water, props, rock-wall sprites
 - `render.js` — battlefield renderer, particles and effects, overlays
+- `assets/sprites/` — baked 3D sprite pack (WebP sheets + bundles)
+- `tools/asset-baker/` — 3D models and the offline renderer for the pack
 - `game-engine.js` — simulation (fixed timestep), navigation, combat,
   economy, AI, input, HUD logic

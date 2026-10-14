@@ -1495,6 +1495,100 @@ const IsoSprites = (() => {
     }
 
     // ============================================
+    // ASSET PACK (pre-rendered 3D sprite sheets)
+    // Bundles from tools/asset-baker register sheets in
+    // window.XFIRE_ASSETS. Each sheet has columns = directions,
+    // rows = animation frames, plus a team mask: team-colored parts are
+    // tinted per player at load time. Anything missing falls back to
+    // the procedural sprites below.
+    // ============================================
+    const Pack = { entries: new Map(), enabled: true, loaded: false };
+
+    function loadImage(src) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+    }
+
+    async function loadPack() {
+        const all = window.XFIRE_ASSETS || {};
+        const jobs = [];
+        for (const faction of Object.keys(all)) {
+            for (const [key, e] of Object.entries(all[faction])) {
+                jobs.push((async () => {
+                    const [color, mask] = await Promise.all([loadImage(e.color), loadImage(e.mask)]);
+                    if (!color) return;
+                    // mask: gray in RGB -> alpha channel, once per sheet
+                    let maskA = null;
+                    if (mask) {
+                        maskA = document.createElement('canvas');
+                        maskA.width = mask.width; maskA.height = mask.height;
+                        const mc = maskA.getContext('2d');
+                        mc.drawImage(mask, 0, 0);
+                        const d = mc.getImageData(0, 0, mask.width, mask.height);
+                        let any = false;
+                        for (let i = 0; i < d.data.length; i += 4) {
+                            const v = d.data[i];
+                            d.data[i + 3] = v > 8 ? v : 0;
+                            d.data[i] = d.data[i + 1] = d.data[i + 2] = 255;
+                            if (v > 8) any = true;
+                        }
+                        mc.putImageData(d, 0, 0);
+                        if (!any) maskA = null;
+                    }
+                    Pack.entries.set(key, { ...e, colorImg: color, maskA });
+                })());
+            }
+        }
+        await Promise.all(jobs);
+        Pack.loaded = true;
+        // procedural sprites cached so far are replaced by the pack
+        cache.clear();
+        iconCache.clear();
+        return Pack.entries.size;
+    }
+
+    function setPackEnabled(on) {
+        if (Pack.enabled === on) return;
+        Pack.enabled = on;
+        cache.clear();
+        iconCache.clear();
+    }
+
+    function packCell(kind, role, faction, dir, frame, team) {
+        if (!Pack.enabled) return null;
+        const e = Pack.entries.get(`${kind}|${role}|${faction}`);
+        if (!e) return null;
+        const cw = e.w * OUT, ch = e.h * OUT;
+        const sx = (dir % e.dirs) * cw, sy = Math.min(frame, e.frames - 1) * ch;
+        const c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        c.logicalWidth = e.w; c.logicalHeight = e.h;
+        c.anchorX = e.ax; c.anchorY = e.ay;
+        const cc = c.getContext('2d');
+        cc.drawImage(e.colorImg, sx, sy, cw, ch, 0, 0, cw, ch);
+        if (e.maskA && team) {
+            const t = document.createElement('canvas');
+            t.width = cw; t.height = ch;
+            const tc = t.getContext('2d');
+            tc.drawImage(e.maskA, sx, sy, cw, ch, 0, 0, cw, ch);
+            tc.globalCompositeOperation = 'source-in';
+            tc.fillStyle = team;
+            tc.fillRect(0, 0, cw, ch);
+            // team paint: shaded light-grey base x team color
+            cc.globalCompositeOperation = 'multiply';
+            cc.drawImage(t, 0, 0);
+            cc.globalCompositeOperation = 'destination-in';
+            cc.drawImage(e.colorImg, sx, sy, cw, ch, 0, 0, cw, ch);
+            cc.globalCompositeOperation = 'source-over';
+        }
+        return c;
+    }
+
+    // ============================================
     // PUBLIC API
     // ============================================
 
@@ -1518,6 +1612,8 @@ const IsoSprites = (() => {
         frame = frames === 1 ? 0 : (INFANTRY_ROLES.has(role) ? frame % 5 : frame % 4);
         const key = `u|${role}|${faction}|${dirIndex}|${frame}|${team}`;
         if (cache.has(key)) return cache.get(key);
+        const baked = packCell('unit', role, faction, dirIndex, frame, team);
+        if (baked) { cache.set(key, baked); return baked; }
         const [w, h, ax, ay] = UNIT_CANVAS[role] || [100, 90, 50, 56];
         const s = new Surface(w, h, ax, ay);
         const yaw = (dirIndex / DIRS) * Math.PI * 2;
@@ -1532,6 +1628,8 @@ const IsoSprites = (() => {
     function turretSprite(role, faction, dirIndex, team = DEFAULT_TEAM) {
         const key = `t|${role}|${faction}|${dirIndex}|${team}`;
         if (cache.has(key)) return cache.get(key);
+        const baked = packCell('turret', role, faction, dirIndex, 0, team);
+        if (baked) { cache.set(key, baked); return baked; }
         const s = new Surface(96, 84, 48, 52);
         const yaw = (dirIndex / DIRS) * Math.PI * 2;
         const pal = FACTIONS[faction].palette;
@@ -1579,6 +1677,8 @@ const IsoSprites = (() => {
         const ft = type ? type.size : 2;
         const key = `b|${role}|${faction}|${frame}|${team}`;
         if (cache.has(key)) return cache.get(key);
+        const baked = packCell('building', role, role === 'bunker' ? 'survivors' : faction, 0, frame, team);
+        if (baked) { cache.set(key, baked); return baked; }
         const w = ft * 64 + 40;
         const h = ft * 32 + 96;
         const s = new Surface(w, h, w / 2, h - ft * 16 - 12);
@@ -1665,7 +1765,8 @@ const IsoSprites = (() => {
 
     return {
         unitSprite, unitComposite, turretSprite, turretMount, towerTurretMount,
-        buildingSprite, wreckSprite, icon, dirFromAngle, prewarm, prewarmStep, clearPrewarm, animatedFrames,
+        buildingSprite, wreckSprite, icon, dirFromAngle, prewarm, loadPack, setPackEnabled,
+        get packLoaded() { return Pack.loaded; }, get packSize() { return Pack.entries.size; }, prewarmStep, clearPrewarm, animatedFrames,
         DIRS, OUT, tint, withAlpha
     };
 })();

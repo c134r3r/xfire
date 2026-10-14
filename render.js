@@ -202,6 +202,7 @@ function render(frameDt = 1 / 60) {
     }
 
     renderMinimap();
+    updateHoverTip();
     if (game.status === 'PLAYING') IsoSprites.prewarmStep(3);
 }
 
@@ -1350,4 +1351,110 @@ function drawHelpOverlay() {
         ly += rowH * 0.6;
     }
     ctx.restore();
+}
+
+// ============================================
+// HOVER INFO (desktop): German description of the unit / building
+// under the mouse - what it is, what it brings, strengths, weaknesses.
+// Appears after a short delay so it never flickers during play.
+// ============================================
+const HoverTip = { el: null, target: null, since: 0, key: '' };
+
+function hoverTipTarget() {
+    if (document.body.classList.contains('touch-device')) return null;
+    if (!game.mouse.inside || game.status !== 'PLAYING' || game.placingBuilding || game.selectionBox || game.showHelp) return null;
+    if (game.hover && isAlive(game.hover)) return game.hover;
+    // tech bunkers aren't entities - test them by distance
+    const w = screenToWorld(game.mouse.x, game.mouse.y);
+    const b = (game.bunkers || []).find(b => tileFog(b.x, b.y) !== 0 && Math.hypot(b.x - w.x, b.y - w.y) < 1.1);
+    return b ? { bunker: b } : null;
+}
+
+function hoverTipHTML(e) {
+    if (e.bunker) {
+        return `<div class="ht-title">Tech-Bunker <span class="ht-tag neutral">neutral</span></div>` +
+            `<div class="ht-role">Kartenobjekt</div>` +
+            (e.bunker.claimed
+                ? `<div class="ht-desc">Bereits geplündert.</div>`
+                : `<div class="ht-desc">Schicke eine beliebige Einheit hierher.</div><div class="ht-use">Belohnung: Öl, gestrandete Einheiten oder Kampfdaten, die Einheiten in der Nähe befördern. Die KI will ihn auch!</div>`);
+    }
+    const isUnit = !!UNIT_TYPES[e.type];
+    const type = UNIT_TYPES[e.type] || BUILDING_TYPES[e.type];
+    const info = (isUnit ? UNIT_INFO_DE : BUILDING_INFO_DE)[e.type] || { role: '', desc: '', use: '' };
+    const faction = getFaction(e.playerId);
+    const name = isUnit ? unitDisplayName(e.type, faction) : buildingDisplayName(e.type, faction);
+    const tag = e.playerId === 0 ? '<span class="ht-tag own">eigene</span>'
+        : e.playerId === 1 ? '<span class="ht-tag enemy">Feind</span>'
+        : '<span class="ht-tag neutral">Plünderer</span>';
+    let html = `<div class="ht-title">${name} ${tag}</div><div class="ht-role">${info.role}</div>`;
+    html += `<div class="ht-desc">${info.desc}</div><div class="ht-use">${info.use}</div>`;
+
+    const hp = e.isUnderConstruction ? null : `${Math.ceil(Math.max(0, e.hp))}/${type.hp}`;
+    const stats = [];
+    if (hp) stats.push(`Leben <b>${hp}</b>`);
+    if (type.damage) stats.push(`Schaden <b>${type.damage}</b>`);
+    if (type.range) stats.push(`Reichweite <b>${(type.range / 24).toFixed(1)}</b>`);
+    if (isUnit) stats.push(`Tempo <b>${(type.speed * 60).toFixed(1)}</b>`);
+    if (stats.length) html += `<div class="ht-stats">${stats.join(' · ')}</div>`;
+
+    const weapon = WEAPON_CLASS[e.type];
+    if (weapon && WEAPON_VS[weapon]) {
+        const row = WEAPON_VS[weapon];
+        const strong = Object.keys(row).filter(k => row[k] >= 1.2).map(k => ARMOR_DE[k]);
+        const weak = Object.keys(row).filter(k => row[k] <= 0.6).map(k => ARMOR_DE[k]);
+        if (strong.length) html += `<div class="ht-good">▲ Stark gegen ${strong.join(', ')}</div>`;
+        if (weak.length) html += `<div class="ht-bad">▼ Schwach gegen ${weak.join(', ')}</div>`;
+    }
+    if (type.overWalls) html += `<div class="ht-good">▲ Schießt über Felswände</div>`;
+
+    // live status for own structures and units
+    if (e.playerId === 0) {
+        if (e.isUnderConstruction) html += `<div class="ht-status">Im Bau: ${Math.round(e.buildProgress / e.buildTime * 100)} %</div>`;
+        else if (e.productionQueue && e.productionQueue.length) {
+            html += `<div class="ht-status">Produziert: ${unitDisplayName(e.productionQueue[0].type, faction)} (${Math.round(e.produceProgress / Math.max(1, e.produceTime) * 100)} %)` +
+                (e.productionQueue.length > 1 ? ` · +${e.productionQueue.length - 1} in der Warteschlange` : '') + `</div>`;
+        } else if (e.researching) {
+            html += `<div class="ht-status">Forscht: Tech-Stufe ${e.researching.level} (${Math.round(e.researching.progress / e.researching.time * 100)} %)</div>`;
+        }
+        if (e.type === 'derrick' && e.oilLeft !== undefined) html += `<div class="ht-status">Ölreserve: ${Math.floor(e.oilLeft)}</div>`;
+        const rank = isUnit ? veterancyRank(e.kills) : 0;
+        if (rank) html += `<div class="ht-status">${'★'.repeat(rank)} Veteran · +${rank * 15} % Schaden</div>`;
+        if (!isUnit && type.produces && type.produces.length) html += `<div class="ht-hint">Klick: auswählen · Einheiten über die Seitenleiste ausbilden</div>`;
+        else if (isUnit) html += `<div class="ht-hint">Klick: auswählen · Doppelklick: alle dieses Typs</div>`;
+    } else if (game.selection.some(s => s.playerId === 0 && UNIT_TYPES[s.type])) {
+        html += `<div class="ht-hint">Rechtsklick: ausgewählte Einheiten greifen an</div>`;
+    }
+    return html;
+}
+
+function updateHoverTip() {
+    if (!HoverTip.el) {
+        HoverTip.el = document.createElement('div');
+        HoverTip.el.className = 'hover-tip';
+        document.body.appendChild(HoverTip.el);
+    }
+    const t = hoverTipTarget();
+    const id = t ? (t.bunker ? 'b' + t.bunker.x + ',' + t.bunker.y : t.id) : null;
+    const now = performance.now();
+    if (id !== HoverTip.target) {
+        HoverTip.target = id;
+        HoverTip.since = now;
+        HoverTip.el.style.display = 'none';
+        return;
+    }
+    if (!t || now - HoverTip.since < 450) return;
+    // refresh contents a few times per second (live HP / progress)
+    if (now - (HoverTip.lastFill || 0) > 250 || HoverTip.el.style.display === 'none') {
+        HoverTip.lastFill = now;
+        const html = hoverTipHTML(t);
+        if (html !== HoverTip.key) { HoverTip.key = html; HoverTip.el.innerHTML = html; }
+    }
+    HoverTip.el.style.display = 'block';
+    const rect = canvas.getBoundingClientRect();
+    const tw = HoverTip.el.offsetWidth, th = HoverTip.el.offsetHeight;
+    let x = rect.left + game.mouse.x + 18, y = rect.top + game.mouse.y + 20;
+    if (x + tw > rect.right - 6) x = rect.left + game.mouse.x - tw - 14;
+    if (y + th > rect.bottom - 6) y = rect.top + game.mouse.y - th - 12;
+    HoverTip.el.style.left = Math.max(4, x) + 'px';
+    HoverTip.el.style.top = Math.max(4, y) + 'px';
 }

@@ -811,3 +811,37 @@ body.touch-device #sidebar { padding-right: max(6px, env(safe-area-inset-right))
     .sel-portrait { width: 44px; height: 44px; }
     .sel-portrait img { width: 40px; height: 40px; }
 }
+
+/* ============================================
+   BATTLEFIELD HOVER INFO (desktop, German)
+   ============================================ */
+.hover-tip {
+    position: fixed;
+    display: none;
+    z-index: 2400;
+    width: 260px;
+    padding: 9px 11px 10px;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(27, 30, 35, 0.97), rgba(14, 16, 19, 0.97));
+    border: 1px solid #000;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--line-hi), 0 8px 24px rgba(0, 0, 0, 0.7);
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text);
+}
+.hover-tip .ht-title { font-weight: 700; font-size: 15px; color: var(--amber-hi); display: flex; align-items: center; gap: 6px; }
+.hover-tip .ht-tag { font-size: 9.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; }
+.hover-tip .ht-tag.own { background: rgba(63, 169, 255, 0.2); color: var(--team); }
+.hover-tip .ht-tag.enemy { background: rgba(255, 59, 48, 0.2); color: #ff6a60; }
+.hover-tip .ht-tag.neutral { background: rgba(232, 196, 64, 0.18); color: #e8c440; }
+.hover-tip .ht-role { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.8px; margin: 1px 0 5px; }
+.hover-tip .ht-desc { color: var(--text); }
+.hover-tip .ht-use { color: #d8d0bc; margin-top: 3px; }
+.hover-tip .ht-stats { margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 11.5px; }
+.hover-tip .ht-stats b { color: var(--text); font-family: var(--font-num); }
+.hover-tip .ht-good { color: var(--good); font-size: 11.5px; }
+.hover-tip .ht-bad { color: var(--bad); font-size: 11.5px; }
+.hover-tip .ht-status { color: #9fd4ff; font-size: 11.5px; margin-top: 3px; }
+.hover-tip .ht-hint { color: var(--text-3); font-size: 11px; margin-top: 5px; }
+body.touch-device .hover-tip { display: none !important; }

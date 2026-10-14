@@ -4670,6 +4670,11 @@ function startGame() {
     if (playerFactionEl) gameSettings.playerFaction = playerFactionEl.value;
     if (enemyFactionEl) gameSettings.enemyFaction = enemyFactionEl.value;
 
+    // Rendered asset pack or procedural sprites
+    const gfxEl = document.getElementById('graphicsSelect');
+    gameSettings.graphics = gfxEl ? gfxEl.value : 'pack';
+    IsoSprites.setPackEnabled(gameSettings.graphics === 'pack');
+
     // Guided start on/off
     const tutorialEl = document.getElementById('tutorialSelect');
     gameSettings.tutorial = !tutorialEl || tutorialEl.value === 'on';
@@ -4683,7 +4688,8 @@ function startGame() {
             startingOil: gameSettings.startingOil,
             playerFaction: gameSettings.playerFaction,
             enemyFaction: gameSettings.enemyFaction,
-            tutorial: gameSettings.tutorial ? 'on' : 'off'
+            tutorial: gameSettings.tutorial ? 'on' : 'off',
+            graphics: gameSettings.graphics
         }));
     } catch (e) { /* private mode etc. */ }
 
@@ -4926,6 +4932,7 @@ function restoreSavedSettings() {
     apply('playerFactionSelect', saved.playerFaction);
     apply('enemyFactionSelect', saved.enemyFaction);
     apply('tutorialSelect', saved.tutorial);
+    apply('graphicsSelect', saved.graphics);
 }
 
 function setupMenuHandlers() {
@@ -5167,6 +5174,12 @@ function showLoadingScreen() {
         const introMusic = document.getElementById('introMusic');
         let progress = 0;
         const duration = 2000; // 2 seconds
+        // decode the 3D asset pack while the bar fills
+        let packDone = false;
+        IsoSprites.loadPack().then(n => {
+            packDone = true;
+            console.log(`[assets] ${n} rendered sprite sheets loaded`);
+        }).catch(() => { packDone = true; });
         const startTime = Date.now();
 
         // Start preloading intro music
@@ -5183,7 +5196,9 @@ function showLoadingScreen() {
                 loadingBar.style.width = progress + '%';
             }
 
-            if (progress < 100) {
+            if (progress < 100 || !packDone) {
+                progress = Math.min(progress, 99);
+                if (loadingBar) loadingBar.style.width = progress + '%';
                 requestAnimationFrame(updateLoadingBar);
             } else {
                 // Loading complete - show GO button

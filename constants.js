@@ -394,3 +394,32 @@ const UNIT_DESC = {
     heavy: 'Slow assault monster with splash damage that fires OVER rock walls. Breaks bases.',
     artillery: 'Extreme-range siege gun that fires OVER rock walls. Needs other units to spot targets. Moving units can dodge its shells.'
 };
+
+// ============================================
+// GERMAN MOUSE-OVER TEXTS (desktop hover info on the battlefield)
+// role: generic class, desc: what it is, use: what it brings you
+// ============================================
+const UNIT_INFO_DE = {
+    trooper: { role: 'Infanterie · Maschinengewehr', desc: 'Günstiger Gewehrschütze, schnell ausgebildet.', use: 'Zerlegt feindliche Infanterie. Gegen Fahrzeuge und Gebäude fast wirkungslos – in Masse die Antwort auf frühe Angriffe.' },
+    flamer: { role: 'Infanterie · Flammenwerfer', desc: 'Nahkämpfer mit Flammenstrahl und Flächenschaden.', use: 'Verbrennt dicht stehende Infanterie-Gruppen. Sehr kurze Reichweite, schwach gegen Panzerung.' },
+    rocketeer: { role: 'Infanterie · Panzerabwehr', desc: 'Raketenschütze mit großer Reichweite und langsamer Nachladezeit.', use: 'Knackt Fahrzeuge und Panzer. Trifft Infanterie schlecht – braucht Begleitschutz.' },
+    bike: { role: 'Fahrzeug · Aufklärer', desc: 'Schnellste Einheit im Spiel.', use: 'Aufklären, Tech-Bunker einsammeln, Ölpumpen überfallen. Hält im offenen Kampf wenig aus.' },
+    buggy: { role: 'Fahrzeug · Leichter Kampfwagen', desc: 'Schnelles Fahrzeug mit schwerem MG.', use: 'Vielseitiger Raider und Begleitschutz – solide gegen alles Leichte, unterlegen gegen Panzer.' },
+    tank: { role: 'Fahrzeug · Kampfpanzer', desc: 'Gepanzertes Rückgrat jeder Armee mit drehbarem Turm.', use: 'Stark gegen Fahrzeuge und Gebäude und überrollt feindliche Infanterie. Anfällig für Raketenschützen.' },
+    heavy: { role: 'Fahrzeug · Schwerer Angriffspanzer', desc: 'Langsamer Koloss mit Flächenschaden.', use: 'Bricht Verteidigungslinien und schießt ÜBER Felswände hinweg. Teuer – schütze ihn vor Raketen.' },
+    artillery: { role: 'Fahrzeug · Artillerie', desc: 'Belagerungsgeschütz mit riesiger Reichweite, feuert über Felswände.', use: 'Zerstört Basen aus sicherer Entfernung. Braucht Späher, sieht selbst nicht so weit wie sie schießt. Bewegliche Ziele können ausweichen; im Nahkampf hilflos.' }
+};
+
+const BUILDING_INFO_DE = {
+    hq: { role: 'Hauptquartier', desc: 'Deine Kommandozentrale.', use: 'Verlierst du alle Gebäude und Einheiten, ist die Schlacht verloren. Gut verteidigen!' },
+    powerStation: { role: 'Wirtschaft · Kraftwerk', desc: 'Raffiniert Rohöl.', use: 'Jedes Kraftwerk steigert die Förderung ALLER Ölpumpen um 25 % (max. 2 zählen). Voraussetzung für fast alles.' },
+    derrick: { role: 'Wirtschaft · Ölpumpe', desc: 'Steht auf einem dunklen Ölfleck und fördert automatisch.', use: 'Deine Einnahmequelle. Wenn das Feld versiegt, auf ein neues Ölfeld ausweichen.' },
+    barracks: { role: 'Produktion · Kaserne', desc: 'Bildet Infanterie aus.', use: 'Gewehrschützen, Flammenwerfer und Raketenschützen. Mehrere Kasernen bilden parallel aus.' },
+    factory: { role: 'Produktion · Fabrik', desc: 'Baut Fahrzeuge.', use: 'Aufklärer, Kampfwagen, Panzer, Artillerie und schwere Angriffspanzer.' },
+    researchLab: { role: 'Forschung · Labor', desc: 'Erforscht Tech-Stufe 2 und 3.', use: 'Schaltet stärkere Einheiten, die Reparaturstation und schwere Türme frei.' },
+    repairBay: { role: 'Unterstützung · Reparaturstation', desc: 'Repariert Fahrzeuge in der Nähe.', use: 'Beschädigte Fahrzeuge hier parken – kostet ein wenig Öl pro Reparaturschritt.' },
+    tower: { role: 'Verteidigung · Wachturm', desc: 'Automatischer Schnellfeuer-Turm.', use: 'Stark gegen Infanterie-Angriffe, schwach gegen Panzerung.' },
+    towerHeavy: { role: 'Verteidigung · Kanonenturm', desc: 'Schwerer Panzerabwehrturm.', use: 'Hat mehr Reichweite als Kampfpanzer – die Mauer gegen Fahrzeug-Vorstöße.' }
+};
+
+const ARMOR_DE = { infantry: 'Infanterie', armor: 'Fahrzeuge', building: 'Gebäude' };
