@@ -32,26 +32,33 @@
 </head>
 <body>
     <div id="header">
-        <h1>XFIRE</h1>
-        <div id="gameStatus">
-            <div class="status-bar">
-                <span>Your Army:</span>
-                <div class="unit-count" id="playerUnits">0 units</div>
+        <div class="hud-brand">
+            <span class="hud-logo">XFIRE</span>
+            <span class="hud-faction" id="hudFaction"></span>
+        </div>
+        <div class="hud-stats">
+            <div class="hud-chip oil" title="Oil: spend it on structures and units. Derricks pump more.">
+                <svg viewBox="0 0 24 24" class="hud-ico"><path d="M12 2c-3.5 5-7 8.6-7 12.5A7 7 0 0 0 19 14.5C19 10.6 15.5 7 12 2z" fill="currentColor"/></svg>
+                <strong id="oil">0</strong>
+                <span class="hud-sub" id="oilRate">+0/s</span>
             </div>
-            <div class="status-bar">
-                <span>Enemy Army:</span>
-                <div class="unit-count" id="enemyUnits">0 units</div>
+            <div class="hud-chip units" title="Your units / population cap">
+                <svg viewBox="0 0 24 24" class="hud-ico"><circle cx="12" cy="7" r="4" fill="currentColor"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill="currentColor"/></svg>
+                <strong id="playerUnits">0</strong>
+            </div>
+            <div class="hud-chip tech" title="Tech level - research more at the Research Lab">
+                <svg viewBox="0 0 24 24" class="hud-ico"><path d="M9 2h6v2h-1v5.5l5.6 9.7A2 2 0 0 1 17.9 22H6.1a2 2 0 0 1-1.7-2.8L10 9.5V4H9z" fill="currentColor"/></svg>
+                <span>T</span><strong id="techLevel">1</strong>
+                <span class="hud-sub" id="techProgress"></span>
+            </div>
+            <div class="hud-chip time" id="timerDisplay" title="Match time">
+                <svg viewBox="0 0 24 24" class="hud-ico"><circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 8v5l3 2M9 2h6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+                <strong id="gameTimer">0:00</strong>
             </div>
         </div>
-        <div id="resources">
-            <div class="resource">
-                <span class="resource-icon">&#9981;</span>
-                <span>Oil: <strong id="oil">3000</strong></span>
-            </div>
-            <div class="resource">
-                <span class="resource-icon">&#128300;</span>
-                <span>Tech: <strong id="techLevel">1</strong></span>
-            </div>
+        <div class="hud-actions">
+            <button class="hud-btn" id="hudHelp" title="Controls (F1)">?</button>
+            <button class="hud-btn" id="hudPause" title="Pause (P)">&#10073;&#10073;</button>
         </div>
     </div>
 
@@ -65,24 +72,27 @@
         <button id="tcFullscreen" title="Fullscreen">&#x26F6;</button>
         <button id="tcSidebar" title="Toggle build menu">&#9654;</button>
         <div id="sidebar">
-            <div class="panel">
-                <h3>Minimap</h3>
-                <canvas id="minimap" width="160" height="160"></canvas>
+            <div class="panel panel-minimap">
+                <canvas id="minimap" width="240" height="126"></canvas>
             </div>
-            <div class="panel">
-                <h3>Selection</h3>
-                <div id="selectionInfo">No selection</div>
+            <div class="panel panel-selection">
+                <div id="selectionInfo"></div>
+                <div id="commandBar">
+                    <button class="cmd-btn" data-cmd="amove" title="Attack-move (A): march and engage everything on the way"><span class="cmd-ico">&#9876;</span><kbd>A</kbd></button>
+                    <button class="cmd-btn" data-cmd="stop" title="Stop (S)"><span class="cmd-ico">&#9632;</span><kbd>S</kbd></button>
+                    <button class="cmd-btn" data-cmd="idle" title="Select idle army (Q)"><span class="cmd-ico">&#9673;</span><kbd>Q</kbd></button>
+                    <button class="cmd-btn" data-cmd="army" title="Select whole army (F2)"><span class="cmd-ico">&#9733;</span><kbd>F2</kbd></button>
+                </div>
             </div>
-            <div class="panel">
-                <h3>Build</h3>
+            <div class="panel panel-build">
+                <div id="buildTabs"></div>
                 <div id="buildMenu"></div>
             </div>
         </div>
     </div>
 
     <div id="footer">
-        <span id="controlsHelp">F1 help | LMB select | RMB move/attack | A attack-move | S stop | H HQ | Space last attack | Ctrl+1-9 / 1-9 groups | Arrows/Edge/Wheel scroll | +/- zoom</span>
-        <span id="timerDisplay" style="display: none;">Time: <strong id="gameTimer">0:00</strong></span>
+        <span id="controlsHelp"></span>
     </div>
 
     <!-- Background Music -->
@@ -111,8 +121,8 @@
     <div id="mainMenu" class="fullscreen-overlay hidden">
         <div class="menu-container">
             <div class="menu-buttons">
-                <button id="newGameBtn" class="menu-btn">New Game</button>
-                <button id="settingsBtn" class="menu-btn secondary">Settings</button>
+                <button id="newGameBtn" class="menu-btn" title="Start right away with your last skirmish settings">Quick Battle</button>
+                <button id="settingsBtn" class="menu-btn secondary">Skirmish Setup</button>
                 <a id="ironcladBtn" class="menu-btn secondary" href="ironclad.html" style="text-decoration:none;text-align:center;display:inline-block;">Play IRONCLAD</a>
             </div>
         </div>
@@ -121,7 +131,7 @@
     <!-- Settings Menu Screen -->
     <div id="settingsMenu" class="fullscreen-overlay hidden">
         <div class="menu-container">
-            <h1 class="menu-title">Game Settings</h1>
+            <h1 class="menu-title">Skirmish Setup</h1>
             <div class="settings-panel">
                 <div class="setting-group">
                     <label>Your Faction:</label>
@@ -184,7 +194,7 @@
                 </div>
             </div>
             <div class="menu-buttons">
-                <button id="startGameBtn" class="menu-btn">Start Game</button>
+                <button id="startGameBtn" class="menu-btn">Start Battle</button>
                 <button id="backBtn" class="menu-btn secondary">Back</button>
             </div>
         </div>
@@ -250,6 +260,8 @@
         <div>ROTATE YOUR DEVICE<br>XFIRE PLAYS IN LANDSCAPE</div>
     </div>
 
-    <script defer src="game-engine.js?v=4"></script>
+    <script defer src="terrain.js?v=5"></script>
+    <script defer src="render.js?v=5"></script>
+    <script defer src="game-engine.js?v=5"></script>
 </body>
 </html>
