@@ -288,6 +288,29 @@ On desktop, resting the mouse on a unit, building or tech bunker shows a
 German info card: what it is, what it is good for, strengths and
 weaknesses, live HP and production status.
 
+## IRONCLAD - Desert Assault (`ironclad.html`)
+
+A standalone top-down tank shooter, linked from the main menu.
+
+- **Fast**: 60 Hz fixed timestep, ~260 px/s tank with inertia, boost to
+  ram and crush light vehicles, camera leads toward the aim.
+- **13 enemy types + Warlord boss** (every 5th wave, 4 attack patterns,
+  enrages at 50%): buggies, raiders, armored cars, kamikaze bombers,
+  chargers, tanks, snipers (laser sight), dozers, mortars, APCs that
+  split, mine layers, rocket trucks, gunships (fly over rocks). Waves
+  arrive in squads; ground units path around rocks via a flow field.
+- **12 power-ups**: Rapid, Spread, Rail, homing Rockets, Laser, gun
+  Drones, Shield, Overdrive, Repair, Airstrike, Bullet Time, Nuke.
+  Timed ones stack and combine (laser + spread = triple beam).
+- **Explosions** are layered (flash, light, fireball, shockwave, sparks,
+  burning debris, smoke, embers) and burn scorch marks into the sand;
+  wrecks burn out and stay as husks. Red barrels chain-react, crates
+  always drop a power-up.
+- Combo multiplier up to x8 with callouts, hit-stop and screen shake on
+  big hits, off-screen arrows, radar, slow-motion death cam.
+- Twin-stick touch controls with aim assist, compact phone HUD, and an
+  adaptive particle budget for slow devices.
+
 ## Files
 
 - `index.html` / `styles.css` — UI shell, menus, HUD, sidebar
