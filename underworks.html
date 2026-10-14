@@ -2110,7 +2110,9 @@ function attachToSurface(e, sp) {
 }
 
 function spawnDrop(x, y, kind) {
-  S.ents.push({ type: 'drop', kind, x, y, vx: rand(-1, 1), vy: -2.5, w: 10, h: 10, life: 600, hp: 1, t: 0 });
+  // power-up drops carry their type; without it the sprite lookup fails
+  const pu = kind === 'pu' ? weighted(PU_WEIGHTS) : undefined;
+  S.ents.push({ type: 'drop', kind, pu, x, y, vx: rand(-1, 1), vy: -2.5, w: 10, h: 10, life: 600, hp: 1, t: 0 });
 }
 
 function damageEnemy(e, dmg, x, y, melee) {
@@ -2970,8 +2972,8 @@ function drawEnemy(e) {
         ctx.fillStyle = '#57e07a'; ctx.fillRect(-3, -3, 6, 6);
         ctx.fillStyle = '#c8ffd8'; ctx.fillRect(-3, -3, 2, 2);
       } else {
-        const spr = pickupSprite(e.pu);
-        ctx.drawImage(spr, x - 9, y - 18 + bob, 18, 18);
+        if (!POWERUPS[e.pu]) break;   // unknown drop: skip it instead of aborting the frame
+        ctx.drawImage(pickupSprite(e.pu), x - 9, y - 18 + bob, 18, 18);
       }
       break;
     }
