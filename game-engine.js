@@ -5215,6 +5215,9 @@ try {
         initializeEventHandlers();
         setupMenuHandlers();
         restoreSavedSettings();
+        // startup succeeded: disarm the boot guard in index.html
+        window.__xfireBooted = true;
+        try { sessionStorage.removeItem('xfire_boot_retry'); } catch (e) { /* private mode */ }
 
         // Show loading screen, then main menu
         showLoadingScreen().then(() => {

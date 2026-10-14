@@ -12,16 +12,41 @@
     <link rel="manifest" href="manifest.json">
     <title>XFire - Krossfire Skirmish</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231a1a2e'/><text x='50' y='70' font-size='60' fill='%23ff6600' text-anchor='middle' font-weight='bold'>X</text></svg>">
-    <link rel="stylesheet" href="styles.css">
-    <script src="constants.js"></script>
-    <script src="audio.js"></script>
-    <script src="sfx.js"></script>
-    <script src="spriteGenerator.js"></script>
+    <script>
+        // Boot guard. After a deploy a browser can mix the new index.html
+        // with older cached scripts (GitHub Pages caches for 10 minutes),
+        // which breaks startup. The ?v= query on every local file prevents
+        // that (bump XFIRE_VERSION and the ?v= values on each release); if
+        // startup still fails, reload once (revalidates the cache), then
+        // show the error instead of hanging on the loading screen.
+        window.XFIRE_VERSION = '20261014b';
+        window.addEventListener('error', function (e) {
+            if (window.__xfireBooted) return;
+            var key = 'xfire_boot_retry';
+            var tried = false;
+            try { tried = sessionStorage.getItem(key) === window.XFIRE_VERSION; } catch (err) { tried = true; }
+            if (!tried) {
+                try { sessionStorage.setItem(key, window.XFIRE_VERSION); } catch (err) { /* private mode */ }
+                location.reload();
+                return;
+            }
+            var show = function () {
+                var t = document.getElementById('loadingText');
+                if (t) t.textContent = 'Startup failed: ' + (e.message || 'script error') + ' - please reload (Ctrl+Shift+R)';
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show); else show();
+        });
+    </script>
+    <link rel="stylesheet" href="styles.css?v=20261014b">
+    <script src="constants.js?v=20261014b"></script>
+    <script src="audio.js?v=20261014b"></script>
+    <script src="sfx.js?v=20261014b"></script>
+    <script src="spriteGenerator.js?v=20261014b"></script>
     <!-- pre-rendered 3D asset pack (tools/asset-baker); optional - the game
          falls back to procedural sprites if these are missing -->
-    <script src="assets/sprites/survivors.bundle.js" defer></script>
-    <script src="assets/sprites/evolved.bundle.js" defer></script>
-    <script src="assets/sprites/series9.bundle.js" defer></script>
+    <script src="assets/sprites/survivors.bundle.js?v=20261014b" defer></script>
+    <script src="assets/sprites/evolved.bundle.js?v=20261014b" defer></script>
+    <script src="assets/sprites/series9.bundle.js?v=20261014b" defer></script>
     <script>
         // Preload background image before initializing game
         window.addEventListener('DOMContentLoaded', () => {
@@ -277,8 +302,8 @@
         <div>ROTATE YOUR DEVICE<br>XFIRE PLAYS IN LANDSCAPE</div>
     </div>
 
-    <script defer src="terrain.js?v=5"></script>
-    <script defer src="render.js?v=5"></script>
-    <script defer src="game-engine.js?v=5"></script>
+    <script defer src="terrain.js?v=20261014b"></script>
+    <script defer src="render.js?v=20261014b"></script>
+    <script defer src="game-engine.js?v=20261014b"></script>
 </body>
 </html>
