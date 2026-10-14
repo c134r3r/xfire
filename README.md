@@ -311,6 +311,35 @@ A standalone top-down tank shooter, linked from the main menu.
 - Twin-stick touch controls with aim assist, compact phone HUD, and an
   adaptive particle budget for slow devices.
 
+## IRONCLAD - Underworks (`underworks.html`)
+
+A dark SNES-style run-and-gun platformer set in the same world, linked
+from the Ironclad menu. Level 1 "The Pit" has five sections, each with
+its own mechanic:
+
+1. **Crash Site** - surface run at dusk. A 5 s intro shows the pilot
+   climbing out of the burning Ironclad tank (chiptune jingle, skippable).
+2. **The Shaft** - rope descent: swing, shoot in 8 directions, avoid
+   blade bars and spiked outcrops in near darkness.
+3. **Underworks** - factory run with conveyors, crushers, ceiling
+   turrets, a stomp-through floor hatch and two lockdown arenas.
+4. **Magma Tunnel** - auto-scrolling hoverbike chase: jump gaps and
+   barriers, duck pipes, shoot drones.
+5. **The Warden** - two-phase boss (the mech from the XFire menu art);
+   in phase 2 the floor melts and it hovers over moving platforms.
+
+- **Shoot, then smash**: enemies reel (★) at low health; a SMASH
+  finisher sends them flying (Battletoads-style oversized fist, hit-stop)
+  and drops armor. Shield troopers only break to a smash; the boss
+  staggers after enough damage.
+- Movement: variable jump with coyote time and buffering, wall cling and
+  wall jump, dash with i-frames, stomp, drop through platforms.
+- Fair difficulty: checkpoints per section, pits and lava cost armor and
+  put you back on safe ground.
+- 480x270 pixel rendering with a darkness layer lit by muzzle flashes,
+  lava, lamps and explosions; synthesized chiptune music and effects.
+- Touch: floating stick plus slide-able JUMP / FIRE / SMASH / DASH.
+
 ## Releasing
 
 GitHub Pages lets browsers cache files for 10 minutes, so right after a
