@@ -613,6 +613,17 @@ function drawEntityOverlay(e) {
         for (let i = 1; i < type.hp / seg; i++) ctx.fillRect(x + w * (i * seg / type.hp), y, 1, h);
     }
 
+    // falling back to the Repair Bay: green cross next to the bar
+    if (isUnit && e._repairing && e.playerId === 0) {
+        const cx = x + w + 6, cy = y + h / 2, a = 3.5 * k, b = 1.4 * k;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(cx - a - 1, cy - b - 1, 2 * a + 2, 2 * b + 2);
+        ctx.fillRect(cx - b - 1, cy - a - 1, 2 * b + 2, 2 * a + 2);
+        ctx.fillStyle = '#66ffaa';
+        ctx.fillRect(cx - a, cy - b, 2 * a, 2 * b);
+        ctx.fillRect(cx - b, cy - a, 2 * b, 2 * a);
+    }
+
     // production / research progress under the building's bar
     if (!isUnit && e.playerId === 0) {
         let p = -1, c = '#3fa9ff';

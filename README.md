@@ -106,6 +106,18 @@ screen made everything except movement run 2.4x faster).
   can dodge them, and a ground marker shows where a shell will land.
 - **Retaliation**: idle units fire back when shot and nearby squad mates
   join in; units on a move order keep moving (a retreat stays a retreat).
+- **Base defense**: when a building is hit, idle combat units within 16
+  tiles move in. Near defense towers they fight only from inside the
+  towers' reach (one tile short of tower range), so every raider that
+  trades shots with them also takes tower fire; targets that can't be
+  hit from there are left to the towers. Without towers they defend
+  within 9 tiles of the struck building. Afterwards they return to their
+  post. Units on a player order are never pulled away.
+- **Repair retreat**: with a Repair Bay, vehicles below 20% HP that are
+  defending (fighting without a player order) fall back to the nearest
+  bay, get patched up and return to their post (green cross on the
+  health bar). Vehicles sent on an attack by the player keep fighting.
+  Infantry can't be repaired and never retreat.
 - **Target priority**: auto-targeting prefers threats already in range
   and targets the weapon is good against.
 - Population cap of 70 (AI cap scales with difficulty).

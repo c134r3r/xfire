@@ -1199,6 +1199,8 @@ function issueMove(unit, x, y, attackMove = false) {
     unit._navGoal = null;
     unit._prog = null;
     unit.closeTarget = null;
+    unit._defend = null;
+    unit._repairing = null;
     if (!attackMove) { unit.resumeX = undefined; unit.resumeY = undefined; }
 }
 
@@ -1212,6 +1214,8 @@ function issueAttack(unit, target) {
     unit.path = null;
     unit._navGoal = null;
     unit._leash = null;
+    unit._defend = null;
+    unit._repairing = null;
     unit._chaseFails = 0;
     unit._explicitTarget = true;
 }
@@ -1227,6 +1231,8 @@ function stopUnit(unit) {
     unit.resumeX = undefined;
     unit.resumeY = undefined;
     unit._leash = null;
+    unit._defend = null;
+    unit._repairing = null;
 }
 
 // ============================================
@@ -1322,16 +1328,20 @@ function onUnitDamaged(victim, attacker) {
     if (!vt) return;
     const respond = (u) => {
         const t = UNIT_TYPES[u.type];
-        if (!t || t.damage <= 0) return;
+        if (!t || t.damage <= 0 || u._repairing) return;
         if (u.attackTarget && isAlive(u.attackTarget)) return;
         if (u.targetX !== undefined && !u.attackMove) return;
-        if (u.attackMove) { u.resumeX = u.targetX; u.resumeY = u.targetY; }
-        u.attackTarget = attacker;
+        if (u.attackMove) {
+            u.resumeX = u.targetX; u.resumeY = u.targetY;
+            u.attackTarget = attacker;
+        } else if (!autoEngage(u, attacker, 10)) {
+            return; // shooter out of reach of the tower zone: hold
+        }
         u.targetX = undefined;
         u.targetY = undefined;
         u.path = null;
-        if (!u._leash && !u.attackMove) u._leash = { x: u.x, y: u.y, r: 10 };
     };
+    victim._hurtTick = game.tick;
     respond(victim);
     if (game.tick - (victim._helpTick || -999) < 30) return;
     victim._helpTick = game.tick;
@@ -1422,15 +1432,13 @@ function updateUnits(dt) {
         // Auto-acquire: idle units engage enemies within sight
         // (staggered scan keeps big battles cheap)
         if (!unit.attackTarget && unit.targetX === undefined && type.damage > 0 &&
-            (game.tick + i) % 12 === 0) {
+            !unit._repairing && (game.tick + i) % 12 === 0) {
             const t = findTarget(unit, type, sightT(type));
-            if (t) {
-                unit.attackTarget = t;
-                unit._explicitTarget = false;
-                // self-acquired target: remember the post to return to
-                unit._leash = { x: unit.x, y: unit.y, r: 7 };
-            }
+            // self-acquired target: remember the post to return to
+            if (t) autoEngage(unit, t, 7);
         }
+
+        if ((game.tick + i) % 15 === 0) updateRepairRetreat(unit, type);
     }
 }
 
@@ -1494,6 +1502,11 @@ function updateUnitAttack(unit, type, speed) {
         if (unit.attackMove && unit.resumeX !== undefined) {
             unit.targetX = unit.resumeX;
             unit.targetY = unit.resumeY;
+        } else if (unit._defend) {
+            // raiders left in reach of the zone? take the next one
+            const next = nextDefenseTarget(unit);
+            if (next) unit.attackTarget = next;
+            else endDefense(unit);
         } else if (unit._leash) {
             // threat dealt with: return to the guard post
             unit.targetX = unit._leash.x;
@@ -1524,6 +1537,26 @@ function updateUnitAttack(unit, type, speed) {
     const desired = Math.atan2(dy, dx);
     const inRange = dist <= range;
     const clear = inRange && (type.overWalls || hasLineOfFire(unit.x, unit.y, target.x, target.y));
+
+    // Defenders never chase out of the zone: close in only as far as
+    // its edge; a target that can't be hit from there is dropped
+    if (unit._defend && !clear) {
+        const fp = defenseFirePos(unit, target);
+        if (fp && !fp.inside) {
+            const res = navigate(unit, type, fp.x, fp.y, speed, 20);
+            if (res === 'arrived' || res === 'unreachable') fp.blocked = true;
+            else return;
+        }
+        if (!fp || fp.blocked) {
+            unit._defIgnore = target;
+            unit.path = null;
+            unit._navGoal = null;
+            const next = nextDefenseTarget(unit);
+            if (next) unit.attackTarget = next;
+            else endDefense(unit);
+            return;
+        }
+    }
 
     if (clear) {
         // in range with a clear line: stand and fire
@@ -1616,21 +1649,202 @@ function arrive(unit) {
     unit.resumeY = undefined;
 }
 
-// When a building takes a hit, idle combat units of the same player
-// near the base move in to defend. They engage on a leash (see
-// updateUnitAttack) so a hit-and-run raider doesn't drag them away.
+// ============================================
+// BASE DEFENSE
+// Idle units answer an attack on the base, but fight from a defense
+// zone: inside the reach of nearby towers, so every raider that trades
+// shots with them also takes tower fire. Without towers the zone is a
+// ring around the struck building. Units on a player order are never
+// pulled away.
+// ============================================
+const DEFENSE_RECRUIT_RADIUS = 16; // idle units this close to a struck building respond
+const DEFENSE_FREE_RADIUS = 9;     // zone radius around the building when there are no towers
+const DEFENSE_TOWER_SPAN = 12;     // towers this close to the anchor shape the zone
+const REPAIR_RETREAT_HP = 0.2;     // vehicles below this fall back to a Repair Bay
+
+function defenseZone(playerId, x, y) {
+    const circles = [];
+    for (const b of game.buildings) {
+        if (b.playerId !== playerId || !isAlive(b) || b.isUnderConstruction) continue;
+        const bt = BUILDING_TYPES[b.type];
+        if (!bt.damage) continue;
+        if (Math.hypot(b.x - x, b.y - y) > DEFENSE_TOWER_SPAN) continue;
+        // a tile inside the tower's reach: whoever shoots at the
+        // defender from point-blank is still covered
+        circles.push({ x: b.x, y: b.y, r: Math.max(1.5, rangeT(bt) - 1) });
+    }
+    if (circles.length) return { circles, towers: true };
+    return { circles: [{ x, y, r: DEFENSE_FREE_RADIUS }], towers: false };
+}
+
+function inZone(zone, x, y) {
+    return zone.circles.some(c => Math.hypot(x - c.x, y - c.y) <= c.r + 0.25);
+}
+
+// The zone follows the towers (built, destroyed) while a fight goes on
+function defendZone(unit) {
+    const d = unit._defend;
+    if (!d.zone || game.tick - d.zoneTick > 30) {
+        d.zone = defenseZone(unit.playerId, d.x, d.y);
+        d.zoneTick = game.tick;
+    }
+    return d.zone;
+}
+
+function startDefending(unit, x, y) {
+    if (!unit._defend) unit._defend = { x, y, post: { x: unit.x, y: unit.y } };
+    unit._defend.zone = null;
+    unit._leash = null;
+}
+
+// Where a defender should stand to shoot `target` without leaving its
+// zone: the target itself if it is inside, else the zone edge facing
+// it. null when the target can't be reached from anywhere in the zone.
+function defenseFirePos(unit, target) {
+    const zone = defendZone(unit);
+    const reach = rangeT(UNIT_TYPES[unit.type]) + targetRadius(target);
+    let best = null, bestGap = Infinity;
+    for (const c of zone.circles) {
+        const d = Math.hypot(target.x - c.x, target.y - c.y);
+        if (d <= c.r) return { x: target.x, y: target.y, inside: true };
+        const gap = d - c.r;
+        if (gap > reach || gap >= bestGap) continue;
+        bestGap = gap;
+        best = { x: c.x + (target.x - c.x) / d * c.r, y: c.y + (target.y - c.y) / d * c.r, inside: false };
+    }
+    return best;
+}
+
+// Next raider a defender can hit from its zone (nearest first)
+function nextDefenseTarget(unit) {
+    let best = null, bestD = Infinity;
+    for (const e of game.units) {
+        if (e.playerId === unit.playerId || e.hp <= 0 || e === unit._defIgnore) continue;
+        const d = Math.hypot(e.x - unit.x, e.y - unit.y);
+        if (d >= bestD || d > DEFENSE_RECRUIT_RADIUS + 8) continue;
+        if (!defenseFirePos(unit, e)) continue;
+        best = e; bestD = d;
+    }
+    return best;
+}
+
+// Defense over (or nothing reachable): walk back to the post
+function endDefense(unit) {
+    const post = unit._defend.post;
+    unit._defend = null;
+    unit._defIgnore = null;
+    unit.attackTarget = null;
+    unit.path = null;
+    unit._navGoal = null;
+    if (Math.hypot(unit.x - post.x, unit.y - post.y) > 0.8) {
+        unit.targetX = post.x;
+        unit.targetY = post.y;
+    }
+}
+
+// Self-initiated engagement (no player order). Next to own towers the
+// unit fights from the tower zone, elsewhere on a plain leash.
+function autoEngage(unit, target, leashR) {
+    if (!unit._defend) {
+        const z = defenseZone(unit.playerId, unit.x, unit.y);
+        if (z.towers && inZone(z, unit.x, unit.y)) startDefending(unit, unit.x, unit.y);
+    }
+    if (unit._defend) {
+        if (!defenseFirePos(unit, target)) return false;
+    } else if (!unit._leash) {
+        unit._leash = { x: unit.x, y: unit.y, r: leashR };
+    }
+    unit.attackTarget = target;
+    unit._explicitTarget = false;
+    return true;
+}
+
+// A building takes a hit: idle combat units near it move in to defend
 function alertDefenders(building, attacker) {
     if (game.tick - (building._alertTick || -999) < 30) return;
     building._alertTick = game.tick;
     for (const u of game.units) {
         if (u.playerId !== building.playerId) continue;
         const t = UNIT_TYPES[u.type];
-        if (!t || t.damage <= 0) continue;
-        if (u.attackTarget || u.targetX !== undefined) continue; // busy
-        if (Math.hypot(u.x - building.x, u.y - building.y) > 14) continue;
-        u.attackTarget = attacker;
-        u._explicitTarget = false;
-        u._leash = { x: u.x, y: u.y, r: 12 };
+        if (!t || t.damage <= 0 || u._repairing) continue;
+        if (u.targetX !== undefined) continue;                    // on an order
+        if (u.attackTarget && (u._explicitTarget || u._defend)) continue; // already fighting
+        if (Math.hypot(u.x - building.x, u.y - building.y) > DEFENSE_RECRUIT_RADIUS) continue;
+        u._leash = null;
+        u._defend = null;
+        startDefending(u, building.x, building.y);
+        const t2 = defenseFirePos(u, attacker) ? attacker : nextDefenseTarget(u);
+        if (t2) {
+            u.attackTarget = t2;
+            u._explicitTarget = false;
+            u.path = null;
+        } else {
+            u._defend = null; // raider out of reach of the zone: hold position
+        }
+    }
+}
+
+// Badly hurt vehicles that are defending (not on a player order) fall
+// back to the nearest Repair Bay, then return to their post. An ordered
+// attack is the player's call and is never interrupted.
+function updateRepairRetreat(unit, type) {
+    if (type.category !== 'armor') return;
+    const r = unit._repairing;
+    if (r) {
+        const player = game.players[unit.playerId];
+        if (unit.targetX !== undefined) return; // still driving there
+        const bt = BUILDING_TYPES[r.bay.type];
+        if (isAlive(r.bay) && Math.hypot(unit.x - r.bay.x, unit.y - r.bay.y) > bt.repairRadius &&
+            (r.tries = (r.tries || 0) + 1) <= 2) {
+            // stopped short in a crowd: squeeze in closer
+            const p = nearestWalkable(r.bay.x, r.bay.y, 4, unit.x, unit.y);
+            if (p) { unit.targetX = p.x; unit.targetY = p.y; unit.path = null; return; }
+        }
+        if (!isAlive(r.bay) || unit.hp >= type.hp || player.oil < 2 ||
+            Math.hypot(unit.x - r.bay.x, unit.y - r.bay.y) > bt.repairRadius) {
+            unit._repairing = null;
+            if (unit.hp >= type.hp && !unit.attackTarget) {
+                unit.targetX = r.post.x;
+                unit.targetY = r.post.y;
+                unit.path = null;
+            }
+        }
+        return;
+    }
+    if (unit.hp >= type.hp * REPAIR_RETREAT_HP) return;
+    if (unit.attackMove || unit.targetX !== undefined) return;
+    if (unit.attackTarget && unit._explicitTarget) return;
+    // only in a defensive fight: engaged on its own or shot recently
+    const fighting = (unit.attackTarget && !unit._explicitTarget) ||
+        game.tick - (unit._hurtTick || -9999) < 180;
+    if (!fighting) return;
+    if (game.players[unit.playerId].oil < 2) return;
+    // defense means at home: a vehicle left idle deep in enemy land after
+    // an ordered attack is still on offense
+    if (!unit._defend && !game.buildings.some(b => b.playerId === unit.playerId && isAlive(b) &&
+        Math.hypot(b.x - unit.x, b.y - unit.y) <= DEFENSE_RECRUIT_RADIUS)) return;
+    let bay = null, bestD = Infinity;
+    for (const b of game.buildings) {
+        if (b.playerId !== unit.playerId || !isAlive(b) || b.isUnderConstruction) continue;
+        if (!BUILDING_TYPES[b.type].repairRate) continue;
+        const d = Math.hypot(b.x - unit.x, b.y - unit.y);
+        if (d < bestD) { bay = b; bestD = d; }
+    }
+    if (!bay) return;
+    const post = unit._defend ? unit._defend.post : unit._leash ? { x: unit._leash.x, y: unit._leash.y } : { x: unit.x, y: unit.y };
+    const bt = BUILDING_TYPES[bay.type];
+    let dest = { x: unit.x, y: unit.y };
+    if (bestD > bt.repairRadius - 0.8) {
+        const k = (bt.size * 0.5 + 1.3) / bestD;
+        dest = nearestWalkable(bay.x + (unit.x - bay.x) * k, bay.y + (unit.y - bay.y) * k, 4) || { x: bay.x, y: bay.y };
+    }
+    issueMove(unit, dest.x, dest.y);
+    unit._leash = null;
+    unit._defend = null;
+    unit._repairing = { bay, post };
+    if (unit.playerId === 0 && game.tick - (game._retreatMsgTick || -9999) > 600) {
+        game._retreatMsgTick = game.tick;
+        setBanner('Damaged vehicles falling back to the Repair Bay', 3, '#66ffaa');
     }
 }
 
