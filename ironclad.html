@@ -2388,6 +2388,7 @@ function spawnBoss() {
   b.hp = b.maxHp = 2200 * (1 + 0.7 * (tier - 1));
   b.radius = 40;
   b.pattern = 0; b.patT = 300; b.enraged = false; b.spin = 0;
+  b.supplyT = 420;   // first supply crate comes early, then every ~15 s
   b.tier = tier;
   game.enemies.push(b);
   game.boss = b;
@@ -2693,6 +2694,8 @@ function updateBoss(e, d, angP, ts) {
     explosion(e.x, e.y, 1.5, { scorch: false });
   }
   const rk = e.enraged ? 0.7 : 1;
+  e.supplyT -= ts;
+  if (e.supplyT <= 0) { e.supplyT = 900; dropSupplyCrate(); }
   e.patT -= ts;
   if (e.patT <= 0) { e.pattern = (e.pattern + 1) % 4; e.patT = e.enraged ? 220 : 280; e.cd = 30; }
   let move = null;
@@ -2742,6 +2745,24 @@ function updateBoss(e, d, angP, ts) {
       break;
   }
   return move;
+}
+
+// Supply crate during the boss fight: lands near the pilot, one at a time,
+// and expires if nobody gets to it, so a fight never runs out of repairs.
+function dropSupplyCrate() {
+  game.crates = game.crates.filter(c => !c.supply || game.time - c.born < 1200);
+  if (game.crates.some(c => c.supply)) return;
+  const p = game.player;
+  for (let k = 0; k < 20; k++) {
+    const a = rand(0, TAU), d = rand(300, 460);
+    const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+    if (freeSpot(x, y, 24)) {
+      game.crates.push({ x, y, r: 17, hp: 30, rot: rand(-0.4, 0.4), supply: true, born: game.time });
+      showCallout('SUPPLY DROP');
+      Snd.play('alarm');
+      return;
+    }
+  }
 }
 
 function killEnemy(e, cause) {
@@ -2990,6 +3011,7 @@ function updateBullets() {
     smoke(c.x, c.y, 26, 'dust', 50);
     // weapon-heavy loot
     const w = { rapid: 3, spread: 3, rail: 2, rockets: 3, laser: 2, drones: 2, shield: 2, overdrive: 1, airstrike: 1.5, slowmo: 1, nuke: 0.6, repair: 2 };
+    if (c.supply && game.player.hp < 70) w.repair = 6;   // a boss crate helps most when you are hurt
     spawnPickup(c.x, c.y, weighted(w));
     Snd.play('crush', c.x, c.y);
   }
