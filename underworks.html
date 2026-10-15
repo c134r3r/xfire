@@ -5302,5 +5302,13 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 requestAnimationFrame(frame);
 </script>
+    <script>
+        // Offline play: register the service worker that stores the game files.
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function () { /* offline support is optional */ });
+            });
+        }
+    </script>
 </body>
 </html>
