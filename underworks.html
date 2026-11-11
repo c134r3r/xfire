@@ -265,6 +265,7 @@ body.touch.ingame #touch { display: block; }
       ◈ Cracked floor: crouch on it (hold ↓ / stick down) or stomp it (↓ + JUMP in the air).</div>
     </div>
     <div class="actions">
+      <button class="btn secondary" id="keysBtn">CO-OP KEYS</button>
       <a class="btn secondary" href="ironclad.html">IRONCLAD</a>
       <a class="btn secondary" href="index.html">XFIRE</a>
     </div>
@@ -5654,7 +5655,9 @@ function testCoopKeys() {
   km.textContent = n ? `Keys down: ${n} · recognised: ${held}${held < n ? '  (some pressed keys are not in use)' : ''}` : '';
 }
 function openCoopScreen(level) {
-  coopLevel = level;
+  coopLevel = level;   // -1: options only, no start
+  document.getElementById('coopGo').classList.toggle('hidden', level < 0);
+  document.querySelector('#coopScreen .pre').textContent = level < 0 ? 'OPTIONS' : 'CO-OP';
   document.getElementById('menuScreen').classList.add('hidden');
   document.getElementById('coopScreen').classList.remove('hidden');
   coopKeyTest = testCoopKeys;
@@ -5665,6 +5668,7 @@ function closeCoopScreen() {
   document.getElementById('coopScreen').classList.add('hidden');
 }
 document.getElementById('coopGo').addEventListener('click', () => { closeCoopScreen(); startGame(coopLevel, false, true); });
+document.getElementById('keysBtn').addEventListener('click', () => openCoopScreen(-1));
 document.getElementById('coopBack').addEventListener('click', () => { closeCoopScreen(); document.getElementById('menuScreen').classList.remove('hidden'); });
 document.getElementById('coopReset').addEventListener('click', () => {
   for (let i = 0; i < 2; i++) Object.assign(COOP_KEYS[i], COOP_DEFAULT[i]);
