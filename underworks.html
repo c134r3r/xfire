@@ -76,7 +76,8 @@ body.coop #card2 { display: flex; }
 body.coop #lbl1 { color: var(--cyan); }
 #card2 .pip.on { background: linear-gradient(135deg, #ff9cc6, #c2457c); border-color: #ffc0dc; box-shadow: 0 0 8px rgba(255,142,192,0.7); }
 #section { font-size: 10px; letter-spacing: 3px; color: var(--cyan); }
-#chips { display: flex; gap: 4px; }
+#chips, #chips2 { display: flex; gap: 4px; }
+#chips2 .chip { border-color: color-mix(in srgb, var(--c) 70%, #ff8ec0); }
 .chip { display: flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; background: rgba(12,8,6,0.85); border: 1px solid var(--c); border-radius: 5px; font-size: 9px; color: var(--c); }
 .chip img { width: 18px; height: 18px; }
 .chip .bar { width: 30px; height: 3px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; }
@@ -219,7 +220,8 @@ body.touch.ingame #touch { display: block; }
     <div class="hud-tl">
       <div class="card"><span class="lbl" id="lbl1">ARMOR</span><div id="hearts"></div><span class="val coop-only" id="liv1">×5</span></div>
       <div class="card p2" id="card2"><span class="lbl">P2</span><div id="hearts2"></div><span class="val coop-only" id="liv2">×5</span></div>
-      <div id="chips"></div>
+      <div class="chips" id="chips2"></div>
+      <div class="chips" id="chips"></div>
     </div>
     <div class="hud-tr">
       <div class="card"><span id="section">CRASH SITE</span><span class="lbl solo-only">LIVES</span><span class="val solo-only" id="lives">5</span><span class="lbl">SCORE</span><span class="val" id="score">0</span></div>
@@ -2328,7 +2330,7 @@ const POWERUPS = {
 };
 const START_LIVES = 5;
 const TIMED = ['rapid', 'spread', 'rail', 'laser', 'rockets', 'drones', 'shield', 'overdrive'];
-const PU_WEIGHTS = { rapid: 4, spread: 4, rail: 2.5, laser: 2, rockets: 3, drones: 2.5, shield: 2, overdrive: 2, repair: 3, oneup: 0.7, nuke: 0.8 };
+const PU_WEIGHTS = { rapid: 4, spread: 4, rail: 2.5, laser: 2, rockets: 3, drones: 2.5, shield: 2, overdrive: 2, repair: 3, oneup: 0.25, nuke: 0.8 };
 
 // Three levels of rising difficulty. diff scales enemy health (hp),
 // enemy cooldowns (rate: lower fires more often) and enemy shot speed.
@@ -2380,7 +2382,7 @@ let state = 'menu';
 function newRun(level = 0, coop = false) {
   G = { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0, php: [6, 6], maxHp: 6, lives: [START_LIVES, START_LIVES], coop, level, section: 0, combo: 0, comboT: 0,
     diff: LEVELS[level].diff, levelStart: { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0 },
-    pu: { rapid: 0, spread: 0, rail: 0, laser: 0, rockets: 0, drones: 0, shield: 0, overdrive: 0 } };
+    pus: [0, 1].map(() => ({ rapid: 0, spread: 0, rail: 0, laser: 0, rockets: 0, drones: 0, shield: 0, overdrive: 0 })) };
 }
 function curSections() { return LEVELS[G.level].sections; }
 // enemy cooldowns shrink with the level's difficulty
@@ -2403,6 +2405,7 @@ function makePlayer(x, y, slot = 0) {
   return {
     slot, inp: PIN[slot].inp, prs: PIN[slot].prs, offT: 0,
     get hp() { return G.php[this.slot]; }, set hp(v) { G.php[this.slot] = v; },
+    get pu() { return G.pus[this.slot]; }, set pu(v) { /* lives in G.pus */ },
     x, y, vx: 0, vy: 0, w: 10, h: 22, face: 1, onGround: false, coyote: 0, jumpBuf: 0, wall: 0, wallT: 0,
     dashT: 0, dashCd: 0, airDash: true, inv: 90, fireCd: 0, meleeT: 0, meleeCd: 0, stomp: false, crouch: false,
     aim: 0, aimX: 1, aimY: 0, run: 0, dropT: 0, lastSafe: { x, y }, recoil: 0, landT: 0, dead: 0, rocketCd: 0,
@@ -2597,7 +2600,7 @@ function updatePlayer() {
   if (P.dead) { tickDead(P); return; }
   if (S.mode === 'rope') return updateRope(P);
   if (S.mode === 'bike') return updateBikePlayer(P);
-  const od = G.pu.overdrive > 0;
+  const od = P.pu.overdrive > 0;
   const dirX = (P.inp.right ? 1 : 0) - (P.inp.left ? 1 : 0);
   if (P.prs.jump) P.jumpBuf = P.prs.jump;
   if (P.jumpBuf > 0) P.jumpBuf--;
@@ -2765,7 +2768,7 @@ function fallReset() {
 function hurtPlayer(n, ignoreInv, who) {
   const P = who || S.P;
   if (P.dead || (P.inv > 0 && !ignoreInv) || state !== 'play') return;
-  if (G.pu.shield > 0) {
+  if (P.pu.shield > 0) {
     sparks(P.x, P.y - 12, 8, '#8fe6ff', 3);
     Snd.play('clank');
     return;
@@ -2805,6 +2808,7 @@ const COOP_DOWN_TICKS = 200;   // a fallen pilot rejoins after ~3.3 s while the 
 function killPlayer(P = S.P) {
   P.hp = 0;
   G.lives[P.slot]--;
+  for (const k of TIMED) P.pu[k] = 0;   // upgrades are lost with the pilot
   P.dead = S.coop ? COOP_DOWN_TICKS : 80;
   S.lastDeathT = S.time;
   G.deaths++;
@@ -2842,7 +2846,7 @@ function respawn() {
   // whole-team reset (solo death, or both pilots down): costs a life
   if (S.players.every(q => G.lives[q.slot] <= 0)) { gameOver(); return; }
   G.php = [G.maxHp, G.maxHp];
-  for (const k of TIMED) G.pu[k] = 0;
+  for (const pu of G.pus) for (const k of TIMED) pu[k] = 0;
   if (S.mode === 'bike') { restartBikeAtCheckpoint(); return; }
   if (S.def.boss) { startSection(G.section); return; }
   const c = S.lift ? { x: S.lift.x, y: S.lift.y } : S.checkpoint;
@@ -2863,7 +2867,7 @@ function respawn() {
 
 // ----- shooting & smashing -----
 function playerCombat(P) {
-  const pu = G.pu;
+  const pu = P.pu;
   if (P.fireCd > 0) P.fireCd--;
   P.recoil *= 0.7;
   P.beam = null;
@@ -2924,7 +2928,7 @@ function playerCombat(P) {
 }
 
 function fireBlaster(P, mx, my) {
-  const pu = G.pu;
+  const pu = P.pu;
   const rail = pu.rail > 0;
   const angs = pu.spread > 0 ? [-0.22, -0.11, 0, 0.11, 0.22] : [0];
   for (const o of angs) {
@@ -2946,7 +2950,7 @@ function fireBlaster(P, mx, my) {
 function fireLaser(P, mx, my) {
   const cx = Math.cos(P.aim), cy = Math.sin(P.aim);
   let len = 280;
-  if (G.pu.rail <= 0) for (let d = 0; d < 280; d += 4) if (solidAtPx(mx + cx * d, my + cy * d)) { len = d; break; }
+  if (P.pu.rail <= 0) for (let d = 0; d < 280; d += 4) if (solidAtPx(mx + cx * d, my + cy * d)) { len = d; break; }
   const x2 = mx + cx * len, y2 = my + cy * len;
   P.beam = { x1: mx, y1: my, x2, y2 };
   for (const e of S.ents) {
@@ -3242,9 +3246,9 @@ function updateBikePlayer(P) {
   if (P.fireCd > 0) P.fireCd--;
   if (P.inp.fire && P.fireCd <= 0) {
     const mx = P.x + 14, my = P.y - 12;
-    const angs = G.pu.spread > 0 ? [-0.2, 0, 0.2] : [0];
+    const angs = P.pu.spread > 0 ? [-0.2, 0, 0.2] : [0];
     for (const o of angs) S.bullets.push({ x: mx, y: my, vx: Math.cos(P.aim + o) * 7.5, vy: Math.sin(P.aim + o) * 7.5, life: 60, dmg: 1, kind: 'shot', r: 2, screen: true, owner: P });
-    P.fireCd = G.pu.rapid > 0 ? 5 : 9;
+    P.fireCd = P.pu.rapid > 0 ? 5 : 9;
     glow(mx, my, 8, '#ffd27a', 3);
     Snd.play('blaster');
   }
@@ -3815,7 +3819,7 @@ function updateBullets() {
   }
   S.bullets = S.bullets.filter(b => b.life > 0 && (b.screen || (b.x > S.cam.x - 40 && b.x < S.cam.x + W + 40 && b.y > S.cam.y - 60 && b.y < S.cam.y + H + 60)));
 
-  const slow = G.pu.overdrive > 0 ? 1 : 1;
+  const slow = 1;
   for (const b of S.ebullets) {
     if (b.life <= 0) continue;
     const hp_ = b.missile && nearestPlayer(b.x, b.y);
@@ -3867,10 +3871,11 @@ function splash(x, y, r, dmg) {
 
 function applyPowerup(type, x, y, who) {
   const def = POWERUPS[type];
-  if (def.dur) G.pu[type] = Math.min(def.dur * 2, G.pu[type] + def.dur);
+  const who_ = who || S.P;
+  if (def.dur) who_.pu[type] = Math.min(def.dur * 2, who_.pu[type] + def.dur);   // only the pilot who grabbed it
   if (type === 'repair') healPlayer(who || S.P, 2);
   if (type === 'oneup') {
-    G.lives[(who || S.P).slot]++;
+    G.lives[0]++; if (G.coop) G.lives[1]++;   // a 1UP counts for both pilots
     Snd.play('checkpoint');
     for (let i = 0; i < 12; i++) glow(x + rand(-10, 10), y - rand(0, 24), rand(5, 9), '#ffd84a', 40, rand(-0.3, 0.3), rand(-1.2, -0.4));
   }
@@ -3885,8 +3890,9 @@ function applyPowerup(type, x, y, who) {
     S.ebullets = [];
   }
   Snd.play('pickup');
-  floatText(x, y - 14, def.label, def.color, 10);
-  showCallout(def.label);
+  const tag = G.coop && def.dur && type !== 'oneup' ? (who_.slot ? 'P2 ' : 'P1 ') : '';
+  floatText(x, y - 14, tag + def.label, def.color, 10);
+  showCallout(tag + def.label);
 }
 
 // ----- arenas & checkpoints -----
@@ -5163,7 +5169,7 @@ function render() {
         }, P.hurtT > 0 ? '#ffffff' : null);
       }
     }
-    if (G.pu.drones > 0 && state === 'play') for (const d of P.drones) if (d.x !== undefined) {
+    if (P.pu.drones > 0 && state === 'play') for (const d of P.drones) if (d.x !== undefined) {
       ctx.fillStyle = '#5fd4e6'; ctx.fillRect(Math.round(d.x) - 2, Math.round(d.y) - 1, 4, 2);
       ctx.fillStyle = '#2a3a40'; ctx.fillRect(Math.round(d.x) - 3, Math.round(d.y) - 2, 6, 1);
     }
@@ -5300,7 +5306,7 @@ function render() {
     }
     ctx.globalAlpha = 0.7;
     ctx.drawImage(glowSprite(P.slot ? '#ff8ec0' : '#57e0c8'), P.x + P.face * 2 - 4, vy - (P.crouch ? 18 : 26) + (S.mode === 'bike' ? 3 : 0), 8, 8);
-    if (G.pu.shield > 0 && state === 'play') {
+    if (P.pu.shield > 0 && state === 'play') {
       ctx.globalAlpha = 0.35 + 0.15 * Math.sin(S.time * 0.3);
       ctx.drawImage(lightSprite('#6fe3ff'), P.x - 20, vy - 32, 40, 40);
     }
@@ -5691,7 +5697,7 @@ function drawIntroOverlay() {
 // ============================================================
 // HUD
 // ============================================================
-let hudKey = '';
+let hudKeys = ['', ''];
 const ICONS = {};
 function updateHud() {
   document.body.classList.toggle('coop', !!G.coop);
@@ -5707,13 +5713,14 @@ function updateHud() {
   }
   document.getElementById('score').textContent = G.score.toLocaleString('en-US');
   document.getElementById('lives').textContent = '×' + Math.max(0, G.lives[0]);
-  const active = TIMED.filter(k => G.pu[k] > 0);
-  const k2 = active.join(',');
-  if (k2 !== hudKey) {
-    hudKey = k2;
-    document.getElementById('chips').innerHTML = active.map(k => `<div class="chip" style="--c:${POWERUPS[k].color}"><img src="${ICONS[k] || (ICONS[k] = iconURL(k))}" alt=""><div class="bar"><i id="pu_${k}"></i></div></div>`).join('');
+  for (let i = 0; i < (G.coop ? 2 : 1); i++) {
+    const pu = G.pus[i], active = TIMED.filter(k => pu[k] > 0), k2 = active.join(',');
+    if (k2 !== hudKeys[i]) {
+      hudKeys[i] = k2;
+      document.getElementById(i ? 'chips2' : 'chips').innerHTML = active.map(k => `<div class="chip" style="--c:${POWERUPS[k].color}"><img src="${ICONS[k] || (ICONS[k] = iconURL(k))}" alt=""><div class="bar"><i id="pu${i}_${k}"></i></div></div>`).join('');
+    }
+    for (const k of active) { const el = document.getElementById('pu' + i + '_' + k); if (el) el.style.width = Math.min(100, pu[k] / POWERUPS[k].dur * 100) + '%'; }
   }
-  for (const k of active) { const el = document.getElementById('pu_' + k); if (el) el.style.width = Math.min(100, G.pu[k] / POWERUPS[k].dur * 100) + '%'; }
   if (S.boss && !S.boss.dead) document.getElementById('bossFill').style.width = Math.max(0, S.boss.hp / S.boss.maxHp * 100) + '%';
 }
 function showBanner(text, sub) {
@@ -5748,7 +5755,7 @@ function step() {
     updateEruptions();
     updateBullets();
     updateLevelLogic();
-    for (const k of TIMED) if (G.pu[k] > 0) G.pu[k]--;
+    for (const pu of G.pus) for (const k of TIMED) if (pu[k] > 0) pu[k]--;
     updateCamera();
   }
   updateParticles();
