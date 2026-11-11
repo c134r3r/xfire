@@ -1,0 +1,110 @@
+{
+ "tank": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "buggy": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "armoredCar": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "dozer": {
+  "cell": 84,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "mortar": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "bike": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "truck": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "apc": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "bomber": {
+  "cell": 76,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "heli": {
+  "cell": 96,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": false
+ },
+ "boss": {
+  "cell": 140,
+  "dirs": 16,
+  "ref": 40,
+  "shadow": true
+ },
+ "rack": {
+  "cell": 36,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "turret120": {
+  "cell": 84,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "turret135": {
+  "cell": 88,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "turret190": {
+  "cell": 108,
+  "dirs": 16,
+  "ref": 20,
+  "shadow": true
+ },
+ "turretBoss": {
+  "cell": 128,
+  "dirs": 16,
+  "ref": 30,
+  "shadow": true
+ },
+ "barrel": {
+  "cell": 56,
+  "dirs": 1,
+  "ref": 20,
+  "shadow": true
+ },
+ "crate": {
+  "cell": 72,
+  "dirs": 1,
+  "ref": 20,
+  "shadow": true
+ }
+}
