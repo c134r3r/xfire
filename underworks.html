@@ -481,7 +481,11 @@ const Snd = {
     const ir = ac.createBuffer(2, rl, ac.sampleRate);
     for (let c = 0; c < 2; c++) {
       const ch = ir.getChannelData(c);
-      for (let i = 0; i < rl; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rl, 3.2) * (i < 90 ? i / 90 : 1);
+      let lpv = 0;
+      for (let i = 0; i < rl; i++) {
+        lpv += 0.42 * ((Math.random() * 2 - 1) - lpv);   // one-pole lowpass: a dull tail instead of a hissy one
+        ch[i] = lpv * Math.pow(1 - i / rl, 3.2) * (i < 90 ? i / 90 : 1) * 1.6;
+      }
     }
     this.rev = ac.createConvolver(); this.rev.buffer = ir;
     this.revOut = ac.createGain(); this.revOut.gain.value = 0.25;
@@ -818,7 +822,7 @@ const SFX = {
 
 // noise: [filter, freq, Q, volume, lfo rate, lfo depth (Hz)]; hum: [freq, wave, lowpass, volume]; room: reverb level
 const AMBIENCE = {
-  sand:      { room: 0.12, noise: [['bandpass', 520, 0.7, 0.05, 0.11, 260]] },
+  sand:      { room: 0.12, noise: [['bandpass', 520, 0.7, 0.03, 0.11, 200]] },
   rock:      { room: 0.42, noise: [['lowpass', 160, 0.7, 0.07, 0.07, 40], ['bandpass', 1800, 4, 0.006, 0.3, 600]] },
   metal:     { room: 0.3, noise: [['lowpass', 380, 0.8, 0.03, 0.15, 80]], hum: [[55, 'sawtooth', 200, 0.018]] },
   core:      { room: 0.36, noise: [['lowpass', 300, 0.8, 0.035, 0.1, 60]], hum: [[48, 'sawtooth', 180, 0.022]] },
@@ -930,11 +934,11 @@ const SONGS = {
         41 . 41 . 41 . 41 . 44 . 44 . 43 . 41 .
         40 . 40 . 40 . 40 . 40 . 40 . 40 . 40 .`) },
       { wave: 'noise', vol: 0.095, notes: track(`
-        c . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
         k . h . s . h . k . k . s . h h
         k . h . s . h . k . k . s . h h
         k . h . s . h . k . s s s . s s
-        c . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
         k . h . s . h . k . k . s . h h
         k . h . s . h . k . k . s . h h
         k . h . s . k . k k s s s s s s`) }
@@ -1177,11 +1181,14 @@ const Chip = {
     if (this._gt && this._gt.ac === ac) return this._gt.inp;
     const inp = ac.createGain(), sh = ac.createWaveShaper(), lp = ac.createBiquadFilter(), post = ac.createGain();
     const curve = new Float32Array(1024);
-    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 7); }
-    sh.curve = curve; sh.oversample = '2x';
-    lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 0.5;
-    post.gain.value = 0.05;
-    inp.connect(sh); sh.connect(lp); lp.connect(post); post.connect(Snd.music);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 3.2); }   // soft clip: less fizz
+    sh.curve = curve; sh.oversample = '4x';
+    lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.4;   // cabinet
+    const lp2 = ac.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 3200; lp2.Q.value = 0.4;
+    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 80;
+    post.gain.value = 0.026;
+    // straight to the master: no reverb send or echo, so no noisy wash behind the riff
+    inp.connect(sh); sh.connect(lp); lp.connect(lp2); lp2.connect(hp); hp.connect(post); post.connect(Snd.master);
     this._gt = { ac, inp };
     return inp;
   },
@@ -1192,13 +1199,13 @@ const Chip = {
     const end = t + (muted ? 0.085 : dur * 0.97);
     const g = ac.createGain(), f = ac.createBiquadFilter();
     f.type = 'lowpass'; f.Q.value = 1.2;
-    f.frequency.setValueAtTime(muted ? 1100 : 3400, t);
-    f.frequency.exponentialRampToValueAtTime(muted ? 450 : 1700, end);
+    f.frequency.setValueAtTime(muted ? 900 : 2200, t);
+    f.frequency.exponentialRampToValueAtTime(muted ? 400 : 1200, end);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(tr.vol, t + 0.004);
     if (muted) g.gain.exponentialRampToValueAtTime(0.0001, end);
     else { g.gain.setValueAtTime(tr.vol * 0.85, Math.max(t + 0.02, end - 0.08)); g.gain.exponentialRampToValueAtTime(0.0001, end); }
-    for (const [mul, det] of [[1, -6], [1.4983, 5], [2, -3]]) {
+    for (const [mul, det] of [[1, -4], [1.4983, 4]]) {
       const o = ac.createOscillator();
       o.type = 'sawtooth'; o.frequency.value = f0 * mul; o.detune.value = det;
       o.connect(g); o.start(t); o.stop(end + 0.02);
