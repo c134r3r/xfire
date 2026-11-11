@@ -217,7 +217,7 @@ body.touch.ingame #touch { display: block; }
       <div id="chips"></div>
     </div>
     <div class="hud-tr">
-      <div class="card"><span id="section">CRASH SITE</span><span class="lbl">SCORE</span><span class="val" id="score">0</span></div>
+      <div class="card"><span id="section">CRASH SITE</span><span class="lbl">LIVES</span><span class="val" id="lives">5</span><span class="lbl">SCORE</span><span class="val" id="score">0</span></div>
     </div>
     <div id="bossBar"><div id="bossName">MECH WARDEN</div><div id="bossTrack"><div id="bossFill"></div></div></div>
     <div id="banner"></div>
@@ -287,6 +287,21 @@ body.touch.ingame #touch { display: block; }
       <button class="btn" id="coopGo">START CO-OP</button>
       <button class="btn secondary" id="coopReset">DEFAULT KEYS</button>
       <button class="btn secondary" id="coopBack">BACK</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overScreen">
+  <div class="panel" style="max-width:420px">
+    <div class="pre">ALL LIVES LOST</div>
+    <div class="title" style="font-size:40px;color:#ff4b3e;text-shadow:0 0 28px rgba(255,75,62,0.6),0 4px 0 #3a0c08">GAME OVER</div>
+    <div class="stats" style="margin-top:14px">
+      <div class="row"><span>SCORE</span><span id="oScore">0</span></div>
+      <div class="row"><span>KILLS</span><span id="oKills">0</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="retryBtn">RETRY LEVEL</button>
+      <button class="btn secondary" id="overMenuBtn">MENU</button>
     </div>
   </div>
 </div>
@@ -1388,6 +1403,9 @@ function drawIcon(g, type, r, color) {
       g.beginPath(); g.moveTo(0, -0.6 * r); g.lineTo(0.48 * r, -0.38 * r); g.quadraticCurveTo(0.45 * r, 0.35 * r, 0, 0.62 * r);
       g.quadraticCurveTo(-0.45 * r, 0.35 * r, -0.48 * r, -0.38 * r); g.closePath(); g.stroke(); break;
     case 'repair': L([[0, -0.5], [0, 0.5]]); L([[-0.5, 0], [0.5, 0]]); break;
+    case 'oneup':
+      g.font = `900 ${Math.round(r * 0.95)}px "Arial Black", Verdana, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('1UP', 0, r * 0.05); break;
     case 'overdrive':
       g.beginPath(); g.moveTo(0.15 * r, -0.62 * r); g.lineTo(-0.35 * r, 0.08 * r); g.lineTo(0, 0.08 * r); g.lineTo(-0.15 * r, 0.62 * r); g.lineTo(0.38 * r, -0.12 * r); g.lineTo(0.02 * r, -0.12 * r); g.closePath(); g.fill(); break;
     case 'airstrike':
@@ -1943,6 +1961,27 @@ function paintTiles(L) {
       g.fillStyle = th.crack; g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 13, y + 2, 1, 1);
     }
   }
+  // grime pass: speckle, seams, rivet glints, LEDs, rust and ooze streaks, ore glints
+  const rg = makeRng(L.w * 17 + L.h * 5 + 3);
+  const rr = (a, b) => a + ((rg() * (b - a + 1)) | 0);
+  for (let ty = 0; ty < L.h; ty++) for (let tx = 0; tx < L.w; tx++) {
+    if (L.tiles[ty * L.w + tx] !== SOLID) continue;
+    const x = tx * T, y = ty * T;
+    const top = !solidAt(tx, ty - 1), bot = !solidAt(tx, ty + 1);
+    for (let k = 0; k < 4; k++) { g.fillStyle = rg() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)'; g.fillRect(x + rr(0, 15), y + rr(0, 15), 1, 1); }
+    g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(x, y + 10, T, 6);
+    if (metallic) {
+      if ((tx + ty) % 3 === 0) { g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(x + 7, y, 1, T); g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(x + 8, y, 1, T); }
+      g.fillStyle = 'rgba(255,255,255,0.2)';
+      g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 11, y + 2, 1, 1); g.fillRect(x + 2, y + 11, 1, 1); g.fillRect(x + 11, y + 11, 1, 1);
+      if (!top && rg() < 0.06) { g.fillStyle = ['#ff4a3a', '#ffb040', '#57e0c8'][rr(0, 2)]; g.fillRect(x + rr(4, 11), y + rr(5, 10), 1, 1); }
+      if (!top && rg() < 0.1) { g.fillStyle = 'rgba(150,70,30,0.3)'; g.fillRect(x + rr(2, 12), y, 1, rr(5, 14)); }
+    } else {
+      if ((ty + tx * 2) % 5 === 0) { g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(x, y + 3, T, 2); }
+      if (!top && rg() < 0.05) { const ox = x + rr(3, 11), oy = y + rr(3, 11); g.fillStyle = L.themeName === 'sand' ? '#e8c08a' : '#ffb060'; g.fillRect(ox, oy, 2, 1); g.fillStyle = '#fff3d0'; g.fillRect(ox, oy, 1, 1); }
+    }
+    if (L.themeName === 'toxic' && bot && rg() < 0.3) { g.fillStyle = 'rgba(122,176,42,0.55)'; g.fillRect(x + rr(2, 12), y + T - 7, rr(1, 2), 7); }
+  }
   // set dressing behind the play (drawn on the tile layer, no collision)
   if (metallic && !L.noCables) {
     for (let tx = 2; tx < L.w - 2; tx += randi(5, 9)) {
@@ -2279,10 +2318,12 @@ const POWERUPS = {
   shield:    { label: 'SHIELD', color: '#6fe3ff', dur: 480 },
   overdrive: { label: 'OVERDRIVE', color: '#8fd0ff', dur: 600 },
   repair:    { label: 'REPAIR', color: '#57e07a', dur: 0 },
+  oneup:     { label: '1UP', color: '#ffd84a', dur: 0 },
   nuke:      { label: 'NUKE', color: '#d6ff3a', dur: 0 }
 };
+const START_LIVES = 5;
 const TIMED = ['rapid', 'spread', 'rail', 'laser', 'rockets', 'drones', 'shield', 'overdrive'];
-const PU_WEIGHTS = { rapid: 4, spread: 4, rail: 2.5, laser: 2, rockets: 3, drones: 2.5, shield: 2, overdrive: 2, repair: 3, nuke: 0.8 };
+const PU_WEIGHTS = { rapid: 4, spread: 4, rail: 2.5, laser: 2, rockets: 3, drones: 2.5, shield: 2, overdrive: 2, repair: 3, oneup: 0.7, nuke: 0.8 };
 
 // Three levels of rising difficulty. diff scales enemy health (hp),
 // enemy cooldowns (rate: lower fires more often) and enemy shot speed.
@@ -2332,7 +2373,7 @@ let S = null;   // current section
 let state = 'menu';
 
 function newRun(level = 0, coop = false) {
-  G = { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0, php: [6, 6], maxHp: 6, coop, level, section: 0, combo: 0, comboT: 0,
+  G = { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0, php: [6, 6], maxHp: 6, lives: START_LIVES, coop, level, section: 0, combo: 0, comboT: 0,
     diff: LEVELS[level].diff, levelStart: { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0 },
     pu: { rapid: 0, spread: 0, rail: 0, laser: 0, rockets: 0, drones: 0, shield: 0, overdrive: 0 } };
 }
@@ -2419,6 +2460,9 @@ function explosion(x, y, s = 1, quiet = false) {
     glow(x + rand(-4, 4) * s, y + rand(-4, 4) * s, rand(7, 12) * Math.sqrt(s), i % 3 ? '#ff8a2a' : '#ffd25a', randi(12, 22), Math.cos(a) * v, Math.sin(a) * v - 0.3, 0.25);
   }
   part({ k: 'ring', x, y, vx: 0, vy: 0, size: 14 + 12 * s, color: 'rgba(255,230,180,1)', life: 12, drag: 1 });
+  part({ k: 'ring', x, y, vx: 0, vy: 0, size: 26 + 22 * s, color: 'rgba(255,150,70,1)', life: 20, drag: 1 });
+  for (let i = 0; i < 4 + 3 * s; i++) glow(x + rand(-6, 6) * s, y + rand(-4, 4) * s, rand(2, 4), '#ffb050', randi(40, 70), rand(-0.6, 0.6), rand(-1.4, -0.4), -0.02);   // rising embers
+  if (s >= 1.4) S.flash = Math.max(S.flash, 0.22);
   sparks(x, y, 8 + 8 * s, '#ffd27a', 3 + s);
   for (let i = 0; i < 3 + 3 * s; i++) {
     const a = rand(-Math.PI, 0), v = rand(1.5, 3.5) * Math.sqrt(s);
@@ -2786,7 +2830,8 @@ function revivePlayer(P, mate) {
 }
 
 function respawn() {
-  // whole-team reset (solo death, or both pilots down)
+  // whole-team reset (solo death, or both pilots down): costs a life
+  if (--G.lives <= 0) { gameOver(); return; }
   G.php = [G.maxHp, G.maxHp];
   for (const k of TIMED) G.pu[k] = 0;
   if (S.mode === 'bike') { restartBikeAtCheckpoint(); return; }
@@ -2881,6 +2926,8 @@ function fireBlaster(P, mx, my) {
   if (pu.overdrive > 0) cd = Math.max(3, cd - 2);
   P.fireCd = cd;
   P.recoil = 2;
+  // ejected brass
+  part({ k: 'debris', x: P.x, y: my + 3, vx: -P.face * rand(0.4, 1.3), vy: rand(-2.6, -1.3), size: 1.5, life: 45, rot: 0, vr: rand(-0.5, 0.5), color: '#d8a830', drag: 0.99, grav: 0.22 });
   glow(mx, my, 8, rail ? '#d6b8ff' : '#ffd27a', 3);
   light(mx, my, 40, '#ffb050', 3);
   Snd.play(rail ? 'rail' : 'blaster');
@@ -2947,9 +2994,26 @@ function updatePlayers() {
     if (Q.inv > 0) Q.inv--;
     if (Q.hurtT > 0) Q.hurtT--;
     updatePlayer();
+    updateIdle(Q);
   }
   S.P = S.players[0];
   if (S.coop) coopRules();
+}
+
+// Standing still for 2 s: the pilot gets bored (backflip or squats). Purely visual.
+function updateIdle(Q) {
+  const I = Q.inp;
+  const active = I.left || I.right || I.up || I.down || I.jump || I.fire || I.melee || I.dash;
+  if (S.mode !== 'run' || Q.dead || !Q.onGround || active || Math.abs(Q.vx) > 0.3 || Q.hurtT > 0) { Q.idleT = 0; Q.idleAnim = null; return; }
+  Q.idleT = (Q.idleT || 0) + 1;
+  if (Q.idleAnim) {
+    Q.animT++;
+    if (Q.idleAnim === 'flip' && Q.animT === 46) { Snd.play('land'); smoke(Q.x - 4, Q.y, 5, 18, -0.3, -0.1, false); smoke(Q.x + 4, Q.y, 5, 18, 0.3, -0.1, false); }
+    if (Q.animT >= (Q.idleAnim === 'flip' ? 48 : 102)) { Q.idleAnim = null; Q.idleT = 30; }
+  } else if (Q.idleT >= 120) {
+    Q.idleAnim = Math.random() < 0.5 ? 'flip' : 'squat'; Q.animT = 0;
+    if (Q.idleAnim === 'flip') Snd.play('whoosh');
+  }
 }
 
 // Co-op housekeeping: screen edges are soft walls, a pilot who drops out of
@@ -3701,6 +3765,8 @@ function updateBullets() {
     if (b.kind !== 'rail' && solidAtPx(b.x, b.y)) {
       b.life = 0;
       sparks(b.x - b.vx, b.y - b.vy, 3, '#ffe0a0', 2, Math.atan2(-b.vy, -b.vx), 0.9);
+      part({ k: 'ring', x: b.x - b.vx, y: b.y - b.vy, vx: 0, vy: 0, size: 5, color: 'rgba(255,224,160,1)', life: 7, drag: 1 });
+      smoke(b.x - b.vx, b.y - b.vy, 3, 14, 0, -0.15, false);
       if (b.kind === 'rocket') { explosion(b.x, b.y, 0.7); splash(b.x, b.y, 26, b.dmg); }
       continue;
     }
@@ -3791,6 +3857,14 @@ function applyPowerup(type, x, y, who) {
   const def = POWERUPS[type];
   if (def.dur) G.pu[type] = Math.min(def.dur * 2, G.pu[type] + def.dur);
   if (type === 'repair') healPlayer(who || S.P, 2);
+  if (type === 'oneup') {
+    G.lives++;
+    Snd.play('checkpoint');
+    for (let i = 0; i < 12; i++) glow(x + rand(-10, 10), y - rand(0, 24), rand(5, 9), '#ffd84a', 40, rand(-0.3, 0.3), rand(-1.2, -0.4));
+  }
+  // pickup burst in the power-up's color
+  part({ k: 'ring', x, y: y - 6, vx: 0, vy: 0, size: 26, color: def.color, life: 16, drag: 1 });
+  sparks(x, y - 6, 10, def.color, 3);
   if (type === 'nuke') {
     S.flash = 1; S.freeze = 6; addTrauma(1);
     Snd.play('finisher');
@@ -4466,6 +4540,56 @@ function drawHoverbike(x, y, tilt) {
   ctx.restore();
 }
 
+// ----- atmosphere: drifting fog banks and sunset rays -----
+const FOG = {
+  rock: ['#3a2a34', 0.32], metal: ['#5a3a30', 0.2], core: ['#2a4a3c', 0.2], magma: ['#8a3010', 0.22],
+  ice: ['#8fc4e8', 0.2], icecore: ['#8fc4e8', 0.2], liftshaft: ['#8fc4e8', 0.16], toxic: ['#6ab02a', 0.22], reactor: ['#7ad038', 0.24]
+};
+const fogCache = {};
+function fogSprite(col) {
+  if (fogCache[col]) return fogCache[col];
+  const c = mkCanvas(480, 96), g = c.getContext('2d');
+  const rng = makeRng(col.length * 977 + col.charCodeAt(1));
+  for (let i = 0; i < 16; i++) {
+    const x = rng() * 480, y = 20 + rng() * 56, rx = 50 + rng() * 80, ry = 8 + rng() * 14;
+    for (const ox of [-480, 0, 480]) {
+      const gr = g.createRadialGradient(x + ox, y, 0, x + ox, y, rx);
+      gr.addColorStop(0, rgba(col, 0.5)); gr.addColorStop(1, rgba(col, 0));
+      g.save(); g.translate(0, y); g.scale(1, ry / rx); g.translate(0, -y);
+      g.fillStyle = gr; g.fillRect(x + ox - rx, y - rx, rx * 2, rx * 2);
+      g.restore();
+    }
+  }
+  return (fogCache[col] = c);
+}
+function drawFog(front) {
+  const f = FOG[S.def.back];
+  if (!f || quality < 0.5) return;
+  const tex = fogSprite(f[0]);
+  const scroll = S.mode === 'bike' ? S.bike.dist : S.cam.x;
+  const bands = front ? [[0.62, 1.5, 0.35], [0.9, 1.9, 0.3]] : [[0.4, 0.35, 0.6], [0.7, 0.55, 0.8]];
+  bands.forEach(([fy, par, a], i) => {
+    const x = -(((scroll * par * 0.5 + S.time * (0.12 + i * 0.08)) % 480) + 480) % 480;
+    const y = fy * H - 48 + Math.sin(S.time * 0.012 + i * 2) * 5 - (S.cam.y * 0.06);
+    ctx.globalAlpha = f[1] * a;
+    ctx.drawImage(tex, Math.round(x), Math.round(y)); ctx.drawImage(tex, Math.round(x) + 480, Math.round(y));
+  });
+  ctx.globalAlpha = 1;
+}
+function drawRays() {
+  if (S.def.back !== 'sand') return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 4; i++) {
+    const x0 = 120 + i * 130 + Math.sin(S.time * 0.01 + i) * 14, w = 30 + (i % 2) * 18;
+    const gr = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+    gr.addColorStop(0, 'rgba(255,190,110,0.11)'); gr.addColorStop(1, 'rgba(255,190,110,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + w, 0); ctx.lineTo(x0 - 70 + w, H * 0.8); ctx.lineTo(x0 - 70 - w * 0.4, H * 0.8); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawStars(x, y, t) {
   for (let i = 0; i < 3; i++) {
     const a = t * 0.12 + i * TAU / 3;
@@ -4961,6 +5085,8 @@ function playerPose(P) {
   return 'idle';
 }
 
+const bloomCanvas = mkCanvas(160, 90), bloomCtx = bloomCanvas.getContext('2d');
+const BLOOM = typeof bloomCtx.filter === 'string';
 function render() {
   const cam = S.cam;
   const sh = S.trauma * S.trauma;
@@ -4984,6 +5110,8 @@ function render() {
     }
   }
 
+  drawFog(false);
+  drawRays();
   ctx.save();
   ctx.translate(-cx, -cy);
 
@@ -5011,9 +5139,16 @@ function render() {
           drawPilot(P.x - 2, P.y - 9 + (P.duck ? 4 : 0), { face: 1, pose: 'sit', run: 0, aim: P.aim, recoil: 0, t: S.time, fem: !!P.slot });
         }, hf);
       } else {
-        const pose = state === 'intro' ? S.intro.pose : playerPose(P);
-        if (P.onGround && S.mode !== 'rope') groundShadow(P.x, P.y, 6);
-        drawOutlined(P.x, P.y, () => drawPilot(P.x, P.y, { face: P.face, pose, run: P.run || S.time * 0.1, aim: P.aim, recoil: P.recoil, fist: P.fist, t: S.time, fem: !!P.slot, vx: P.vx }), P.hurtT > 0 ? '#ffffff' : null);
+        let pose = state === 'intro' ? S.intro.pose : playerPose(P);
+        let flipA = 0, hop = 0;
+        if (P.idleAnim === 'squat') pose = P.animT % 34 < 17 ? 'crouch' : 'idle';
+        else if (P.idleAnim === 'flip') { const k = Math.min(1, P.animT / 46); flipA = -k * TAU * P.face; hop = Math.sin(k * Math.PI) * 17; pose = 'jump'; }
+        if (P.onGround && S.mode !== 'rope') groundShadow(P.x, P.y, 6 - hop * 0.12);
+        const po = { face: P.face, pose, run: P.run || S.time * 0.1, aim: P.aim, recoil: P.recoil, fist: P.fist, t: S.time, fem: !!P.slot, vx: P.vx };
+        drawOutlined(P.x, P.y, () => {
+          if (flipA) { ctx.save(); ctx.translate(Math.round(P.x), Math.round(P.y - 11 - hop)); ctx.rotate(flipA); drawPilot(0, 11, po); ctx.restore(); }
+          else drawPilot(P.x, P.y, po);
+        }, P.hurtT > 0 ? '#ffffff' : null);
       }
     }
     if (G.pu.drones > 0 && state === 'play') for (const d of P.drones) if (d.x !== undefined) {
@@ -5028,7 +5163,7 @@ function render() {
     if (b.kind === 'rocket') { ctx.fillStyle = '#d0d0d0'; ctx.fillRect(Math.round(bx) - 2, Math.round(by) - 1, 4, 2); continue; }
     ctx.strokeStyle = b.kind === 'rail' ? '#e8d8ff' : b.kind === 'drone' ? '#bff8ff' : '#fff2c0';
     ctx.lineWidth = b.kind === 'rail' ? 2 : 1.5;
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - b.vx * 1.2, by - b.vy * 1.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - b.vx * 2.2, by - b.vy * 2.2); ctx.stroke();
   }
   for (const b of S.ebullets) {
     const bx = b.screen ? b.x + cx : b.x, by = b.screen ? b.y + cy : b.y;
@@ -5057,6 +5192,8 @@ function render() {
     const fw = S.fore.width, off = -Math.floor((cam.x * 1.35) % fw);
     ctx.drawImage(S.fore, off - ox, -oy); ctx.drawImage(S.fore, off + fw - ox, -oy);
   }
+
+  drawFog(true);
 
   // ---- darkness with light holes ----
   renderLighting(cx, cy);
@@ -5087,6 +5224,9 @@ function render() {
     const bx = b.screen ? b.x + cx : b.x, by = b.screen ? b.y + cy : b.y;
     const col = b.kind === 'rail' ? '#b28cff' : b.kind === 'drone' ? '#5fd4e6' : b.kind === 'rocket' ? '#ffb050' : '#ffb050';
     ctx.drawImage(glowSprite(col), bx - 6, by - 6, 12, 12);
+    ctx.globalAlpha = 0.5; ctx.drawImage(glowSprite(col), bx - b.vx * 1.4 - 4, by - b.vy * 1.4 - 4, 8, 8);
+    ctx.globalAlpha = 0.25; ctx.drawImage(glowSprite(col), bx - b.vx * 2.8 - 3, by - b.vy * 2.8 - 3, 6, 6);
+    ctx.globalAlpha = 1;
   }
   for (const b of S.ebullets) {
     const bx = b.screen ? b.x + cx : b.x, by = b.screen ? b.y + cy : b.y;
@@ -5178,6 +5318,17 @@ function render() {
   }
   ctx.globalAlpha = 1;
   ctx.restore();
+
+  // ---- bloom: bright areas bleed softly (skipped where canvas filters are missing) ----
+  if (BLOOM && quality > 0.7) {
+    bloomCtx.clearRect(0, 0, 160, 90);
+    bloomCtx.filter = 'brightness(0.75) contrast(2.4) blur(1.5px)';
+    bloomCtx.drawImage(canvas, 0, 0, 160, 90);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bloomCanvas, 0, 0, W, H);
+    ctx.restore();
+  }
 
   // ---- screen effects ----
   if (S.flash > 0) { ctx.fillStyle = `rgba(255,${S.flash > 0.7 ? 250 : 80},${S.flash > 0.7 ? 230 : 60},${S.flash * 0.45})`; ctx.fillRect(0, 0, W, H); }
@@ -5542,6 +5693,7 @@ function updateHud() {
     }
   }
   document.getElementById('score').textContent = G.score.toLocaleString('en-US');
+  document.getElementById('lives').textContent = '×' + G.lives;
   const active = TIMED.filter(k => G.pu[k] > 0);
   const k2 = active.join(',');
   if (k2 !== hudKey) {
@@ -5601,6 +5753,15 @@ function updateShocks() {
   }
 }
 
+function gameOver() {
+  state = 'over';
+  Chip.stop(); Snd.ambience(null);
+  Snd.play('explode', undefined, undefined, 1, 1.5);
+  document.getElementById('oScore').textContent = G.score.toLocaleString('en-US');
+  document.getElementById('oKills').textContent = G.kills;
+  document.getElementById('overScreen').classList.remove('hidden');
+  document.body.classList.remove('ingame');
+}
 function nextSection() {
   if (G.section + 1 >= curSections().length) return levelComplete();
   startSection(G.section + 1);
@@ -5667,7 +5828,7 @@ function startGame(level = 0, keepRun = false, coop = false) {
   }
   Snd.init();
   if (!keepRun || !G) newRun(level, coop);
-  for (const id of ['menuScreen', 'winScreen', 'pauseScreen', 'coopScreen']) document.getElementById(id).classList.add('hidden');
+  for (const id of ['menuScreen', 'winScreen', 'pauseScreen', 'coopScreen', 'overScreen']) document.getElementById(id).classList.add('hidden');
   document.body.classList.add('ingame');
   state = 'play';
   beginLevel(level);
@@ -5707,6 +5868,12 @@ document.getElementById('menuBtn').addEventListener('click', () => {
   document.getElementById('menuScreen').classList.remove('hidden');
 });
 document.getElementById('resumeBtn').addEventListener('click', togglePause);
+document.getElementById('retryBtn').addEventListener('click', () => startGame(G.level, false, G.coop));
+document.getElementById('overMenuBtn').addEventListener('click', () => {
+  state = 'menu';
+  document.getElementById('overScreen').classList.add('hidden');
+  document.getElementById('menuScreen').classList.remove('hidden');
+});
 document.getElementById('restartBtn').addEventListener('click', () => {
   document.getElementById('pauseScreen').classList.add('hidden');
   G.php = [G.maxHp, G.maxHp];

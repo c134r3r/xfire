@@ -357,6 +357,14 @@ from the Ironclad menu. Three levels, each harder than the last (tougher
 troops, faster fire, faster shots); finishing a level unlocks the next
 in the menu, and NEXT LEVEL carries the score on.
 
+**Lives** - you start with 5 lives (HUD, top right). A death that sends
+the team back to the checkpoint costs one; at 0 it is GAME OVER (retry the
+level). The rare `1UP` power-up drop adds one. In co-op a pilot who is
+revived by the partner costs nothing; only a full wipe does.
+
+**Idle animation** - stand still for 2 s and the pilot does a backflip or
+a few squats.
+
 **Co-op (2 players, one keyboard)** - pick `2 PLAYERS · CO-OP` in the
 menu (keyboard only, not offered on touch). A key-check screen follows:
 every key lights up while held, and keys can be rebound (saved locally).
