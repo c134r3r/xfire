@@ -49,8 +49,9 @@ body.touch #game { box-shadow: none; }
 #hud { position: absolute; pointer-events: none; z-index: 5; font-family: var(--font-display); opacity: 0; transition: opacity 0.3s; }
 body.ingame #hud { opacity: 1; }
 .hud-tl, .hud-tr { position: absolute; top: 8px; display: flex; flex-direction: column; gap: 5px; }
-.hud-tl { left: 8px; }
-.hud-tr { right: 8px; align-items: flex-end; }
+.hud-tl { left: 8px; transform-origin: top left; transform: scale(var(--hs, 1)); }
+.hud-tr { right: 8px; align-items: flex-end; transform-origin: top right; transform: scale(var(--hs, 1)); }
+body.ingame #game { cursor: none; }
 .card {
   display: flex; align-items: center; gap: 8px;
   background: linear-gradient(180deg, rgba(18,12,10,0.8), rgba(10,7,6,0.8));
@@ -267,12 +268,14 @@ body.touch.ingame #touch { display: block; }
       <div id="touchControls" class="hidden">
         <div>Left thumb: stick to run, aim and crouch. Right thumb: JUMP, FIRE, SMASH, DASH.</div>
       </div>
+      <div class="hint" style="margin-bottom:6px">◈ Fullscreen: button below or <span class="key">ALT</span>+<span class="key">ENTER</span>. On a TV, connect by HDMI and go fullscreen: the picture renders in the screen's own resolution.</div>
       <div class="hint">◈ Shoot enemies until they reel (★), then SMASH them — finishers drop armor and score.<br>
       ◈ Shield troopers only break to a smash. Red barrels chain-react.<br>
       ◈ Cracked floor: crouch on it (hold ↓ / stick down) or stomp it (↓ + JUMP in the air).</div>
     </div>
     <div class="actions">
       <button class="btn secondary" id="keysBtn">CO-OP KEYS</button>
+      <button class="btn secondary" id="fsBtn">FULLSCREEN</button>
       <a class="btn secondary" href="ironclad.html">IRONCLAD</a>
       <a class="btn secondary" href="index.html">XFIRE</a>
     </div>
@@ -319,6 +322,7 @@ body.touch.ingame #touch { display: block; }
     <div class="actions">
       <button class="btn" id="resumeBtn">RESUME</button>
       <button class="btn secondary" id="restartBtn">RESTART SECTION</button>
+      <button class="btn secondary" id="fsBtn2">FULLSCREEN</button>
       <button class="btn secondary" id="quitBtn">QUIT</button>
     </div>
   </div>
@@ -383,16 +387,37 @@ if (isTouch) {
 }
 
 const hudEl = document.getElementById('hud');
+// Render scale: the game logic and art live on a 480x270 grid, but the canvas is
+// rendered at RS times that so a big screen (HDTV, 4K, Retina) gets sharp text,
+// glows and light instead of a blown-up 480x270 picture. Pixel-art blocks stay
+// square because the scale is an exact divisor of the device-pixel scale.
+let RS = 1, rsCap = 4;
+function setRenderScale(k) {
+  if (k === RS && canvas.width === W * k) return;
+  RS = k;
+  canvas.width = W * k; canvas.height = H * k;   // resets the context state; render() sets it each frame
+}
 function fitCanvas() {
-  const vw = window.innerWidth, vh = window.innerHeight;
+  const vw = window.innerWidth, vh = window.innerHeight, dpr = window.devicePixelRatio || 1;
   let s = Math.min(vw / W, vh / H);
-  // integer scaling keeps pixels square when there is room for it
-  if (s >= 2 && !isTouch) s = Math.floor(s);
+  // integer scaling (in device pixels) keeps pixels square when there is room for it
+  let sd = s * dpr;
+  if (sd >= 2 && !isTouch) { sd = Math.floor(sd); s = sd / dpr; }
   const cw = Math.floor(W * s), ch = Math.floor(H * s);
   canvas.style.width = cw + 'px';
   canvas.style.height = ch + 'px';
+  // largest render scale (<= cap) that divides the device scale evenly
+  let k = 1;
+  if (!isTouch && sd >= 2 && Number.isInteger(sd)) for (let c = Math.min(rsCap, sd); c >= 1; c--) if (sd % c === 0) { k = c; break; }
+  setRenderScale(k);
   const r = canvas.getBoundingClientRect();
   Object.assign(hudEl.style, { left: r.left + 'px', top: r.top + 'px', width: cw + 'px', height: ch + 'px' });
+  hudEl.style.setProperty('--hs', Math.max(1, Math.min(2, cw / 960)).toFixed(2));
+}
+function toggleFullscreen() {
+  const d = document;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else { const el = d.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(() => {}); }
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
@@ -1189,6 +1214,7 @@ window.addEventListener('keydown', e => {
   if (anyKeyCb && !e.repeat) { anyKeyCb(); }
   if (k === 'p' || k === 'escape') { if (!coopKeyTest) togglePause(); return; }
   if (k === 'm') { Snd.toggleMute(); return; }
+  if (k === 'enter' && e.altKey) { e.preventDefault(); toggleFullscreen(); return; }
   if (!codeDown[e.code]) {
     // co-op edge buffers (jump)
     for (let s = 0; s < 2; s++) for (const a in COOP_KEYS[s]) if (COOP_KEYS[s][a] === e.code && PIN[s].prs[a] !== undefined) PIN[s].prs[a] = 8;
@@ -5110,7 +5136,7 @@ function render() {
   const sh = S.trauma * S.trauma;
   const ox = Math.round((Math.random() * 2 - 1) * 6 * sh), oy = Math.round((Math.random() * 2 - 1) * 6 * sh);
   const cx = Math.round(cam.x) - ox, cy = Math.round(cam.y) - oy;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(RS, 0, 0, RS, 0, 0);
   ctx.imageSmoothingEnabled = false;
 
   // ---- parallax backdrop ----
@@ -5323,7 +5349,7 @@ function render() {
     ctx.globalAlpha = 1;
   }
   // additive weather (embers, spores) lives in screen space
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); drawWeather(true); ctx.restore();
+  ctx.save(); ctx.setTransform(RS, 0, 0, RS, 0, 0); drawWeather(true); ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
 
   // ---- floating text ----
@@ -5352,14 +5378,16 @@ function render() {
   if (S.flash > 0) { ctx.fillStyle = `rgba(255,${S.flash > 0.7 ? 250 : 80},${S.flash > 0.7 ? 230 : 60},${S.flash * 0.45})`; ctx.fillRect(0, 0, W, H); }
   if (state === 'play' && S.players.some(q => !q.dead && q.hp <= 2)) {
     ctx.globalAlpha = 0.25 + 0.15 * Math.sin(S.time * 0.15);
-    ctx.drawImage(getVignette('#c8140a'), 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(getVignette('#c8140a'), 0, 0, W, H); ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 1;
   }
   // per-area color grade, then soft scanlines for the CRT look
   const grade = S.L ? S.L.theme.grade : S.bike && S.bike.cfg === BIKES.canal ? THEMES.toxic.grade : 'rgba(255,120,40,';
   if (grade) { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = grade + '0.35)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
-  ctx.drawImage(getVignette('#000000'), 0, 0);
-  ctx.drawImage(getScanlines(), 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(getVignette('#000000'), 0, 0, W, H);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(getScanlines(), 0, 0, W, H);
   if (state === 'intro') drawIntroOverlay();
   if (S.done && S.outT < 30) { ctx.fillStyle = `rgba(0,0,0,${1 - S.outT / 30})`; ctx.fillRect(0, 0, W, H); }
   if (S.time < 20) { ctx.fillStyle = `rgba(0,0,0,${1 - S.time / 20})`; ctx.fillRect(0, 0, W, H); }
@@ -5607,7 +5635,9 @@ function renderLighting(cx, cy) {
   for (const b of S.ebullets) cut(b.screen ? b.x + cx : b.x, b.screen ? b.y + cy : b.y, 18, 0.7);
   for (const P of S.players) if (P.beam) cut((P.beam.x1 + P.beam.x2) / 2, (P.beam.y1 + P.beam.y2) / 2, 120, 0.7);
   lg.globalAlpha = 1;
-  ctx.drawImage(lightCanvas, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(lightCanvas, 0, 0, W, H);
+  ctx.imageSmoothingEnabled = false;
   // warm/colored tint of the lights
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -5814,7 +5844,7 @@ function levelComplete() {
   renderLevelSelect();
 }
 
-let acc = 0, lastT = 0, hudT = 0, renderEma = 0;
+let acc = 0, lastT = 0, hudT = 0, renderEma = 0, slowFrames = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   if (!lastT) lastT = now;
@@ -5834,6 +5864,9 @@ function frame(now) {
     const ms = performance.now() - r0;
     renderEma = renderEma ? renderEma * 0.95 + ms * 0.05 : ms;
     if (renderEma > 9) quality = Math.max(0.4, quality - 0.01); else if (renderEma < 5) quality = Math.min(1, quality + 0.005);
+    // too slow (CPU time per frame, or the display falling under ~40 fps): step the render scale down
+    const slow = renderEma > 13 || (dt > 0.026 && dt < 0.2);
+    if (RS > 1 && state === 'play' && slow) { if (++slowFrames > 120) { rsCap = RS - 1; slowFrames = 0; renderEma = 0; fitCanvas(); } } else slowFrames = Math.max(0, slowFrames - 2);
     if (++hudT % 4 === 0 && state === 'play') updateHud();
   }
 }
@@ -5966,6 +5999,8 @@ function closeCoopScreen() {
   document.getElementById('coopScreen').classList.add('hidden');
 }
 document.getElementById('coopGo').addEventListener('click', () => { closeCoopScreen(); startGame(coopLevel, false, true); });
+document.getElementById('fsBtn').addEventListener('click', toggleFullscreen);
+document.getElementById('fsBtn2').addEventListener('click', toggleFullscreen);
 document.getElementById('keysBtn').addEventListener('click', () => openCoopScreen(-1));
 document.getElementById('coopBack').addEventListener('click', () => { closeCoopScreen(); document.getElementById('menuScreen').classList.remove('hidden'); });
 document.getElementById('coopReset').addEventListener('click', () => {
