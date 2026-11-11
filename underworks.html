@@ -229,7 +229,8 @@ body.touch.ingame #touch { display: block; }
         <div>Left thumb: stick to run, aim and crouch. Right thumb: JUMP, FIRE, SMASH, DASH.</div>
       </div>
       <div class="hint">◈ Shoot enemies until they reel (★), then SMASH them — finishers drop armor and score.<br>
-      ◈ Shield troopers only break to a smash. Stomp cracked floors. Red barrels chain-react.</div>
+      ◈ Shield troopers only break to a smash. Red barrels chain-react.<br>
+      ◈ Cracked floor: crouch on it (hold ↓ / stick down) or stomp it (↓ + JUMP in the air).</div>
     </div>
     <div class="actions">
       <a class="btn secondary" href="ironclad.html">IRONCLAD</a>
@@ -2468,6 +2469,7 @@ function updatePlayer() {
   P.aimX = ax; P.aimY = ay;
   P.aim = Math.atan2(ay, ax);
   P.h = P.crouch ? 15 : 22;
+  updateCrackFloor(P);
 
   // dash
   if (P.dashCd > 0) P.dashCd--;
@@ -2563,18 +2565,36 @@ function updatePlayer() {
   playerCombat(P);
 }
 
+// crack open BREAK tiles under and beside the feet
+function breakFloorAround(P, reach) {
+  const ty = Math.floor((P.y + 2) / T);
+  for (let tx = Math.floor((P.x - reach) / T); tx <= Math.floor((P.x + reach) / T); tx++) {
+    for (let k = 0; k < 2; k++) {
+      if (tileAt(S.L, tx, ty + k) === BREAK) breakTile(tx, ty + k);
+    }
+  }
+}
+// Cracked floor also gives way if you crouch on it (hold down) for a moment:
+// the stomp is hard to find and awkward to pull off on a touch screen.
+const CRACK_TICKS = 42;
+function updateCrackFloor(P) {
+  const under = tileAt(S.L, Math.floor(P.x / T), Math.floor((P.y + 1) / T));
+  if (!(P.crouch && under === BREAK)) { P.crack = 0; return; }
+  P.crack = (P.crack || 0) + 1;
+  if (P.crack % 7 === 1) { Snd.play('creak', P.x, P.y); sparks(P.x + rand(-6, 6), P.y, 3, '#c8b8a0', 1.5, -Math.PI / 2, 0.8); smoke(P.x, P.y, 3, 14, 0, -0.2, false); }
+  if (P.crack === CRACK_TICKS) {
+    breakFloorAround(P, 22);
+    addTrauma(0.3); Snd.play('stomp');
+    for (const side of [-1, 1]) for (let i = 0; i < 3; i++) smoke(P.x + side * i * 6, P.y, 6, 24, side * 0.6, -0.3, false);
+    P.crack = 0;
+  }
+}
+
 function stompLand(P) {
   Snd.play('stomp');
   addTrauma(0.35);
   S.freeze = 3;
-  const L = S.L;
-  // crack open BREAK tiles under and beside the feet
-  const ty = Math.floor((P.y + 2) / T);
-  for (let tx = Math.floor((P.x - 14) / T); tx <= Math.floor((P.x + 14) / T); tx++) {
-    for (let k = 0; k < 2; k++) {
-      if (tileAt(L, tx, ty + k) === BREAK) breakTile(tx, ty + k);
-    }
-  }
+  breakFloorAround(P, 14);
   for (const side of [-1, 1]) for (let i = 0; i < 4; i++) smoke(P.x + side * i * 5, P.y, 6, 26, side * 0.8, -0.3, false);
   part({ k: 'ring', x: P.x, y: P.y - 2, vx: 0, vy: 0, size: 34, color: 'rgba(200,240,255,1)', life: 12, drag: 1 });
   for (const e of S.ents) {
@@ -4812,6 +4832,22 @@ const EYES = {
 };
 // additive extras: sight lines, arcs, eyes. Runs inside the glow pass.
 function drawGlowFx(cx, cy) {
+  // hatch hint: a bobbing arrow over cracked floor says how to open it
+  if (S.L && S.mode === 'run') {
+    const L = S.L;
+    for (const i of L.dyn) {
+      if (L.tiles[i] !== BREAK || L.tiles[i - 1] === BREAK) continue;
+      let n = 1; while (L.tiles[i + n] === BREAK) n++;
+      const hx = ((i % L.w) + n / 2) * T, hy = ((i / L.w) | 0) * T;
+      if (!onScreen(hx, hy, 40)) continue;
+      const bob = Math.sin(S.time * 0.12) * 2;
+      ctx.globalAlpha = 0.9; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd84a';
+      ctx.font = '900 8px "Arial Black", Verdana, sans-serif';
+      ctx.fillText(isTouch ? 'STICK DOWN' : 'HOLD DOWN', hx, hy - 24);
+      ctx.fillText('▼', hx, hy - 12 + bob);
+      ctx.globalAlpha = 1;
+    }
+  }
   for (const e of S.ents) {
     if (e.dead || !onScreen(e.x, e.y, 60)) continue;
     const eye = EYES[e.type];
