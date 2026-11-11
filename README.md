@@ -357,6 +357,15 @@ from the Ironclad menu. Three levels, each harder than the last (tougher
 troops, faster fire, faster shots); finishing a level unlocks the next
 in the menu, and NEXT LEVEL carries the score on.
 
+**Controllers** - PlayStation (DualShock 4/DualSense), Xbox and other pads
+work through the browser's Gamepad API (Bluetooth or USB; press a button
+once so the browser sees the pad). D-pad/left stick move, cross jumps,
+square or R2 fires, circle smashes and R1/triangle dashes (solo), OPTIONS
+pauses; jump/fire buttons can be rebound on the key screen. In co-op the
+first pad that presses a button is P1, the second P2; keyboards keep
+working alongside. Menus: D-pad + cross, circle goes back. Rumble on hits.
+A disconnected pad pauses the game.
+
 **Lives** - every pilot starts with 5 lives. Each death costs the pilot
 one; at 0 it is GAME OVER (solo) and you can retry the level. The rare
 `1UP` power-up drop (very rare) adds one for both pilots. In co-op each pilot has
