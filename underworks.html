@@ -285,6 +285,7 @@ body.touch.ingame #touch { display: block; }
     <div class="actions">
       <button class="btn secondary" id="keysBtn">CO-OP KEYS</button>
       <button class="btn secondary" id="fsBtn">FULLSCREEN</button>
+      <button class="btn secondary" id="musicBtn">MUSIC: GUITAR</button>
       <a class="btn secondary" href="ironclad.html">IRONCLAD</a>
       <a class="btn secondary" href="index.html">XFIRE</a>
     </div>
@@ -896,6 +897,49 @@ const SONGS = {
         k . h . s . h . k k s s s s s s`) }
     ]
   },
+  // alternative level theme: chiptune lead over a palm-muted, distorted guitar
+  // riff (power chords; one-step notes chug, held notes ring), A minor
+  riff: {
+    tempo: 138, loop: true,
+    tracks: [
+      { wave: 'guitar', vol: 0.4, notes: track(`
+        45 45 . 45 45 . 45 45 . 45 45 . 48 - 47 -
+        45 45 . 45 45 . 45 45 . 45 45 . 52 - 50 -
+        41 41 . 41 41 . 41 41 . 41 41 . 44 - 43 -
+        43 43 . 43 43 . 43 43 . 40 40 . 40 40 40 40
+        45 45 . 45 45 . 45 45 . 45 45 . 48 - 47 -
+        45 45 . 45 45 . 45 45 . 45 45 . 52 - 55 -
+        41 41 . 41 41 . 41 41 . 44 44 . 43 43 41 41
+        40 - - - - - - - 40 40 . 40 40 . 47 -`) },
+      { wave: 'pulse25', vol: 0.03, vib: true, notes: track(`
+        . . . . . . . . . . . . . . . .
+        . . . . . . . . . . . . . . . .
+        77 - - - 76 - 74 - . . 72 - 74 - 76 -
+        79 - - - . . 76 - 74 - 72 - 71 - . .
+        81 - - - 79 - 76 - . . 76 - 79 - 81 -
+        84 - - - 83 - 81 - . . 79 - 76 - . .
+        77 - 79 - 81 - 77 - 76 - 74 - 72 - 74 -
+        76 - - - - - - - 71 - 74 - 76 - 80 -`) },
+      { wave: 'triangle', vol: 0.16, notes: track(`
+        45 . 45 . 45 . 45 . 45 . 45 . 45 . 47 .
+        45 . 45 . 45 . 45 . 45 . 45 . 45 . 50 .
+        41 . 41 . 41 . 41 . 41 . 41 . 41 . 43 .
+        43 . 43 . 43 . 43 . 40 . 40 . 40 . 40 .
+        45 . 45 . 45 . 45 . 45 . 45 . 45 . 47 .
+        45 . 45 . 45 . 45 . 45 . 45 . 45 . 52 .
+        41 . 41 . 41 . 41 . 44 . 44 . 43 . 41 .
+        40 . 40 . 40 . 40 . 40 . 40 . 40 . 40 .`) },
+      { wave: 'noise', vol: 0.095, notes: track(`
+        c . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
+        k . h . s . h . k . s s s . s s
+        c . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
+        k . h . s . h . k . k . s . h h
+        k . h . s . k . k k s s s s s s`) }
+    ]
+  },
   // hoverbike chase: same key, double time
   chase: {
     tempo: 150, loop: true,
@@ -1089,9 +1133,12 @@ SONGS.lift = Object.assign({}, SONGS.ice, {
     k . h . s . s s k s s . s s s s`) }])
 });
 
+let musicStyle = 'riff';   // 'riff' (guitar) or 'classic' for the first level's theme
+try { if (localStorage.getItem('underworks_music') === 'classic') musicStyle = 'classic'; } catch (e) { /* private mode */ }
 const Chip = {
   song: null, step: 0, nextT: 0, timer: null, onEnd: null,
   play(name, onEnd) {
+    if (name === 'level' && musicStyle === 'riff') name = 'riff';
     const ac = Snd.init();
     this.stop();
     if (!ac) { if (onEnd) setTimeout(onEnd, 50); return; }
@@ -1124,9 +1171,44 @@ const Chip = {
       this.step++;
     }
   },
+  // shared amp: gain -> soft-clip distortion -> cabinet-ish lowpass -> music bus
+  gtBus() {
+    const ac = Snd.ac;
+    if (this._gt && this._gt.ac === ac) return this._gt.inp;
+    const inp = ac.createGain(), sh = ac.createWaveShaper(), lp = ac.createBiquadFilter(), post = ac.createGain();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 7); }
+    sh.curve = curve; sh.oversample = '2x';
+    lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 0.5;
+    post.gain.value = 0.05;
+    inp.connect(sh); sh.connect(lp); lp.connect(post); post.connect(Snd.music);
+    this._gt = { ac, inp };
+    return inp;
+  },
+  // power chord (root + fifth + octave): a one-step note is a palm-muted chug, longer notes ring
+  guitar(tr, n, t, dur) {
+    const ac = Snd.ac, bus = this.gtBus();
+    const f0 = midi(n), muted = dur < 0.16;
+    const end = t + (muted ? 0.085 : dur * 0.97);
+    const g = ac.createGain(), f = ac.createBiquadFilter();
+    f.type = 'lowpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(muted ? 1100 : 3400, t);
+    f.frequency.exponentialRampToValueAtTime(muted ? 450 : 1700, end);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(tr.vol, t + 0.004);
+    if (muted) g.gain.exponentialRampToValueAtTime(0.0001, end);
+    else { g.gain.setValueAtTime(tr.vol * 0.85, Math.max(t + 0.02, end - 0.08)); g.gain.exponentialRampToValueAtTime(0.0001, end); }
+    for (const [mul, det] of [[1, -6], [1.4983, 5], [2, -3]]) {
+      const o = ac.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = f0 * mul; o.detune.value = det;
+      o.connect(g); o.start(t); o.stop(end + 0.02);
+    }
+    g.connect(f); f.connect(bus);
+  },
   voice(tr, n, t, dur) {
     const ac = Snd.ac;
     const out = Snd.music;
+    if (tr.wave === 'guitar') { this.guitar(tr, +n, t, dur); return; }
     if (tr.wave === 'noise') {
       const kind = { k: [120, 0.18, 'lowpass', 1.0], s: [1800, 0.12, 'bandpass', 0.7], h: [7000, 0.035, 'highpass', 0.45], c: [5000, 0.9, 'highpass', 0.6] }[n];
       if (!kind) return;
@@ -6132,6 +6214,14 @@ function closeCoopScreen() {
 }
 document.getElementById('coopGo').addEventListener('click', () => { closeCoopScreen(); startGame(coopLevel, false, true); });
 document.getElementById('fsBtn').addEventListener('click', toggleFullscreen);
+function showMusicStyle() { document.getElementById('musicBtn').textContent = 'MUSIC: ' + (musicStyle === 'riff' ? 'GUITAR' : 'CLASSIC'); }
+document.getElementById('musicBtn').addEventListener('click', () => {
+  musicStyle = musicStyle === 'riff' ? 'classic' : 'riff';
+  try { localStorage.setItem('underworks_music', musicStyle); } catch (e) { /* private mode */ }
+  showMusicStyle();
+  if (state === 'menu') { Snd.init(); Chip.play('level'); setTimeout(() => { if (state === 'menu') Chip.stop(); }, 4000); }   // short preview
+});
+showMusicStyle();
 document.getElementById('fsBtn2').addEventListener('click', toggleFullscreen);
 document.getElementById('keysBtn').addEventListener('click', () => openCoopScreen(-1));
 document.getElementById('coopBack').addEventListener('click', () => { closeCoopScreen(); document.getElementById('menuScreen').classList.remove('hidden'); });

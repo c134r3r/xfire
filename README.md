@@ -357,6 +357,10 @@ from the Ironclad menu. Three levels, each harder than the last (tougher
 troops, faster fire, faster shots); finishing a level unlocks the next
 in the menu, and NEXT LEVEL carries the score on.
 
+**Music** - level 1 has two themes: a new guitar one (chiptune lead over a
+palm-muted, distorted power-chord riff, synthesized, no samples) and the
+classic one. Switch with `MUSIC` in the menu (saved locally).
+
 **Controllers** - PlayStation (DualShock 4/DualSense), Xbox and other pads
 work through the browser's Gamepad API (Bluetooth or USB; press a button
 once so the browser sees the pad). D-pad/left stick move, cross jumps,
