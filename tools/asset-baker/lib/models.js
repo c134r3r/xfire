@@ -4,6 +4,11 @@
 // signature: (s: Kit3D, yaw, palette, faction, team, frame)
 // ============================================
 import { TEAM, tint, withAlpha, fwd, rot } from './kit.js';
+import { SURV_UNITS, SURV_TURRETS } from './survivors.js';
+import { soldier } from './infantry.js';
+import { SURV_BUILDINGS } from './survivorBuildings.js';
+import { S9_UNITS, S9_TURRETS } from './series9.js';
+import { EVO_UNITS, EVO_TURRETS } from './evolved.js';
 
 const shade = (c) => c;
 // ============================================
@@ -117,9 +122,9 @@ function rider(s, x, y, z, pal, team, faction) {
 }
 
 export const UNIT_BUILDERS = {
-    trooper(s, yaw, pal, f, team, frame) { infantry(s, yaw, pal, f, team, 'rifle', frame); },
-    flamer(s, yaw, pal, f, team, frame) { infantry(s, yaw, pal, f, team, 'flame', frame); },
-    rocketeer(s, yaw, pal, f, team, frame) { infantry(s, yaw, pal, f, team, 'rocket', frame); },
+    trooper(s, yaw, pal, f, team, frame) { soldier(s, yaw, pal, team, f, 'rifle', frame); },
+    flamer(s, yaw, pal, f, team, frame) { soldier(s, yaw, pal, team, f, 'flame', frame); },
+    rocketeer(s, yaw, pal, f, team, frame) { soldier(s, yaw, pal, team, f, 'rocket', frame); },
 
     bike(s, yaw, pal, faction, team, frame) {
         s.shadow(0, 0, 9, 0.38, 1.1);
@@ -938,3 +943,28 @@ export const BUILDING_BUILDERS = {
     }
 };
 
+
+// Survivors models live in survivors.js
+for (const [role, fn] of Object.entries(SURV_UNITS)) {
+    const old = UNIT_BUILDERS[role];
+    UNIT_BUILDERS[role] = (s, yaw, pal, faction, team, frame) => faction === 'survivors' ? fn(s, yaw, pal, team, frame) : old(s, yaw, pal, faction, team, frame);
+}
+for (const [role, fn] of Object.entries(SURV_TURRETS)) {
+    const old = TURRET_BUILDERS[role];
+    TURRET_BUILDERS[role] = (s, yaw, pal, faction, team) => faction === 'survivors' ? fn(s, yaw, pal, team) : old(s, yaw, pal, faction, team);
+}
+for (const [role, fn] of Object.entries(SURV_BUILDINGS)) {
+    const old = BUILDING_BUILDERS[role];
+    BUILDING_BUILDERS[role] = (s, ft, pal, f, frame, team) => f === 'survivors' ? fn(s, ft, pal, frame, team) : old(s, ft, pal, f, frame, team);
+}
+// Series 9 and Evolved vehicles / beasts live in their own files too
+for (const [fac, units, turrets] of [['series9', S9_UNITS, S9_TURRETS], ['evolved', EVO_UNITS, EVO_TURRETS]]) {
+    for (const [role, fn] of Object.entries(units)) {
+        const old = UNIT_BUILDERS[role];
+        UNIT_BUILDERS[role] = (s, yaw, pal, faction, team, frame) => faction === fac ? fn(s, yaw, pal, team, frame) : old(s, yaw, pal, faction, team, frame);
+    }
+    for (const [role, fn] of Object.entries(turrets)) {
+        const old = TURRET_BUILDERS[role];
+        TURRET_BUILDERS[role] = (s, yaw, pal, faction, team) => faction === fac ? fn(s, yaw, pal, team) : old(s, yaw, pal, faction, team);
+    }
+}

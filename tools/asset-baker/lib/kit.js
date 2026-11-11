@@ -44,38 +44,77 @@ export function fwd(yaw, d, side = 0) {
     return { x, y };
 }
 
-// ---------- shared procedural surface texture ----------
-let grimeTex = null;
-function grime() {
-    if (grimeTex) return grimeTex;
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const g = c.getContext('2d');
-    const img = g.createImageData(128, 128);
-    let s = 1234567;
-    const rnd = () => { s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-    for (let i = 0; i < img.data.length; i += 4) {
-        const v = 215 + rnd() * 40;
-        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-        img.data[i + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-    // scratches + stains
-    for (let i = 0; i < 40; i++) {
-        g.strokeStyle = `rgba(${rnd() > 0.5 ? '255,255,255' : '40,30,20'},${0.15 + rnd() * 0.2})`;
-        g.lineWidth = 0.6;
-        const x = rnd() * 128, y = rnd() * 128;
-        g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - 0.5) * 24, y + (rnd() - 0.5) * 8); g.stroke();
-    }
-    for (let i = 0; i < 14; i++) {
-        g.fillStyle = `rgba(50,36,20,${0.08 + rnd() * 0.12})`;
-        g.beginPath(); g.arc(rnd() * 128, rnd() * 128, 3 + rnd() * 10, 0, Math.PI * 2); g.fill();
-    }
-    grimeTex = new THREE.CanvasTexture(c);
-    grimeTex.wrapS = grimeTex.wrapT = THREE.RepeatWrapping;
-    grimeTex.colorSpace = THREE.SRGBColorSpace;
-    return grimeTex;
+// ---------- procedural surface detail ----------
+// Weathering is computed in the fragment shader from the object-space
+// position (un-rotated by the model's yaw so it sticks to the vehicle
+// in all 16 directions): camouflage blotches, grunge, rain streaks on
+// vertical plates, paint chips and dust creeping up from the ground.
+const NOISE_GLSL = `
+uniform float uYaw;
+uniform vec4 uCamo;      // rgb multiplier for the dark camo tone, a = amount
+uniform vec4 uCamo2;     // second tone
+uniform vec4 uDust;      // rgb dust color, a = amount
+uniform vec4 uWear;      // x grunge, y streaks, z chips, w dust height
+uniform float uSeed;
+uniform float uFilm;
+uniform float uPanel;
+varying vec3 vOP;
+float h31(vec3 p){ p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x){
+    vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
+float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 11.7; a *= 0.5; } return s / 0.9375; }
+`;
+const DETAIL_GLSL = `
+    float wc = cos(uYaw), ws = sin(uYaw);
+    vec3 op = vec3(wc * vOP.x + ws * vOP.y, -ws * vOP.x + wc * vOP.y, vOP.z) + uSeed;
+    vec3 gN = normalize(cross(dFdx(vOP), dFdy(vOP)));
+    float wVert = 1.0 - abs(gN.z);
+    float wN1 = fbm(op * 0.33);
+    float wN2 = fbm(op * 1.2 + 5.0);
+    // camouflage: two darker tones in large soft-edged blotches
+    float cA = smoothstep(0.50, 0.535, fbm(op * 0.115 + 3.0));
+    float cB = smoothstep(0.585, 0.615, fbm(op * 0.14 + 19.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uCamo.rgb, cA * uCamo.a);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uCamo2.rgb, cB * uCamo2.a);
+    // machined panel seams on a regular grid (never on a face's own plane)
+    if (uPanel > 0.0) {
+        vec3 rN = abs(vec3(wc * gN.x + ws * gN.y, -ws * gN.x + wc * gN.y, gN.z));
+        vec3 pg = abs(fract((op - uSeed) / uPanel + 0.5) - 0.5) * uPanel + rN * 9.0;
+        float seam = 1.0 - smoothstep(0.1, 0.24, min(pg.x, min(pg.y, pg.z)));
+        diffuseColor.rgb *= 1.0 - 0.42 * seam;
+    }
+    // sun-faded / stained paint
+    diffuseColor.rgb *= 1.0 + uWear.x * (wN1 - 0.5) * 0.9 + uWear.x * (wN2 - 0.5) * 0.35;
+    // streaks running down vertical plates
+    float wS = vnoise(vec3(op.xy * 1.9, op.z * 0.16));
+    diffuseColor.rgb *= 1.0 - uWear.y * wVert * smoothstep(0.5, 0.85, wS) * 0.42;
+    // chipped paint down to dark primer/steel
+    float wC = smoothstep(0.71, 0.76, vnoise(op * 2.6) * 0.75 + wN2 * 0.3);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.46, 0.42), wC * uWear.z);
+    // dust: thick near the ground, a film on upward faces
+    float wD = smoothstep(uWear.w, 0.0, vOP.z + (wN2 - 0.5) * uWear.w * 0.9);
+    wD = max(wD, max(gN.z, 0.0) * smoothstep(0.42, 0.7, wN1) * uFilm);
+    diffuseColor.rgb = mix(diffuseColor.rgb, uDust.rgb, clamp(wD * uDust.a, 0.0, 0.92));
+`;
+
+// How strongly each finish takes the kit's weathering style:
+// [camo, grunge, streaks, chips, dust]
+const WEAR = {
+    paint:  [1, 1, 1, 1, 1],
+    metal:  [0, 0.8, 0.7, 0.5, 0.8],
+    rubber: [0, 0.5, 0, 0, 1.25],
+    flesh:  [1, 1.2, 0.25, 0, 0.6],
+    bone:   [0, 0.9, 0.5, 0, 0.5],
+    glass:  [0, 0.15, 0, 0, 0.25],
+    ground: [0, 1.3, 0, 0.7, 0.3]
+};
+export const STYLE_DEFAULT = {
+    camo: [0.72, 0.74, 0.62, 0], camo2: [0.86, 0.72, 0.56, 0],
+    dust: '#9c8058', dustAmt: 0.6, dustH: 4, grunge: 0.3, streaks: 0.6, chips: 0.5, seed: 0
+};
 
 // Material presets by "finish"
 const FINISH = {
@@ -97,6 +136,9 @@ export class Kit3D {
         this.pulse = opts.pulse || 1;
         this.finish = 'paint';    // default finish for new parts
         this.receiveOnly = false;
+        this.yaw = opts.yaw || 0;                 // model yaw (weathering sticks to it)
+        this.style = { ...STYLE_DEFAULT, ...(opts.style || {}) };
+        this.bevel = opts.bevel === undefined ? 0.45 : opts.bevel;
     }
 
     // ---- materials ----
@@ -113,13 +155,35 @@ export class Kit3D {
             color: col,
             roughness: f.roughness,
             metalness: f.metalness,
-            map: finish === 'glass' ? null : grime(),
             transparent: a < 1,
             opacity: a,
             depthWrite: a >= 0.99,
             side: THREE.DoubleSide
         });
         m.userData.team = team;
+        const st = this.style, w = WEAR[finish] || WEAR.paint;
+        const dust = hexRGB(st.dust).map(v => Math.pow(v / 255, 2.2));
+        const camoK = team ? 0 : w[0];
+        const U = {
+            uYaw: { value: this.yaw },
+            uCamo: { value: new THREE.Vector4(st.camo[0], st.camo[1], st.camo[2], st.camo[3] * camoK) },
+            uCamo2: { value: new THREE.Vector4(st.camo2[0], st.camo2[1], st.camo2[2], st.camo2[3] * camoK) },
+            uDust: { value: new THREE.Vector4(dust[0], dust[1], dust[2], st.dustAmt * w[4] * (team ? 0.6 : 1) * (a < 1 ? 0 : 1)) },
+            uWear: { value: new THREE.Vector4(st.grunge * w[1], st.streaks * w[2], st.chips * w[3] * (team ? 0.6 : 1), st.dustH) },
+            uSeed: { value: st.seed },
+            uFilm: { value: st.film === undefined ? 0.4 : st.film },
+            uPanel: { value: finish === 'paint' && !team ? (st.panel || 0) : 0 }
+        };
+        m.onBeforeCompile = (sh) => {
+            Object.assign(sh.uniforms, U);
+            sh.vertexShader = sh.vertexShader
+                .replace('#include <common>', '#include <common>\nvarying vec3 vOP;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOP = position;');
+            sh.fragmentShader = sh.fragmentShader
+                .replace('#include <common>', '#include <common>\n' + NOISE_GLSL)
+                .replace('#include <map_fragment>', '#include <map_fragment>\n' + DETAIL_GLSL)
+                .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + (wN1 - 0.5) * 0.35 + wD * uDust.a * 0.4, 0.06, 1.0);');
+        };
         this.matCache.set(key, m);
         return m;
     }
@@ -133,15 +197,19 @@ export class Kit3D {
         return mesh;
     }
 
-    // ---- generic convex solid from two rings ----
-    solidGeometry(bottom, top) {
+    // ---- generic convex solid from a stack of rings ----
+    solidGeometry(bottom, top, mid = []) {
+        const rings = [bottom, ...mid, top];
         const n = bottom.length;
         const pos = [];
         const pushTri = (a, b, c) => pos.push(...a, ...b, ...c);
-        for (let i = 0; i < n; i++) {
-            const j = (i + 1) % n;
-            pushTri(bottom[i], bottom[j], top[j]);
-            pushTri(bottom[i], top[j], top[i]);
+        for (let r = 0; r < rings.length - 1; r++) {
+            const lo = rings[r], hi = rings[r + 1];
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                pushTri(lo[i], lo[j], hi[j]);
+                pushTri(lo[i], hi[j], hi[i]);
+            }
         }
         for (let i = 1; i < n - 1; i++) {
             pushTri(top[0], top[i], top[i + 1]);
@@ -149,17 +217,31 @@ export class Kit3D {
         }
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        // planar UVs so the grime texture isn't stretched
-        const uv = [];
-        for (let i = 0; i < pos.length; i += 3) uv.push((pos[i] + pos[i + 2] * 0.7) / 40, (pos[i + 1] - pos[i + 2] * 0.7) / 40);
-        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-        g.computeVertexNormals();
-        // make normals point outward and flat
-        return g.toNonIndexed ? fixOutward(g) : g;
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(pos.length / 3 * 2).fill(0.5), 2));
+        return fixOutward(g);
+    }
+
+    // chamfer ring: the top ring pulled in toward its centroid
+    static insetRing(ring, d, dz) {
+        let cx = 0, cy = 0;
+        for (const p of ring) { cx += p[0]; cy += p[1]; }
+        cx /= ring.length; cy /= ring.length;
+        return ring.map(p => {
+            const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy) || 1;
+            const k = Math.min(d, l * 0.45);
+            return [p[0] - dx / l * k, p[1] - dy / l * k, p[2] + dz];
+        });
     }
 
     solid(bottom, top, color, opts = {}) {
-        this.add(this.solidGeometry(bottom, top), opts.topColor && false ? opts.topColor : color, opts.finish);
+        // every solid gets a small chamfer on its top edges: real plate
+        // and masonry is never knife-sharp, and the chamfer catches light
+        const h = Math.min(...top.map((p, i) => p[2] - bottom[i][2]));
+        const bv = opts.bevel === false ? 0 : Math.min(typeof opts.bevel === 'number' ? opts.bevel : this.bevel, h * 0.35);
+        if (bv > 0.12) {
+            const shoulder = top.map(p => [p[0], p[1], p[2] - bv]);
+            this.add(this.solidGeometry(bottom, Kit3D.insetRing(shoulder, bv, bv), [shoulder]), color, opts.finish);
+        } else this.add(this.solidGeometry(bottom, top), color, opts.finish);
         if (opts.topMark) {
             const [scale, mc] = opts.topMark;
             const n = top.length;
@@ -305,6 +387,73 @@ export class Kit3D {
         this.tube(x, y, z, x + 1.5, y + 1.5, z + 2.5, 0.3, '#2a2826');
     }
 
+    // Side profile [[u, z], ...] (u = forward) extruded across `width`,
+    // centred on (cx, cy), with real bevelled edges. This is how hulls,
+    // track runs and gabled roofs are built.
+    prism(cx, cy, profile, width, yaw, color, opts = {}) {
+        const shape = new THREE.Shape(profile.map(([u, z]) => new THREE.Vector2(u, z)));
+        if (opts.hole) shape.holes.push(new THREE.Path(opts.hole.map(([u, z]) => new THREE.Vector2(u, z))));
+        const bv = opts.bevel === undefined ? 0.4 : opts.bevel;
+        const g = new THREE.ExtrudeGeometry(shape, {
+            depth: Math.max(0.05, width - bv * 2), bevelEnabled: bv > 0, bevelThickness: bv, bevelSize: bv,
+            bevelOffset: -bv, bevelSegments: 1, steps: 1, curveSegments: 6
+        });
+        g.translate(0, 0, -(width - bv * 2) / 2);
+        // shape x -> forward, shape y -> up, extrusion -> -side
+        const c = Math.cos(yaw || 0), sn = Math.sin(yaw || 0);
+        const m = new THREE.Matrix4().set(
+            c, 0, sn, cx,
+            sn, 0, -c, cy,
+            0, 1, 0, opts.z || 0,
+            0, 0, 0, 1);
+        g.applyMatrix4(m);
+        const flat = g.toNonIndexed();
+        flat.computeVertexNormals();
+        return this.add(flat, color, opts.finish, opts);
+    }
+
+    // Box with rounded plan corners and bevelled top/bottom edges
+    rbox(cx, cy, z, w, l, h, yaw, color, opts = {}) {
+        const r = Math.min(opts.radius === undefined ? 1 : opts.radius, w / 2 - 0.01, l / 2 - 0.01);
+        const hw = w / 2, hl = l / 2;
+        const sh = new THREE.Shape();
+        sh.moveTo(-hw + r, -hl); sh.lineTo(hw - r, -hl); sh.quadraticCurveTo(hw, -hl, hw, -hl + r);
+        sh.lineTo(hw, hl - r); sh.quadraticCurveTo(hw, hl, hw - r, hl);
+        sh.lineTo(-hw + r, hl); sh.quadraticCurveTo(-hw, hl, -hw, hl - r);
+        sh.lineTo(-hw, -hl + r); sh.quadraticCurveTo(-hw, -hl, -hw + r, -hl);
+        const bv = Math.min(opts.bevel === undefined ? 0.5 : opts.bevel, h * 0.4);
+        const g = new THREE.ExtrudeGeometry(sh, {
+            depth: h - bv * 2, bevelEnabled: bv > 0, bevelThickness: bv, bevelSize: bv, bevelOffset: -bv,
+            bevelSegments: opts.round ? 3 : 1, steps: 1, curveSegments: 5
+        });
+        g.translate(0, 0, bv);
+        g.rotateZ(yaw || 0);
+        g.translate(cx, cy, z);
+        return this.add(g, color, opts.finish, opts);
+    }
+
+    // Free cylinder between two points with independent end radii
+    // (gun barrels, exhausts, axles, legs)
+    rod(x1, y1, z1, x2, y2, z2, r1, r2, color, opts = {}) {
+        const a = new THREE.Vector3(x1, y1, z1), b = new THREE.Vector3(x2, y2, z2);
+        const len = a.distanceTo(b);
+        if (len < 1e-4) return;
+        const g = new THREE.CylinderGeometry(r2 === undefined ? r1 : r2, r1, len, opts.seg || 14, 1, false);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()));
+        const mid = a.add(b).multiplyScalar(0.5);
+        g.translate(mid.x, mid.y, mid.z);
+        return this.add(g, color, opts.finish || 'metal', opts);
+    }
+
+    // Ellipsoid (rx, ry along the model's forward/side axes)
+    ellipsoid(cx, cy, z, rx, ry, rz, yaw, color, opts = {}) {
+        const g = new THREE.SphereGeometry(1, 24, 16);
+        g.scale(rx, ry, rz);
+        g.rotateZ(yaw || 0);
+        g.translate(cx, cy, z);
+        return this.add(g, color, opts.finish);
+    }
+
     shadow() { /* real shadows are cast by the sun */ }
 
     glow(x, y, z, r, color) {
@@ -318,28 +467,36 @@ export class Kit3D {
     }
     glowDot(x, y, z, r, color) { this.glow(x, y, z, r, color); }
 
-    wheel(cx, cy, z, r, width, yaw, tire = '#24221f', hub = '#8a8a86') {
-        const g = new THREE.CylinderGeometry(r, r, width, 24);
-        // axle along the side vector
+    wheel(cx, cy, z, r, width, yaw, tire = '#22201d', hub = '#77786f') {
         const side = new THREE.Vector3(-Math.sin(yaw), Math.cos(yaw), 0);
-        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), side));
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), side);
+        const hw = width / 2;
+        // tyre with rounded shoulders, recessed rim, hub
+        const prof = [[r * 0.5, -hw * 0.82], [r * 0.86, -hw], [r, -hw * 0.6], [r, hw * 0.6], [r * 0.86, hw], [r * 0.5, hw * 0.82]];
+        const g = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 26);
+        g.applyQuaternion(q);
         g.translate(cx, cy, z + r);
         this.add(g, tire, 'rubber');
-        // tread blocks
-        for (let i = 0; i < 12; i++) {
-            const a = (i / 12) * Math.PI * 2;
+        // chunky tread lugs
+        const lugs = Math.max(10, Math.round(r * 4.5));
+        for (let i = 0; i < lugs; i++) {
+            const a = (i / lugs) * Math.PI * 2;
             const f = fwd(yaw, Math.cos(a) * r, 0);
-            const t = new THREE.BoxGeometry(width * 1.02, r * 0.28, r * 0.22);
+            const t = new THREE.BoxGeometry(width * 0.92, r * 0.2, r * 0.14);
             t.rotateX(-a);
             t.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), yaw + Math.PI / 2));
             t.translate(cx + f.x, cy + f.y, z + r + Math.sin(a) * r);
-            this.add(t, tint(tire, -6), 'rubber', { cast: false });
+            this.add(t, tint(tire, -5), 'rubber', { cast: false });
         }
         for (const s of [-1, 1]) {
-            const h = new THREE.CylinderGeometry(r * 0.52, r * 0.52, 0.3, 16);
-            h.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), side));
-            h.translate(cx + side.x * s * width / 2, cy + side.y * s * width / 2, z + r);
-            this.add(h, hub, 'metal');
+            const rim = new THREE.CylinderGeometry(r * 0.5, r * 0.56, hw * 0.5, 18);
+            rim.applyQuaternion(q);
+            rim.translate(cx + side.x * s * hw * 0.62, cy + side.y * s * hw * 0.62, z + r);
+            this.add(rim, hub, 'metal');
+            const cap = new THREE.CylinderGeometry(r * 0.17, r * 0.2, hw * 0.3, 10);
+            cap.applyQuaternion(q);
+            cap.translate(cx + side.x * s * hw * 0.95, cy + side.y * s * hw * 0.95, z + r);
+            this.add(cap, tint(hub, -18), 'metal');
         }
     }
 

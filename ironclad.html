@@ -499,6 +499,7 @@ body.touch .tbtn { display: block; }
   </div>
 </div>
 
+<script src="assets/sprites/ironclad.bundle.js?v=20261111a"></script>
 <script>
 'use strict';
 // ============================================================
@@ -1372,6 +1373,117 @@ function droneSprite() {
   });
 }
 
+// ----- Pre-rendered 3D sprite pack -----
+// assets/sprites/ironclad.bundle.js (baked by tools/asset-baker) holds
+// every vehicle as 16 lit views plus a paint mask and a ground shadow.
+// A vehicle is drawn from the nearest view and turned by the few
+// degrees that remain, so light and shadow stay put while it rotates.
+// Without the bundle everything falls back to the canvas art above.
+const PACK = { ready: false, src: {}, sheets: new Map() };
+const PACK_OUT = 2;
+function grayToAlpha(img) {
+  const c = mkCanvas(img.width, img.height), g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) { a[i + 3] = a[i] > 6 ? a[i] : 0; a[i] = a[i + 1] = a[i + 2] = 0; }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+function loadPack() {
+  const A = window.IRONCLAD_ASSETS;
+  if (!A) return;
+  let left = 0, failed = false;
+  const done = () => {
+    if (--left > 0 || failed) return;
+    for (const e of Object.values(PACK.src)) {
+      e.mask = grayToAlpha(e.maskImg);
+      e.shadow = e.shadowImg ? grayToAlpha(e.shadowImg) : null;
+    }
+    PACK.ready = true;
+    if (game.state === 'menu') buildDesert();   // redraw the set-dressing wrecks
+  };
+  const img = (url) => {
+    if (!url) return null;
+    left++;
+    const i = new Image();
+    i.onload = done;
+    i.onerror = () => { failed = true; };
+    i.src = url;
+    return i;
+  };
+  for (const n in A) PACK.src[n] = { ...A[n], colorImg: img(A[n].color), maskImg: img(A[n].mask), shadowImg: img(A[n].shadow) };
+}
+// sheet with the paint mask tinted in the vehicle's color
+function packSheet(name, color) {
+  if (!PACK.ready) return null;
+  const e = PACK.src[name];
+  if (!e) return null;
+  const key = name + '|' + color;
+  let ps = PACK.sheets.get(key);
+  if (ps) return ps;
+  const sheet = mkCanvas(e.colorImg.width, e.colorImg.height), g = sheet.getContext('2d');
+  g.drawImage(e.colorImg, 0, 0);
+  if (color) {
+    const t = mkCanvas(sheet.width, sheet.height), tg = t.getContext('2d');
+    tg.drawImage(e.mask, 0, 0);
+    tg.globalCompositeOperation = 'source-in';
+    tg.fillStyle = color;
+    tg.fillRect(0, 0, t.width, t.height);
+    g.globalCompositeOperation = 'multiply';
+    g.drawImage(t, 0, 0);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(e.colorImg, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+  }
+  ps = { key, sheet, shadow: e.shadow, cell: e.cell * PACK_OUT, dirs: e.dirs, ref: e.ref };
+  PACK.sheets.set(key, ps);
+  return ps;
+}
+function packDir(ps, ang) {
+  const step = TAU / ps.dirs, d = Math.round(ang / step);
+  return [((d % ps.dirs) + ps.dirs) % ps.dirs, ang - d * step];
+}
+// draw one layer ('sheet' or 'shadow') of a pack sprite at world x,y
+function drawPack(g, ps, layer, x, y, ang, size, alpha = 1) {
+  const img = ps[layer];
+  if (!img) return;
+  const [d, rest] = packDir(ps, ps.dirs > 1 ? ang : 0);
+  const c = ps.cell, k = size / ps.ref / PACK_OUT;
+  g.save();
+  g.translate(x, y);
+  g.rotate(ps.dirs > 1 ? rest : ang);
+  g.scale(k, k);
+  if (alpha !== 1) g.globalAlpha *= alpha;
+  g.drawImage(img, d * c, 0, c, c, -c / 2, -c / 2, c, c);
+  g.restore();
+}
+// same view filled with one color (hit flash, boost ghost, burnt husk)
+function drawPackTint(g, ps, color, x, y, ang, size, alpha = 1) {
+  const [d, rest] = packDir(ps, ang);
+  const c = ps.cell, k = size / ps.ref / PACK_OUT;
+  let t = SPR.get('pt|' + ps.key + '|' + d + '|' + color);
+  if (!t) {
+    t = mkCanvas(c, c);
+    const tg = t.getContext('2d');
+    tg.drawImage(ps.sheet, d * c, 0, c, c, 0, 0, c, c);
+    tg.globalCompositeOperation = 'source-atop';
+    tg.fillStyle = color;
+    tg.fillRect(0, 0, c, c);
+    SPR.set('pt|' + ps.key + '|' + d + '|' + color, t);
+  }
+  g.save();
+  g.translate(x, y);
+  g.rotate(rest);
+  g.scale(k, k);
+  if (alpha !== 1) g.globalAlpha *= alpha;
+  g.drawImage(t, -c / 2, -c / 2);
+  g.restore();
+}
+function turretPackName(size, barrel) {
+  if (size === 30) return 'turretBoss';
+  return barrel >= 1.6 ? 'turret190' : barrel >= 1.3 ? 'turret135' : 'turret120';
+}
+
 // ----- Power-up icons (canvas, also exported to the DOM HUD) -----
 function drawIcon(g, type, r, color) {
   g.save();
@@ -1614,13 +1726,22 @@ function buildDesert() {
   for (let i = 0; i < 10; i++) {
     const kind = pick(['tank', 'truck', 'armoredCar', 'apc']);
     const s = rand(16, 22) | 0;
-    const husk = tinted(vehicleSprite(kind, s, '#6a5a48'), 'husk|' + kind + s, 'rgba(34,24,16,0.72)');
     const x = rand(100, WORLD_W - 100), y = rand(100, WORLD_H - 100);
     if (Math.hypot(x - cx0, y - cy0) < 300) continue;
-    t.save(); t.translate(x, y); t.rotate(rand(0, TAU));
-    t.globalAlpha = 0.9;
-    t.drawImage(husk, -husk.width / 2, -husk.height / 2);
-    t.restore();
+    const ps = packSheet(kind, '#6a5a48');
+    if (ps) {
+      const a = rand(0, TAU);
+      t.globalAlpha = 0.9;
+      drawPack(t, ps, 'shadow', x, y, a, s, 0.8);
+      drawPackTint(t, ps, 'rgba(34,24,16,0.62)', x, y, a, s);
+      t.globalAlpha = 1;
+    } else {
+      const husk = tinted(vehicleSprite(kind, s, '#6a5a48'), 'husk|' + kind + s, 'rgba(34,24,16,0.72)');
+      t.save(); t.translate(x, y); t.rotate(rand(0, TAU));
+      t.globalAlpha = 0.9;
+      t.drawImage(husk, -husk.width / 2, -husk.height / 2);
+      t.restore();
+    }
     stampScorch(x, y, 0.6);
   }
 
@@ -2824,6 +2945,12 @@ function killEnemy(e, cause) {
 function settleWreck(w) {
   // burned-out husk becomes part of the terrain
   if (!tctx) return;
+  const ps = packSheet(w.kind, w.color);
+  if (ps) {
+    drawPack(tctx, ps, 'shadow', w.x, w.y, w.ang, w.size, 0.7);
+    drawPackTint(tctx, ps, 'rgba(30,20,12,0.74)', w.x, w.y, w.ang, w.size);
+    return;
+  }
   const spr = vehicleSprite(w.kind, w.size, w.color);
   const husk = tinted(spr, 'husk|' + w.kind + '|' + w.size + '|' + w.color, 'rgba(30,20,12,0.82)');
   tctx.save();
@@ -3266,13 +3393,30 @@ function render() {
   }
   // barrels & crates
   const bs = barrelSprite(), cs = crateSprite();
+  const pBarrel = packSheet('barrel', null), pCrate = packSheet('crate', null);
   for (const b of game.barrels) {
     if (!onScreen(b.x, b.y, 30)) continue;
+    const k = b.fuse > 0 ? 1 + 0.08 * Math.sin(game.time) : 1;
+    if (pBarrel) {
+      drawPack(ctx, pBarrel, 'shadow', b.x, b.y, 0, 20);
+      drawPack(ctx, pBarrel, 'sheet', b.x, b.y, 0, 20 * k);
+      continue;
+    }
     drawImg(shadowSprite(13, 10), b.x + 4, b.y + 6);
-    drawImg(bs, b.x, b.y, 0, 1, b.fuse > 0 ? 1 + 0.08 * Math.sin(game.time) : 1);
+    drawImg(bs, b.x, b.y, 0, 1, k);
   }
   for (const c of game.crates) {
     if (!onScreen(c.x, c.y, 30)) continue;
+    if (pCrate) {
+      // the crate is lit from a fixed side: keep it axis-aligned
+      drawPack(ctx, pCrate, 'shadow', c.x, c.y, 0, 20);
+      drawPack(ctx, pCrate, 'sheet', c.x, c.y, 0, 20);
+      ctx.fillStyle = '#4a2f14';
+      ctx.font = '900 10px Arial Black, Verdana';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', c.x, c.y + 1);
+      continue;
+    }
     drawImg(shadowSprite(18, 16), c.x + 5, c.y + 7);
     drawImg(cs, c.x, c.y, c.rot);
   }
@@ -3382,6 +3526,28 @@ function render() {
 }
 
 function drawPlayer(p) {
+  const pb = packSheet('tank', PLAYER_COLOR), pt = packSheet('turret135', PLAYER_COLOR);
+  if (pb && pt) {
+    const alpha = p.invuln > 0 && p.invuln % 6 < 3 ? 0.55 : (p.hidden ? 0.8 : 1);
+    drawPack(ctx, pb, 'shadow', p.x, p.y, p.hull, 20, alpha);
+    if (p.boosting) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 1; k <= 3; k++) drawPackTint(ctx, pb, '#58b8ff', p.x - p.vx * k * 2.2, p.y - p.vy * k * 2.2, p.hull, 20, 0.16 / k);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    drawPack(ctx, pb, 'sheet', p.x, p.y, p.hull, 20, alpha);
+    const rx = -Math.cos(p.turret) * p.recoil, ry = -Math.sin(p.turret) * p.recoil;
+    drawPack(ctx, pt, 'shadow', p.x + rx, p.y + ry, p.turret, 20, alpha * 0.8);
+    drawPack(ctx, pt, 'sheet', p.x + rx, p.y + ry, p.turret, 20, alpha);
+    if (game.pu.drones > 0) {
+      const ds = droneSprite();
+      for (const d of p.drones) if (d.x !== undefined) {
+        drawImg(shadowSprite(9, 9), d.x + 10, d.y + 16, 0, 0.5);
+        drawImg(ds, d.x, d.y, game.time * 0.3);
+      }
+    }
+    return;
+  }
   const body = vehicleSprite('tank', 20, PLAYER_COLOR);
   const tur = turretSprite(20, PLAYER_COLOR, 1.35);
   const alpha = p.invuln > 0 && p.invuln % 6 < 3 ? 0.55 : (p.hidden ? 0.8 : 1);
@@ -3409,6 +3575,40 @@ function drawEnemy(e) {
   const def = e.def;
   if (!onScreen(e.x, e.y, 90)) return;
   const fade = e.spawnT > 0 ? 1 - e.spawnT / 24 : 1;
+  const pb = packSheet(def.art, def.color);
+  if (pb) {
+    const bob = def.air ? Math.sin(game.time * 0.08 + e.id) * 2 : 0;
+    if (def.air) drawImg(shadowSprite(def.size * 1.1, def.size * 0.6), e.x + 34, e.y + 52, 0, 0.55 * fade);
+    else drawPack(ctx, pb, 'shadow', e.x, e.y, e.ang, def.size, fade);
+    if (def.ai === 'charge' && (e.windup > 0 || e.dash > 0)) {
+      ctx.globalCompositeOperation = 'lighter';
+      drawImg(glowSprite('#ff6a1a'), e.x, e.y, 0, 0.7, 0.9);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    drawPack(ctx, pb, 'sheet', e.x, e.y + bob, e.ang, def.size, fade);
+    if (e.flash > 0) drawPackTint(ctx, pb, '#ffffff', e.x, e.y + bob, e.ang, def.size, e.flash / 6);
+    if (def.turret) {
+      const ts = def.ai === 'boss' ? 30 : def.size;
+      const pt = packSheet(turretPackName(ts, def.turret), def.color);
+      if (pt) {
+        drawPack(ctx, pt, 'shadow', e.x, e.y, e.tur, ts, fade * 0.8);
+        drawPack(ctx, pt, 'sheet', e.x, e.y, e.tur, ts, fade);
+        if (e.flash > 0) drawPackTint(ctx, pt, '#ffffff', e.x, e.y, e.tur, ts, e.flash / 6);
+      }
+    }
+    if (def.rack) {
+      const pr = packSheet('rack', def.color);
+      const rx = e.x - Math.cos(e.ang) * def.size * 0.3, ry = e.y - Math.sin(e.ang) * def.size * 0.3;
+      if (pr) { drawPack(ctx, pr, 'shadow', rx, ry, e.tur, def.size, fade * 0.8); drawPack(ctx, pr, 'sheet', rx, ry, e.tur, def.size, fade); }
+    }
+    if (def.air) drawImg(rotorSprite(def.size), e.x + Math.cos(e.ang) * 2, e.y + bob, e.rotor, 0.85 * fade);
+    if (def.ai === 'bomb' && (game.time + e.id) % (e.arm > 0 ? 6 : 24) < 3) {
+      ctx.globalCompositeOperation = 'lighter';
+      drawImg(glowSprite('#ff2020'), e.x, e.y, 0, 0.9, e.arm > 0 ? 0.6 : 0.3);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    return;
+  }
   const body = vehicleSprite(def.art, def.size, def.color);
   if (def.air) {
     drawImg(shadowSprite(def.size * 1.1, def.size * 0.6), e.x + 34, e.y + 52, 0, 0.55 * fade);
@@ -4018,6 +4218,7 @@ document.addEventListener('visibilitychange', () => {
 // boot: build the world for the menu fly-over
 newGame();
 buildDesert();
+loadPack();
 buildOverlays();
 buildLegend();
 requestAnimationFrame(frame);
