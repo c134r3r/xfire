@@ -65,6 +65,11 @@ body.ingame #hud { opacity: 1; }
 .pip.on { background: linear-gradient(135deg, #ff6a5a, #c4241c); border-color: #ff9a8a; box-shadow: 0 0 8px rgba(255,80,60,0.7); }
 .pip.on.low { animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+body.coop .solo-only { display: none; }
+body:not(.coop) .coop-only { display: none; }
+.coop-only { font-size: 12px; }
+#card2 .val { color: #ff8ec0; text-shadow: 0 0 8px rgba(255,142,192,0.5); }
+.out { font-size: 10px; letter-spacing: 2px; color: #7a6a60; }
 #card2 { display: none; border-color: rgba(255,142,192,0.5); }
 body.coop #card2 { display: flex; }
 #card2 .lbl { color: #ff8ec0; }
@@ -212,12 +217,12 @@ body.touch.ingame #touch { display: block; }
   <canvas id="game" width="480" height="270"></canvas>
   <div id="hud">
     <div class="hud-tl">
-      <div class="card"><span class="lbl" id="lbl1">ARMOR</span><div id="hearts"></div></div>
-      <div class="card p2" id="card2"><span class="lbl">P2</span><div id="hearts2"></div></div>
+      <div class="card"><span class="lbl" id="lbl1">ARMOR</span><div id="hearts"></div><span class="val coop-only" id="liv1">×5</span></div>
+      <div class="card p2" id="card2"><span class="lbl">P2</span><div id="hearts2"></div><span class="val coop-only" id="liv2">×5</span></div>
       <div id="chips"></div>
     </div>
     <div class="hud-tr">
-      <div class="card"><span id="section">CRASH SITE</span><span class="lbl">LIVES</span><span class="val" id="lives">5</span><span class="lbl">SCORE</span><span class="val" id="score">0</span></div>
+      <div class="card"><span id="section">CRASH SITE</span><span class="lbl solo-only">LIVES</span><span class="val solo-only" id="lives">5</span><span class="lbl">SCORE</span><span class="val" id="score">0</span></div>
     </div>
     <div id="bossBar"><div id="bossName">MECH WARDEN</div><div id="bossTrack"><div id="bossFill"></div></div></div>
     <div id="banner"></div>
@@ -2373,7 +2378,7 @@ let S = null;   // current section
 let state = 'menu';
 
 function newRun(level = 0, coop = false) {
-  G = { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0, php: [6, 6], maxHp: 6, lives: START_LIVES, coop, level, section: 0, combo: 0, comboT: 0,
+  G = { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0, php: [6, 6], maxHp: 6, lives: [START_LIVES, START_LIVES], coop, level, section: 0, combo: 0, comboT: 0,
     diff: LEVELS[level].diff, levelStart: { score: 0, kills: 0, finishers: 0, deaths: 0, time: 0 },
     pu: { rapid: 0, spread: 0, rail: 0, laser: 0, rockets: 0, drones: 0, shield: 0, overdrive: 0 } };
 }
@@ -2384,6 +2389,7 @@ function beginLevel(level, section = 0) {
   G.level = level;
   G.diff = LEVELS[level].diff;
   G.php = [G.maxHp, G.maxHp];
+  for (let i = 0; i < 2; i++) if (G.lives[i] <= 0) G.lives[i] = 1;   // new level: a benched pilot is back with 1 life
   G.levelStart = { score: G.score, kills: G.kills, finishers: G.finishers, deaths: G.deaths, time: G.time };
   startSection(section);
 }
@@ -2420,6 +2426,7 @@ function startSection(i, fromCheckpoint) {
     S.players = [makePlayer(S.L.start.x, S.L.start.y, 0)];
     if (G.coop) S.players.push(makePlayer(S.L.start.x + 14, S.L.start.y, 1));
     S.P = S.players[0];
+    for (const q of S.players) if (G.lives[q.slot] <= 0) q.dead = 1;   // out of lives until the next level
     S.checkpoint = { x: S.L.start.x, y: S.L.start.y };
     for (const sp of S.L.spawns) spawnEntity(sp);
   }
@@ -2797,6 +2804,7 @@ function nearestPlayer(x, y) {
 const COOP_DOWN_TICKS = 200;   // a fallen pilot rejoins after ~3.3 s while the partner lives
 function killPlayer(P = S.P) {
   P.hp = 0;
+  G.lives[P.slot]--;
   P.dead = S.coop ? COOP_DOWN_TICKS : 80;
   S.lastDeathT = S.time;
   G.deaths++;
@@ -2809,6 +2817,7 @@ function killPlayer(P = S.P) {
 // partner while one of them lives; when both are down the whole team resets.
 function tickDead(P) {
   if (!S.coop) { if (--P.dead === 0) respawn(); return; }
+  if (G.lives[P.slot] <= 0) { P.dead = 1; return; }   // out of lives: stays down until the next level
   if (P.dead > 1) { P.dead--; return; }
   const mate = S.players.find(q => q !== P && !q.dead);
   if (mate) revivePlayer(P, mate);
@@ -2831,13 +2840,14 @@ function revivePlayer(P, mate) {
 
 function respawn() {
   // whole-team reset (solo death, or both pilots down): costs a life
-  if (--G.lives <= 0) { gameOver(); return; }
+  if (S.players.every(q => G.lives[q.slot] <= 0)) { gameOver(); return; }
   G.php = [G.maxHp, G.maxHp];
   for (const k of TIMED) G.pu[k] = 0;
   if (S.mode === 'bike') { restartBikeAtCheckpoint(); return; }
   if (S.def.boss) { startSection(G.section); return; }
   const c = S.lift ? { x: S.lift.x, y: S.lift.y } : S.checkpoint;
   S.players.forEach((P, i) => {
+    if (G.lives[P.slot] <= 0) { P.dead = 1; return; }   // benched
     Object.assign(P, makePlayer(c.x + i * 14, c.y, i));
     P.inv = 120;
   });
@@ -3124,6 +3134,7 @@ function setupBike(kind) {
   if (G.coop) S.players.push(makePlayer(160, BIKE_GROUND, 1));
   for (const q of S.players) { q.h = 18; q.w = 26; }
   S.P = S.players[0];
+  for (const q of S.players) if (G.lives[q.slot] <= 0) q.dead = 1;
   S.checkpoint = { d: 0, idx: 0 };
 }
 function restartBikeAtCheckpoint() {
@@ -3131,6 +3142,7 @@ function restartBikeAtCheckpoint() {
   B.dist = c.d; B.idx = c.idx; B.objs = [];
   S.ebullets = []; S.bullets = [];
   S.players.forEach((q, i) => {
+    if (G.lives[q.slot] <= 0) { q.dead = 1; return; }
     Object.assign(q, makePlayer(110 + i * 50, BIKE_GROUND, i));
     q.h = 18; q.w = 26; q.inv = 120;
   });
@@ -3858,7 +3870,7 @@ function applyPowerup(type, x, y, who) {
   if (def.dur) G.pu[type] = Math.min(def.dur * 2, G.pu[type] + def.dur);
   if (type === 'repair') healPlayer(who || S.P, 2);
   if (type === 'oneup') {
-    G.lives++;
+    G.lives[(who || S.P).slot]++;
     Snd.play('checkpoint');
     for (let i = 0; i < 12; i++) glow(x + rand(-10, 10), y - rand(0, 24), rand(5, 9), '#ffd84a', 40, rand(-0.3, 0.3), rand(-1.2, -0.4));
   }
@@ -5685,15 +5697,16 @@ function updateHud() {
   document.body.classList.toggle('coop', !!G.coop);
   document.getElementById('lbl1').textContent = G.coop ? 'P1' : 'ARMOR';
   for (let i = 0; i < (G.coop ? 2 : 1); i++) {
-    const hearts = document.getElementById(i ? 'hearts2' : 'hearts'), hp = G.php[i];
-    const key = hp + '/' + G.maxHp;
+    const hearts = document.getElementById(i ? 'hearts2' : 'hearts'), hp = G.php[i], out = G.coop && G.lives[i] <= 0;
+    const key = hp + '/' + G.maxHp + (out ? 'x' : '');
     if (hearts.dataset.k !== key) {
       hearts.dataset.k = key;
-      hearts.innerHTML = Array.from({ length: G.maxHp }, (_, n) => `<div class="pip${n < hp ? ' on' : ''}${hp <= 2 ? ' low' : ''}"></div>`).join('');
+      hearts.innerHTML = out ? '<span class="out">OUT · BACK NEXT LEVEL</span>' : Array.from({ length: G.maxHp }, (_, n) => `<div class="pip${n < hp ? ' on' : ''}${hp <= 2 ? ' low' : ''}"></div>`).join('');
     }
+    if (G.coop) document.getElementById(i ? 'liv2' : 'liv1').textContent = '×' + Math.max(0, G.lives[i]);
   }
   document.getElementById('score').textContent = G.score.toLocaleString('en-US');
-  document.getElementById('lives').textContent = '×' + G.lives;
+  document.getElementById('lives').textContent = '×' + Math.max(0, G.lives[0]);
   const active = TIMED.filter(k => G.pu[k] > 0);
   const k2 = active.join(',');
   if (k2 !== hudKey) {
