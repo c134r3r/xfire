@@ -357,6 +357,23 @@ from the Ironclad menu. Three levels, each harder than the last (tougher
 troops, faster fire, faster shots); finishing a level unlocks the next
 in the menu, and NEXT LEVEL carries the score on.
 
+**Co-op (2 players, one keyboard)** - pick `2 PLAYERS · CO-OP` in the
+menu (keyboard only, not offered on touch). A key-check screen follows:
+every key lights up while held, and keys can be rebound (saved locally).
+Solo play is unchanged.
+
+- P1: `W A S D` (aim up / crouch), `SPACE` jump, `F` fire.
+- P2: arrow keys, `.` jump, `/` fire. Pilot 2 is a woman in rose armor.
+- No smash and no dash in co-op: jump + fire only.
+- One shared camera on the midpoint; screen edges are soft walls, a pilot
+  who drops out of view is pulled to the partner.
+- Separate armor bars; a fallen pilot rejoins at the partner after ~3 s
+  with half armor. Both down: back to the checkpoint (boss: restart).
+- Power-ups, score and combo are shared. Enemies and bosses have 1.5x
+  health and go for the nearest living pilot. Shots into a reeling enemy
+  finish it, 7 hits break a shield, a staggered boss takes triple damage.
+- Hoverbike: both ride side by side on the same track.
+
 **Level 1 - The Pit**
 
 1. **Crash Site** - surface run at dusk. A 5 s intro shows the pilot
