@@ -143,6 +143,13 @@ body.touch.ingame #touch { display: block; }
 @keyframes rot { 0%, 25% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
 @media (orientation: portrait) { body.touch #rotateHint { display: flex; } }
 
+/* ---------- Controller toast + menu focus ---------- */
+#toast { position: fixed; left: 50%; bottom: 7%; transform: translate(-50%, 20px); z-index: 400; padding: 10px 22px; border-radius: 8px; background: rgba(10,7,6,0.92); border: 1px solid var(--cyan); color: var(--cyan); font: 14px var(--font-display); letter-spacing: 3px; opacity: 0; pointer-events: none; }
+#toast.show { animation: toastIn 2.4s ease forwards; }
+@keyframes toastIn { 0% { opacity: 0; transform: translate(-50%, 20px); } 10%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+.padfocus { outline: 3px solid var(--cyan); outline-offset: 3px; filter: brightness(1.2); }
+.kpad { margin: 8px 0 0; font-size: 12px; color: var(--muted); letter-spacing: 1px; display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.padtag { font-size: 10px; color: #8fd0ff; letter-spacing: 1px; margin-left: 6px; }
 /* ---------- Co-op menu + key screen ---------- */
 .modes { display: flex; gap: 8px; justify-content: center; margin: 0 0 12px; }
 .mode { padding: 8px 16px; font: 12px var(--font-display); letter-spacing: 3px; color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(255,122,46,0.25); border-radius: 8px; cursor: pointer; }
@@ -243,6 +250,7 @@ body.touch.ingame #touch { display: block; }
   </div>
 </div>
 
+<div id="toast"></div>
 <div id="rotateHint"><div class="phone">📱</div><div>ROTATE YOUR DEVICE<br>UNDERWORKS PLAYS IN LANDSCAPE</div></div>
 
 <div class="overlay" id="menuScreen">
@@ -268,6 +276,7 @@ body.touch.ingame #touch { display: block; }
       <div id="touchControls" class="hidden">
         <div>Left thumb: stick to run, aim and crouch. Right thumb: JUMP, FIRE, SMASH, DASH.</div>
       </div>
+      <div class="hint" style="margin-bottom:6px">◈ Controller (PlayStation/Xbox, Bluetooth or USB): press any button once so the browser sees it. D-pad/stick move, ✕ jump, □ fire, ○ smash, R1 dash, OPTIONS pause. In co-op the first pad is P1, the second P2. Menus: D-pad + ✕.</div>
       <div class="hint" style="margin-bottom:6px">◈ Fullscreen: button below or <span class="key">ALT</span>+<span class="key">ENTER</span>. On a TV, connect by HDMI and go fullscreen: the picture renders in the screen's own resolution.</div>
       <div class="hint">◈ Shoot enemies until they reel (★), then SMASH them — finishers drop armor and score.<br>
       ◈ Shield troopers only break to a smash. Red barrels chain-react.<br>
@@ -288,9 +297,10 @@ body.touch.ingame #touch { display: block; }
     <div class="title" style="font-size:32px">KEY CHECK</div>
     <div class="subtitle" style="margin:8px 0 6px">Hold keys of both pilots at once: every key you press must light up</div>
     <div class="kcols">
-      <div class="kcol p1"><h3>P1</h3><div id="kp1"></div></div>
-      <div class="kcol p2"><h3>P2</h3><div id="kp2"></div></div>
+      <div class="kcol p1"><h3>P1<span class="padtag" id="ptag1"></span></h3><div id="kp1"></div></div>
+      <div class="kcol p2"><h3>P2<span class="padtag" id="ptag2"></span></h3><div id="kp2"></div></div>
     </div>
+    <div class="kpad">🎮 Controller: <span>JUMP</span> <button class="kbtn" id="padJump"></button> <span>FIRE</span> <button class="kbtn" id="padFire"></button> <span>· press a button on each pad: 1st = P1, 2nd = P2</span></div>
     <div class="kmeta" id="kmeta"></div>
     <div class="hint">Click a key to change it, then press the new one. Laptop keyboards often drop keys when many are held: if one stays dark while others are down, move it to another spot.</div>
     <div class="actions">
@@ -1232,16 +1242,126 @@ function readInput() {
   for (const pi of PIN) for (const a in pi.inp) pi.inp[a] = false;
   if (G && G.coop) {
     for (let s = 0; s < 2; s++) for (const a of COOP_ACTIONS) if (codeDown[COOP_KEYS[s][a]]) PIN[s].inp[a] = true;
-    return;
+  } else {
+    for (const k in keys) if (keys[k] && KEYMAP[k]) input[KEYMAP[k]] = true;
+    const s = touchState.stick;
+    if (s.x < -0.38) input.left = true;
+    if (s.x > 0.38) input.right = true;
+    if (s.y < -0.45) input.up = true;
+    if (s.y > 0.45) input.down = true;
+    for (const b in touchState.buttons) if (touchState.buttons[b]) input[b] = true;
   }
-  for (const k in keys) if (keys[k] && KEYMAP[k]) input[KEYMAP[k]] = true;
-  const s = touchState.stick;
-  if (s.x < -0.38) input.left = true;
-  if (s.x > 0.38) input.right = true;
-  if (s.y < -0.45) input.up = true;
-  if (s.y > 0.45) input.down = true;
-  for (const b in touchState.buttons) if (touchState.buttons[b]) input[b] = true;
+  // controllers add to whatever the keyboard says
+  for (let s = 0; s < 2; s++) for (const a in padIn[s]) if (padIn[s][a]) PIN[s].inp[a] = true;
 }
+
+// ============================================================
+// CONTROLLERS (Gamepad API: PlayStation pads over Bluetooth/USB, Xbox, ...)
+// Standard mapping: stick/D-pad move, cross = jump, square = fire (rebindable),
+// R2 also fires, circle = smash, R1/triangle = dash (solo), options = pause.
+// Solo: every pad drives pilot 1. Co-op: the first pad that presses a button
+// becomes P1, the second P2 (keyboard still works alongside).
+// ============================================================
+const PAD_NAMES = ['✕', '○', '□', '△', 'L1', 'R1', 'L2', 'R2', 'SHARE', 'OPTIONS', 'L3', 'R3'];
+const PAD_BIND = { jump: 0, fire: 2 };
+try { const sv = JSON.parse(localStorage.getItem('underworks_padbind') || 'null'); if (sv) { if (Number.isInteger(sv.jump)) PAD_BIND.jump = sv.jump; if (Number.isInteger(sv.fire)) PAD_BIND.fire = sv.fire; } } catch (e) { /* private mode */ }
+function savePadBind() { try { localStorage.setItem('underworks_padbind', JSON.stringify(PAD_BIND)); } catch (e) { /* private mode */ } }
+const padBlank = () => ({ left: false, right: false, up: false, down: false, jump: false, fire: false, melee: false, dash: false });
+let padIn = [padBlank(), padBlank()];
+const padPrev = {};        // gamepad index -> previous button states
+const padStick = {};       // gamepad index -> previous stick/D-pad direction flags (menu navigation)
+const padSlot = {};        // gamepad index -> pilot slot (co-op)
+let padCapture = null;     // set while the key screen waits for a button to rebind
+let padNavIdx = 0, padNavOv = null, padNavShown = false;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+}
+function rumble(slot, ms, strong, weak) {
+  if (!navigator.getGamepads) return;
+  for (const gp of navigator.getGamepads()) {
+    if (!gp || !gp.vibrationActuator) continue;
+    if (G && G.coop && padSlot[gp.index] !== slot) continue;
+    try { gp.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) { /* unsupported */ }
+  }
+}
+function padMenuNav(dir) {
+  const ov = document.querySelector('.overlay:not(.hidden)');
+  if (!ov) return;
+  const items = [...ov.querySelectorAll('button, a.btn')].filter(el => !el.disabled && !el.classList.contains('hidden') && el.offsetParent !== null);
+  if (!items.length) return;
+  if (ov !== padNavOv) { padNavOv = ov; padNavIdx = 0; dir = 0; }
+  padNavIdx = (padNavIdx + dir + items.length) % items.length;
+  document.querySelectorAll('.padfocus').forEach(el => el.classList.remove('padfocus'));
+  items[padNavIdx].classList.add('padfocus');
+  padNavShown = true;
+  return items[padNavIdx];
+}
+function coopPadMode() { return coopKeyTest !== null || (G && G.coop && (state === 'play' || state === 'intro' || state === 'paused')); }
+function pollPads() {
+  const next = [padBlank(), padBlank()];
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const nav = !!document.querySelector('.overlay:not(.hidden)') && state !== 'play' && state !== 'intro';
+  for (const gp of pads) {
+    if (!gp || !gp.connected) continue;
+    const down = gp.buttons.map(b => b.pressed);
+    const prev = padPrev[gp.index] || [];
+    padPrev[gp.index] = down;
+    const edge = (i) => !!down[i] && !prev[i];
+    const first = down.findIndex((d, i) => d && !prev[i]);
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    const dir = { left: ax < -0.45 || down[14], right: ax > 0.45 || down[15], up: ay < -0.45 || down[12], down: ay > 0.45 || down[13] };
+    if (first >= 0 && padCapture) { const cb = padCapture; padCapture = null; cb(first); continue; }
+    if (first >= 0 && anyKeyCb) anyKeyCb();
+    // co-op: claim a pilot slot on the first button press
+    if (coopPadMode() && padSlot[gp.index] === undefined && first >= 0) {
+      const taken = Object.values(padSlot);
+      const free = [0, 1].find(sl => !taken.includes(sl));
+      if (free !== undefined) { padSlot[gp.index] = free; toast('CONTROLLER → P' + (free + 1)); }
+    }
+    if (edge(9) && (state === 'play' || state === 'paused') && !coopKeyTest) { togglePause(); continue; }
+    if (nav) {
+      // menus: stick/D-pad moves the highlight, cross selects, circle goes back
+      const pd = padStick[gp.index] || {};
+      padStick[gp.index] = dir;
+      if (first >= 0 || (dir.left && !pd.left) || (dir.right && !pd.right) || (dir.up && !pd.up) || (dir.down && !pd.down)) {
+        const step = ((dir.right && !pd.right) || (dir.down && !pd.down)) ? 1 : ((dir.left && !pd.left) || (dir.up && !pd.up)) ? -1 : 0;
+        if (edge(0) && padNavShown) { const el = padMenuNav(0); if (el) el.click(); }
+        else if (edge(1)) { const ov = document.querySelector('.overlay:not(.hidden)'); const back = ov && ov.querySelector('#coopBack, #resumeBtn'); if (back) back.click(); }
+        else padMenuNav(step);
+      }
+      continue;
+    }
+    padStick[gp.index] = dir;
+    if (state !== 'play' && state !== 'intro') continue;
+    const slot = G && G.coop ? padSlot[gp.index] : 0;
+    if (slot === undefined) continue;
+    const I = next[slot], P = PIN[slot].prs;
+    I.left = I.left || dir.left; I.right = I.right || dir.right; I.up = I.up || dir.up; I.down = I.down || dir.down;
+    if (down[PAD_BIND.jump]) { I.jump = true; if (edge(PAD_BIND.jump)) P.jump = 8; }
+    if (down[PAD_BIND.fire] || down[7]) I.fire = true;
+    if (!(G && G.coop)) {
+      if (down[1]) { I.melee = true; if (edge(1)) P.melee = 8; }
+      if (down[5] || down[3]) { I.dash = true; if (edge(5) || edge(3)) P.dash = 8; }
+    }
+  }
+  padIn = next;
+  // key screen: show which controller belongs to whom
+  if (coopKeyTest) {
+    for (let sl = 0; sl < 2; sl++) {
+      const el = document.getElementById('ptag' + (sl + 1));
+      const has = Object.entries(padSlot).some(([i, v]) => v === sl && pads[i] && pads[i].connected);
+      const txt = has ? '🎮 CONTROLLER READY' : '';
+      if (el && el.textContent !== txt) el.textContent = txt;
+    }
+  }
+}
+window.addEventListener('gamepadconnected', e => { toast('CONTROLLER CONNECTED — PRESS A BUTTON'); });
+window.addEventListener('gamepaddisconnected', e => {
+  delete padSlot[e.gamepad.index]; delete padPrev[e.gamepad.index];
+  if (state === 'play') togglePause();
+  toast('CONTROLLER DISCONNECTED');
+});
 
 // --- touch: floating stick on the left, slide-able buttons on the right ---
 (function setupTouch() {
@@ -2806,6 +2926,7 @@ function hurtPlayer(n, ignoreInv, who) {
   addTrauma(0.35);
   S.freeze = 4;
   Snd.play('hurt');
+  rumble(P.slot, 160, 0.7, 0.35);
   sparks(P.x, P.y - 12, 10, '#ff8a6a', 3);
   G.combo = 0;
   if (P.hp <= 0) killPlayer(P);
@@ -2839,6 +2960,7 @@ function killPlayer(P = S.P) {
   S.lastDeathT = S.time;
   G.deaths++;
   P.beam = null;
+  rumble(P.slot, 420, 1, 0.8);
   explosion(P.x, P.y - 10, 1.4);
   for (let i = 0; i < 8; i++) part({ k: 'debris', x: P.x, y: P.y - 10, vx: rand(-2.5, 2.5), vy: rand(-4, -1), size: 3, life: 70, rot: 0, vr: rand(-0.3, 0.3), color: P.slot ? '#c8407a' : '#3f93a8', drag: 0.99, grav: 0.18 });
 }
@@ -5851,6 +5973,7 @@ function frame(now) {
   let dt = (now - lastT) / 1000;
   lastT = now;
   if (dt > 0.25) dt = 0.25;
+  pollPads();
   if (!S) return;
   if (state === 'play' || state === 'intro') {
     acc += dt;
@@ -5953,12 +6076,21 @@ function keyLabel(code) {
   return m[code] || code.replace(/^Key|^Digit|^Numpad/, c => c === 'Numpad' ? 'NUM ' : '');
 }
 const ACT_NAMES = { up: 'AIM UP', left: 'LEFT', down: 'DOWN / CROUCH', right: 'RIGHT', jump: 'JUMP', fire: 'FIRE' };
+function padLabel(i) { return PAD_NAMES[i] || 'B' + i; }
+function buildPadBind() {
+  for (const a of ['jump', 'fire']) {
+    const b = document.getElementById(a === 'jump' ? 'padJump' : 'padFire');
+    b.classList.remove('wait'); b.textContent = padLabel(PAD_BIND[a]);
+    b.onclick = () => { b.classList.add('wait'); b.textContent = '...'; padCapture = (i) => { PAD_BIND[a] = i; savePadBind(); buildPadBind(); }; };
+  }
+}
 function buildCoopKeys() {
+  buildPadBind();
   for (let s = 0; s < 2; s++) {
     const el = document.getElementById('kp' + (s + 1));
     el.innerHTML = COOP_ACTIONS.map(a => `<div class="krow"><span>${ACT_NAMES[a]}</span><button class="kbtn" data-s="${s}" data-a="${a}">${keyLabel(COOP_KEYS[s][a])}</button></div>`).join('');
   }
-  for (const b of document.querySelectorAll('#coopScreen .kbtn')) b.addEventListener('click', () => {
+  for (const b of document.querySelectorAll('#coopScreen .kcol .kbtn')) b.addEventListener('click', () => {
     b.classList.add('wait'); b.textContent = '...';
     coopKeyCapture = (code) => {
       coopKeyCapture = null;
@@ -5976,7 +6108,7 @@ function buildCoopKeys() {
 }
 function testCoopKeys() {
   let held = 0;
-  for (const b of document.querySelectorAll('#coopScreen .kbtn')) {
+  for (const b of document.querySelectorAll('#coopScreen .kcol .kbtn')) {
     const on = !!codeDown[COOP_KEYS[+b.dataset.s][b.dataset.a]];
     b.classList.toggle('down', on);
     if (on) held++;
