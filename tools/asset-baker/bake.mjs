@@ -6,6 +6,7 @@
 //   node tools/asset-baker/bake.mjs --only tank     # roles containing "tank"
 //   node tools/asset-baker/bake.mjs --faction evolved
 //   node tools/asset-baker/bake.mjs --test out.png  # quick contact sheet
+//   node tools/asset-baker/bake.mjs --ironclad      # top-down sheets for ironclad.html
 //
 // Writes assets/sprites/<faction>/<kind>-<role>.png (+ .mask.png),
 // assets/sprites/manifest.json and per-faction bundles
@@ -77,6 +78,29 @@ await page.goto(`http://127.0.0.1:${port}/tools/asset-baker/bake.html${process.e
 await page.waitForFunction(() => window.bakerReady === true, null, { timeout: 30000 });
 
 const test = opt('--test');
+if (opt('--game') === 'ironclad' || args.includes('--ironclad')) {
+    // IRONCLAD: top-down sheets -> assets/sprites/ironclad/*.png + ironclad.json
+    const { IRONCLAD_JOBS } = await import('./ironclad-jobs.mjs');
+    const dir = path.join(OUTDIR, 'ironclad');
+    fs.mkdirSync(dir, { recursive: true });
+    const only = opt('--only');
+    const metaPath = path.join(dir, 'ironclad.json');
+    const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
+    for (const job of IRONCLAD_JOBS) {
+        if (only && !job.name.toLowerCase().includes(only.toLowerCase())) continue;
+        const t0 = Date.now();
+        const r = await page.evaluate((j) => window.bakeTop(j), job);
+        fs.writeFileSync(path.join(dir, job.name + '.png'), dataToBuf(r.color));
+        fs.writeFileSync(path.join(dir, job.name + '.mask.png'), dataToBuf(r.mask));
+        if (r.shadow) fs.writeFileSync(path.join(dir, job.name + '.shadow.png'), dataToBuf(r.shadow));
+        meta[job.name] = { cell: job.cell, dirs: job.dirs, ref: job.ref, shadow: !!r.shadow };
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 1));
+        console.log(`ironclad ${job.name}  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    }
+    await browser.close();
+    server.close();
+    process.exit(0);
+}
 if (test) {
     // quick look: a handful of cells on one sheet
     const out = await page.evaluate(async () => {

@@ -1,8 +1,8 @@
 # XFire — Krossfire Skirmish
 
 A browser-based isometric RTS skirmish inspired by **KKnD2: Krossfire** (1998).
-Pure HTML5 Canvas + vanilla JavaScript — no build step, no external assets.
-All unit and building graphics are procedurally rendered isometric sprites.
+Pure HTML5 Canvas + vanilla JavaScript — no build step. Units and buildings
+come from a pre-rendered 3D sprite pack, with procedural sprites as fallback.
 
 ## Run it
 
@@ -263,24 +263,56 @@ but rebuilt from scratch:
 
 `assets/sprites/` holds a pre-rendered sprite pack: every unit (16
 directions, walk/stride frames), every turret and every building of all
-three factions, rendered from real 3D models (three.js, soft shadow-mapped
-sun, sky light, PBR materials, edge highlights). Each sheet comes with a
-team mask, so one render is tinted for any player color at load time.
-The game loads the pack during the loading screen and falls back to the
-procedural sprites for anything missing; *Skirmish Setup → Graphics*
-switches between the two.
+three factions, rendered from real 3D models with three.js. Each sheet
+comes with a team mask, so one render is tinted for any player color at
+load time. The game loads the pack during the loading screen and falls
+back to the procedural sprites for anything missing; *Skirmish Setup →
+Graphics* switches between the two.
+
+What the renderer does to make a sprite look like an object rather than
+a drawing:
+
+- **Sky occlusion**: each cell is lit from 16 directions across the sky
+  dome, with and without shadows; the ratio darkens crevices, the
+  underside of fenders, the gap behind road wheels, and leaves a soft
+  contact shadow on the ground under the model.
+- **Weathering in the shader**, keyed to the object-space position so it
+  sticks to the vehicle in all 16 directions: camouflage blotches, faded
+  and stained paint, streaks down vertical plates, chipped paint, dust
+  that is thick near the ground and thin on upward faces, panel seams
+  for the machines (`lib/styles.js` holds the per-faction settings).
+- **Chamfered edges** on every solid, a soft sun shadow, and only a
+  faint contour instead of a cartoon outline.
+
+Models are built from real layouts rather than boxes: open track loops
+with road wheels, sprocket and idler inside them, sloped glacis plates,
+engine decks, exhausts, stowage; infantry with jointed arms and legs
+carrying their weapons; beasts with segmented carapaces and legs that
+plant on the ground; concrete buildings with parapets, formwork joints,
+recessed windows, roof plant, lattice masts, tanks and pipework.
 
 Rebuild the pack after changing a model:
 
 ```
 cd tools/asset-baker && npm install        # three.js
-node tools/asset-baker/bake.mjs            # all sheets (~5 min); --only tank, --faction evolved
-python3 tools/asset-baker/pack.py          # WebP sheets + per-faction bundles
+node tools/asset-baker/bake.mjs            # all sheets (~20 min); --only tank, --faction evolved
+node tools/asset-baker/bake.mjs --ironclad # top-down sheets for ironclad.html
+python3 tools/asset-baker/pack.py          # WebP sheets + bundles
+node tools/asset-baker/preview.mjs out.png tank:survivors b:hq:survivors   # look at a model while working on it
 ```
 
-Models live in `tools/asset-baker/lib/models.js` (same coordinates as the
-procedural builders, so mounts and anchors line up), the modelling kit in
-`lib/kit.js`, the iso renderer in `lib/iso.js`.
+Where things live in `tools/asset-baker/lib/`:
+
+- `kit.js` primitives and materials, `parts.js` shared assemblies
+  (tracks, guns, stowage), `iso.js` the renderer.
+- `survivors.js`, `evolved.js`, `series9.js` vehicles and turrets,
+  `infantry.js` the shared soldier rig, `survivorBuildings.js` +
+  `buildings.js` the Survivors base. `models.js` still holds the
+  Evolved and Series 9 buildings in their older, simpler geometry.
+- `ironclad.js` the top-down vehicles for IRONCLAD.
+
+Mounts, anchors and footprints are unchanged, so sprites line up with
+the engine exactly as before.
 
 ## Hover info
 
@@ -310,6 +342,13 @@ A standalone top-down tank shooter, linked from the main menu.
   big hits, off-screen arrows, radar, slow-motion death cam.
 - Twin-stick touch controls with aim assist, compact phone HUD, and an
   adaptive particle budget for slow devices.
+- **Pre-rendered vehicles**: every vehicle, turret, barrel and crate is
+  baked from a 3D model as 16 lit views (`assets/sprites/ironclad.bundle.js`,
+  built by `tools/asset-baker`). A vehicle is drawn from the nearest view
+  and turned by the few degrees that remain, so the sun and the shadows
+  stay put while it rotates. Colors come from a paint mask, so the enemy
+  table still decides them. If the bundle is missing, the game draws the
+  old canvas art instead.
 
 ## IRONCLAD - Underworks (`underworks.html`)
 
