@@ -357,6 +357,16 @@ from the Ironclad menu. Three levels, each harder than the last (tougher
 troops, faster fire, faster shots); finishing a level unlocks the next
 in the menu, and NEXT LEVEL carries the score on.
 
+**Lives** - every pilot starts with 5 lives. Each death costs the pilot
+one; at 0 it is GAME OVER (solo) and you can retry the level. The rare
+`1UP` power-up drop (very rare) adds one for both pilots. In co-op each pilot has
+an own count: a pilot who runs out sits out while the partner plays on,
+and is back with 1 life at the start of the next level. Both out = GAME
+OVER.
+
+**Idle animation** - stand still for 2 s and the pilot does a backflip or
+a few squats.
+
 **Co-op (2 players, one keyboard)** - pick `2 PLAYERS · CO-OP` in the
 menu (keyboard only, not offered on touch). A key-check screen follows:
 every key lights up while held, and keys can be rebound (saved locally).
@@ -369,7 +379,7 @@ Solo play is unchanged.
   who drops out of view is pulled to the partner.
 - Separate armor bars; a fallen pilot rejoins at the partner after ~3 s
   with half armor. Both down: back to the checkpoint (boss: restart).
-- Power-ups, score and combo are shared. Enemies and bosses have 1.5x
+- Score, combo, 1UP, nuke and repair are shared; weapon upgrades and the shield belong to the pilot who grabbed them (lost on death). Enemies and bosses have 1.5x
   health and go for the nearest living pilot. Shots into a reeling enemy
   finish it, 7 hits break a shield, a staggered boss takes triple damage.
 - Hoverbike: both ride side by side on the same track.
