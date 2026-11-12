@@ -371,7 +371,32 @@ function drawBuilding(building) {
 
     if (building.isUnderConstruction) {
         const progress = building.buildProgress / building.buildTime;
-        // the structure rises inside a scaffold
+        const stages = IsoSprites.buildStages(building.type, faction);
+        if (stages) {
+            // four baked stages: site, frame, shell, fit-out. Each one
+            // dissolves into the next over the last fifth of its time.
+            const t = Math.min(0.9999, Math.max(0, progress)) * stages;
+            const st = Math.floor(t), k = t - st;
+            ctx.drawImage(IsoSprites.buildingSprite(building.type, faction, 2 + st, team), dx, dy, dw, dh);
+            if (k > 0.8) {
+                const next = st + 1 < stages ? IsoSprites.buildingSprite(building.type, faction, 3 + st, team) : spr;
+                const a = (k - 0.8) / 0.2;
+                ctx.save();
+                ctx.globalAlpha = a * a * (3 - 2 * a);
+                ctx.drawImage(next, dx, dy, dw, dh);
+                ctx.restore();
+            }
+            // welding sparks while steel and plating go up, dust on the site
+            if (Math.random() < (st === 0 ? 0.05 : 0.18)) {
+                game.particles.push({
+                    x: building.x + (Math.random() - 0.5) * type.size * 0.8, y: building.y + (Math.random() - 0.5) * type.size * 0.8,
+                    z: st === 0 ? 2 : 6 + Math.random() * 18, vx: (Math.random() - 0.5) * 0.02, vy: (Math.random() - 0.5) * 0.02, vz: 0.8,
+                    color: st === 0 ? '#c9b48a' : '#ffd27a', size: 1.5, life: 0.5, decay: 0.05, type: 'spark', grav: 0.15
+                });
+            }
+            return;
+        }
+        // procedural sprites: the structure rises inside a scaffold
         ctx.save();
         ctx.globalAlpha = 0.5 + progress * 0.5;
         const visible = dh * (0.18 + progress * 0.82);

@@ -1,6 +1,7 @@
 // Bake page: exposes window.bake(job) to the node driver.
 import { Kit3D, TEAM } from './kit.js';
 import { STYLES } from './styles.js';
+import { applyStage } from './construction.js';
 import { renderSprite, OUT } from './iso.js';
 import { UNIT_BUILDERS, TURRET_BUILDERS, BUILDING_BUILDERS } from './models.js';
 
@@ -19,7 +20,9 @@ function cell(kind, role, faction, dir, frame) {
         const w = ft * 64 + 40, h = ft * 32 + 96;
         const spec = { w, h, ax: w / 2, ay: h - ft * 16 - 12 };
         const kit = new Kit3D({ pulse: frame === 1 ? 1.3 : 1, style: STYLES[faction].building });
-        BUILDING_BUILDERS[role](kit, ft, pal, faction, frame, TEAM);
+        // frames 2-5 are the four construction stages of the frame-0 model
+        BUILDING_BUILDERS[role](kit, ft, pal, faction, frame > 1 ? 0 : frame, TEAM);
+        if (frame > 1) applyStage(kit, frame - 1, faction, ft, pal);
         return { spec, out: renderSprite(kit, spec, { shadowExtent: ft * 50 + 40 }) };
     }
     const yaw = (dir / DIRS) * Math.PI * 2;

@@ -48,11 +48,12 @@ function jobs() {
     for (const faction of FACTIONS) {
         for (const role of UNIT_ROLES) list.push({ kind: 'unit', role, faction, dirs: 16, frames: frameCount(role, faction) });
         for (const role of ['tank', 'heavy', 'tower', 'towerHeavy']) list.push({ kind: 'turret', role, faction, dirs: 16, frames: 1 });
-        for (const role of BUILDINGS) list.push({ kind: 'building', role, faction, dirs: 1, frames: 2 });
+        // frames: idle, lit, then four construction stages
+        for (const role of BUILDINGS) list.push({ kind: 'building', role, faction, dirs: 1, frames: 6 });
     }
     list.push({ kind: 'building', role: 'bunker', faction: 'survivors', dirs: 1, frames: 2 });
-    const only = opt('--only'), fac = opt('--faction');
-    return list.filter(j => (!only || j.role.toLowerCase().includes(only.toLowerCase())) && (!fac || j.faction === fac));
+    const only = opt('--only'), fac = opt('--faction'), kind = opt('--kind');
+    return list.filter(j => (!only || j.role.toLowerCase().includes(only.toLowerCase())) && (!fac || j.faction === fac) && (!kind || j.kind === kind));
 }
 
 function serve() {
