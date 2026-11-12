@@ -1551,6 +1551,14 @@ const IsoSprites = (() => {
         return Pack.entries.size;
     }
 
+    // Buildings in the pack carry four baked construction stages after
+    // their two idle frames (site, frame, shell, fit-out)
+    function buildStages(role, faction) {
+        if (!Pack.enabled) return 0;
+        const e = Pack.entries.get(`building|${role}|${faction}`);
+        return e && e.frames >= 6 ? 4 : 0;
+    }
+
     function setPackEnabled(on) {
         if (Pack.enabled === on) return;
         Pack.enabled = on;
@@ -1765,7 +1773,7 @@ const IsoSprites = (() => {
 
     return {
         unitSprite, unitComposite, turretSprite, turretMount, towerTurretMount,
-        buildingSprite, wreckSprite, icon, dirFromAngle, prewarm, loadPack, setPackEnabled,
+        buildingSprite, buildStages, wreckSprite, icon, dirFromAngle, prewarm, loadPack, setPackEnabled,
         get packLoaded() { return Pack.loaded; }, get packSize() { return Pack.entries.size; }, prewarmStep, clearPrewarm, animatedFrames,
         DIRS, OUT, tint, withAlpha
     };

@@ -291,6 +291,16 @@ carrying their weapons; beasts with segmented carapaces and legs that
 plant on the ground; concrete buildings with parapets, formwork joints,
 recessed windows, roof plant, lattice masts, tanks and pipework.
 
+**Construction stages.** Every building sheet carries four more frames
+after its two idle frames: *site* (footings poured or pit dug, materials
+delivered), *frame* (steel skeleton, bone rib cage or alloy lattice of
+every main volume), *shell* (raw, unpainted volumes inside scaffolding)
+and *fit-out* (finished and dark, one scaffold bay left). They are
+derived from the finished model in `lib/construction.js`, which finds
+the main volumes by size, so a new or changed building gets its stages
+for free. The game dissolves from one stage into the next; with the
+procedural sprites it falls back to the old rising-clip effect.
+
 Rebuild the pack after changing a model:
 
 ```

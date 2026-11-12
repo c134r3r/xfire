@@ -117,7 +117,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|powerStation|survivors": {
    "file": "survivors/building-powerStation",
@@ -126,7 +126,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|derrick|survivors": {
    "file": "survivors/building-derrick",
@@ -135,7 +135,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|barracks|survivors": {
    "file": "survivors/building-barracks",
@@ -144,7 +144,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|factory|survivors": {
    "file": "survivors/building-factory",
@@ -153,7 +153,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|researchLab|survivors": {
    "file": "survivors/building-researchLab",
@@ -162,7 +162,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|repairBay|survivors": {
    "file": "survivors/building-repairBay",
@@ -171,7 +171,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|tower|survivors": {
    "file": "survivors/building-tower",
@@ -180,7 +180,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|towerHeavy|survivors": {
    "file": "survivors/building-towerHeavy",
@@ -189,7 +189,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "unit|trooper|evolved": {
    "file": "evolved/unit-trooper",
@@ -306,7 +306,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|powerStation|evolved": {
    "file": "evolved/building-powerStation",
@@ -315,7 +315,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|derrick|evolved": {
    "file": "evolved/building-derrick",
@@ -324,7 +324,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|barracks|evolved": {
    "file": "evolved/building-barracks",
@@ -333,7 +333,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|factory|evolved": {
    "file": "evolved/building-factory",
@@ -342,7 +342,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|researchLab|evolved": {
    "file": "evolved/building-researchLab",
@@ -351,7 +351,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|repairBay|evolved": {
    "file": "evolved/building-repairBay",
@@ -360,7 +360,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|tower|evolved": {
    "file": "evolved/building-tower",
@@ -369,7 +369,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|towerHeavy|evolved": {
    "file": "evolved/building-towerHeavy",
@@ -378,7 +378,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "unit|trooper|series9": {
    "file": "series9/unit-trooper",
@@ -495,7 +495,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|powerStation|series9": {
    "file": "series9/building-powerStation",
@@ -504,7 +504,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|derrick|series9": {
    "file": "series9/building-derrick",
@@ -513,7 +513,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|barracks|series9": {
    "file": "series9/building-barracks",
@@ -522,7 +522,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|factory|series9": {
    "file": "series9/building-factory",
@@ -531,7 +531,7 @@
    "ax": 116,
    "ay": 132,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|researchLab|series9": {
    "file": "series9/building-researchLab",
@@ -540,7 +540,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|repairBay|series9": {
    "file": "series9/building-repairBay",
@@ -549,7 +549,7 @@
    "ax": 84,
    "ay": 116,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|tower|series9": {
    "file": "series9/building-tower",
@@ -558,7 +558,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|towerHeavy|series9": {
    "file": "series9/building-towerHeavy",
@@ -567,7 +567,7 @@
    "ax": 52,
    "ay": 100,
    "dirs": 1,
-   "frames": 2
+   "frames": 6
   },
   "building|bunker|survivors": {
    "file": "survivors/building-bunker",

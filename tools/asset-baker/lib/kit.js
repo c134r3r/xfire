@@ -161,6 +161,7 @@ export class Kit3D {
             side: THREE.DoubleSide
         });
         m.userData.team = team;
+        m.userData.finish = finish;
         const st = this.style, w = WEAR[finish] || WEAR.paint;
         const dust = hexRGB(st.dust).map(v => Math.pow(v / 255, 2.2));
         const camoK = team ? 0 : w[0];
