@@ -143,7 +143,7 @@ nächste passende Kachel geschnappt. Rennen-Kontrollpunkte `{ cell }` = Kreuzung
 | `m10_cashSpill` | Tresorwagen platzt auf, Geldscheine als Partikel + Geld-Pickups |
 | `releasePrisoners` | 3–4 Gefangene laufen aus der Zelle (Panik zum nächsten Rand), Vela: „Lauft!" |
 | `m13_silence` | Alle Holo-Plakate der Stadt flackern → Rauschen → aus; MANDAT-Pager verstummt |
-| `m14_dome` | Kuppel des Palasts: Explosionskette, Dach-Textur verschwindet, Grube (Mausoleum) wird sichtbar, Rampe öffnet |
+| `m14_dome` | Kuppel des Palasts: Explosionskette, dann **Dach weg wie bei jedem begehbaren Gebäude** (PLAN §5.9), aber dauerhaft (`cut` bleibt 0); das Mausoleum-Template wird sichtbar, die eingestürzte Kuppel ist der Eingang |
 | `ending` | Endsequenz §7 |
 
 ### M00 – Erwachen (Prolog)
@@ -360,8 +360,9 @@ nächste passende Kachel geschnappt. Rennen-Kontrollpunkte `{ cell }` = Kreuzung
               { kind: 'ped', type: 'civ', tag: 'patient', count: 6, at: { lm: 'u' }, spread: 90, ai: 'panic' }],
       immune: ['gen1', 'gen2', 'gen3', 'gen4', 'wache'],
       say: [['MANDAT', 'Kollateralschäden sind akzeptabel.']] },
-    { t: 'talk', tag: 'aerztin', r: 50, hud: 'Sprich mit der Ärztin',
+    { t: 'goto', inside: 'u', hud: 'Geh in die Klinik',
       spawn: [{ kind: 'ped', type: 'civ', look: 'aerztin', tag: 'aerztin', name: 'DR. MARTEN', at: { lm: 'u' }, down: 'sitting' }] },
+    { t: 'talk', tag: 'aerztin', r: 50, hud: 'Sprich mit der Ärztin' },
     { t: 'cutscene', secs: 13, cam: { tag: 'aerztin', zoom: 1.5 },
       say: [['DR. MARTEN', 'Wir haben niemanden krank gemacht. Wir haben die Chips entfernt.'],
             ['DR. MARTEN', 'Hundertzwölf Menschen. Frei. Die Akten… am Hinterausgang. Sie wissen nicht, wem Sie dienen.'],
@@ -376,6 +377,7 @@ nächste passende Kachel geschnappt. Rennen-Kontrollpunkte `{ cell }` = Kreuzung
 ```
 
 Patienten sind **nicht** immun: wer sie trifft, bekommt Fahndung. Datenchip 7 (Patientenakte) liegt wirklich am Hinterausgang.
+Die Ärztin sitzt **im** begehbaren Klinikgebäude: Beim Betreten verschwindet das Dach, man sieht die Feldbetten (PLAN §5.9).
 
 ### M08 – Stimmprobe (Akt II)
 
@@ -511,6 +513,7 @@ Die „Störer" sind Velas Leute (Drohnen ohne Besatzung). Sie wollten die Wahrh
   call: [['VELA', 'In der Klinik Null setzen sie die Chips ein. Und sie halten Menschen fest, die ihre loswerden wollten.'],
          ['VELA', 'Der Chirurg operiert heute Nacht. Er darf nicht wieder aufstehen.']],
   steps: [
+    { t: 'goto', inside: 'n', hud: 'Dring in die Klinik Null ein' },
     { t: 'destroy', tags: ['zelle1', 'zelle2', 'zelle3'], hud: 'Öffne die Zellen ({n}/3)',
       spawn: [{ kind: 'prop', type: 'zellentor', tag: 'zelle1', at: { lm: 'n', dx: -3, dy: 1 } },
               { kind: 'prop', type: 'zellentor', tag: 'zelle2', at: { lm: 'n', dx: 0, dy: 1 } },
@@ -583,7 +586,7 @@ Die „Störer" sind Velas Leute (Drohnen ohne Besatzung). Sie wollten die Wahrh
               { kind: 'vehicle', type: 'tribunal', tag: 'ptank', at: { lm: 'p', dx: -8, dy: 0 }, ai: 'hostile', paint: '#1a1a1f' }] },
     { t: 'cutscene', secs: 7, cam: { lm: 'p', zoom: 0.8 }, script: 'm14_dome',
       say: [['SYS', 'Die Kuppel des Regentenpalasts bricht ein.'], ['VELA', 'Da unten. Das Mausoleum.']] },
-    { t: 'goto', at: { lm: 'p', dx: 0, dy: 3 }, r: 70, hud: 'Steig ins Mausoleum hinab' },
+    { t: 'goto', inside: 'p', hud: 'Betritt das Mausoleum durch die eingestürzte Kuppel' },
     { t: 'kill', tags: ['mgarde'], hud: 'Kämpf dich zum Thronsaal durch',
       spawn: [{ kind: 'ped', type: 'erbe_garde', tag: 'mgarde', count: 10, at: { lm: 'p', dx: 0, dy: -2 }, spread: 300, ai: 'hostile' },
               { kind: 'prop', type: 'pylon', tag: 'pylon', count: 4, at: { lm: 'p', dx: 0, dy: -3 }, spread: 200 }] },
@@ -604,6 +607,7 @@ Die „Störer" sind Velas Leute (Drohnen ohne Besatzung). Sie wollten die Wahrh
 ```
 
 `mech` = Erbschaftsmech (PLAN §6.2 Punkt 4; Fallback: Ironclads `boss`-Modell in Erben-Farben). Datenchip 12 liegt im Thronsaal.
+Das Mausoleum ist das Innenraum-Template des Palasts (WORLD.md §14); `m14_dome` öffnet es dauerhaft.
 
 ---
 
@@ -640,6 +644,7 @@ Die „Störer" sind Velas Leute (Drohnen ohne Besatzung). Sie wollten die Wahrh
 | Terminal Akt I–II / III | „MANDAT-TERMINAL – Nächstes Mandat anfordern?" / „VERBINDUNG GESTÖRT" |
 | Treuechip | AKTIV · GESTÖRT · STUMM |
 | Fahrzeugnamen | KAPSEL · LIMO · TAXI · PFEIL · GLEITER · PRITSCHE · KASTENWAGEN · LASTER · KURIER-BIKE · OD-STREIFE · OD-ABFANGJÄGER · OD-STURMWAGEN · TRIBUNAL · ERBEN-LIMOUSINE · SENDEWAGEN · PANZER-AMBULANZ · TRESORWAGEN |
+| Innenräume (HUD „INNENRAUM · …", zufällig je Art) | Nudelbar: „SUZU", „KAPSEL 9", „ROTER DAMPF" · Bar: „KOBALT", „LETZTE RUNDE", „NULLPUNKT" · Spielhalle: „PIXELGRUFT", „NEONHÖHLE" · Pfandhaus: „ALLES MUSS RAUS" · Imbiss: „HEISSER DRAHT" · Wohnung: „WOHNBLOCK {nr}" · Lager: „LAGER {nr}" · Werkstatt: „RUSSFINGER" · Hütte: „VERSCHLAG" · Villa: „VILLA {name}" · Dienste: „KAPSELHOTEL MÖWE" usw. (Namen aus WORLD.md §4.1) · Story: „UNTERGRUNDKLINIK", „KLINIK NULL", „DAS MAUSOLEUM" |
 
 ### 6.3 Plakate und Ticker
 
@@ -703,5 +708,5 @@ Erledigte Karten werden rot durchgestrichen (Ironclad-Stempel-Optik). Systemisch
 7. **Abspann** (DOM-Scroll über die Morgenstadt, Kamera fährt langsam über alle drei Distrikte, Morgengrauen-Musik in Dur):
    „NEON REGENT – ein Spiel aus der Welt von XFIRE und IRONCLAD" · „Idee & Story: (eintragen)" · „Technik: IRONCLAD-Engine" ·
    „Klang & Musik: synthetisch, live im Browser erzeugt" · „Danke an alle, die gefragt haben, wo der Regent ist."
-8. Zurück ins Hauptmenü; Spielstand mit Flag `ende`. Optional (M11): **„FREIES SPIEL – MORGENGRAUEN"** – freie Stadt bei
+8. Zurück ins Hauptmenü; Spielstand mit Flag `ende`. Optional (MS12): **„FREIES SPIEL – MORGENGRAUEN"** – freie Stadt bei
    Tagesanbruch, kein MANDAT, statt OD eine **Bürgerwehr** (OD-Einheiten in Blau-Weiß, Fahndung max. Stufe 2).

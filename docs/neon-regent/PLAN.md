@@ -7,24 +7,29 @@
 > mittlerer Aufwand). Stand: Repo-Commit `f6bc224` + dieser Plan.
 >
 > Dateien in `docs/neon-regent/`:
-> - `PLAN.md` – dieses Dokument: Regeln, Architektur, Render-Pipeline, Meilensteine, Tests
-> - `WORLD.md` – Stadtplan (ASCII), Landmarken, alle Tuning-Tabellen (Fahrzeuge, Waffen, Fahndung …)
+> - `PLAN.md` – dieses Dokument: Regeln, Architektur, Render-Pipeline, Sound-Design, Meilensteine, Tests
+> - `WORLD.md` – Stadtplan (ASCII), Landmarken, Innenraum-Typen, alle Tuning-Tabellen
 > - `STORY.md` – Story-Bibel, Wendung, alle 15 Missionen als Daten, alle Spieltexte
-> - `concept.html` / `concept.jpg` – **validierter Konzept-Render** (Ziel-Look + Referenzcode
->   für kippende Gebäude und Nachtlicht). Öffnen: `concept.html` direkt im Browser (auch file://).
+> - `concept.html` + `concept.jpg` / `concept-innen.jpg` – **validierter Konzept-Render**: Ziel-Look und Referenzcode für
+>   kippende Gebäude, Nacht-Lightmap und begehbare Gebäude (Dach weg, Grundriss). `concept.html#inside` zeigt den Innenraum,
+>   `#enter` das Hinein- und Hinausgehen, `#cut50` den Übergang. Läuft direkt im Browser (auch file://).
+> - `klangprobe.html` – **Referenz-Rezepte für den Sound** (Schrei-Stimmmodell, Überfahren, Panik, Vollstreckung, MANDAT);
+>   spielt alles live im Browser ab.
 
-![Konzept](concept.jpg)
+| Straße bei Nacht (`concept.jpg`) | Begehbares Gebäude, Dach weg (`concept-innen.jpg`) |
+|---|---|
+| ![Konzept](concept.jpg) | ![Innenraum](concept-innen.jpg) |
 
 ---
 
 ## 0. So arbeitest du mit diesem Plan (für die umsetzende Session)
 
-1. Lies **§0–§5 und §8–§10 vollständig**, bevor du Code schreibst. Lies `concept.html` (≈ 560 Zeilen) –
-   das ist funktionierender Referenzcode für die zwei neuen Render-Techniken.
+1. Lies **§0–§5 und §8–§10 vollständig**, bevor du Code schreibst. Lies `concept.html` (≈ 700 Zeilen) und
+   `klangprobe.html` (≈ 310 Zeilen) – das ist funktionierender Referenzcode für Gebäude, Licht, Innenräume und Sound.
 2. Schau in **§14 Fortschrittslog**, welcher Meilenstein als Nächstes dran ist.
 3. Lies die für diesen Meilenstein genannten Abschnitte in `WORLD.md` / `STORY.md` (steht bei jedem Meilenstein).
-4. Setze **genau einen Meilenstein** um (M0 + M1 zusammen ist ok, wenn Zeit bleibt). Danach **stoppen**.
-5. Teste nach §9, trage Ergebnis/Abweichungen in §14 ein, committe (`Neon Regent Mx: …`) und pushe.
+4. Setze **genau einen Meilenstein** um (MS0 + MS1 zusammen ist ok, wenn Zeit bleibt). Danach **stoppen**.
+5. Teste nach §9, trage Ergebnis/Abweichungen in §14 ein, committe (`Neon Regent MSx: …`) und pushe.
 6. Berichte: was fertig ist, Screenshots, Messwerte, was der Nutzer entscheiden muss.
 
 ### Harte Regeln
@@ -43,6 +48,9 @@
 | R10 | Code aus Ironclad/Underworks **kopieren und anpassen**, nicht die Originale für Wiederverwendung umbauen. | R1. |
 | R11 | Jede Spielfigur/jedes Fahrzeug braucht **prozedurale Fallback-Grafik** (wie `VEHICLE_ART` in Ironclad). Das Spiel muss ohne Sprite-Bundle laufen. | Fortschritt vor dem Baken, Robustheit. |
 | R12 | Canvas-Fonts immer mit generischem Ende: `"Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif`. | Im Konzept fiel Text unter Linux auf Serif zurück. |
+| R13 | **Sound ist gleichrangig mit Grafik.** Jeder Meilenstein liefert die Klänge seiner Features mit (steht in jeder DoD); kein Feature gilt ohne Sound als fertig. Rezepte: `klangprobe.html`. | Nutzer-Vorgabe: „Sounds sind besonders wichtig." |
+| R14 | Meilensteine heißen **MS0–MS12**, Missionen **M00–M14**. In Commits, Log und Berichten nie verwechseln. | „M10" war sonst doppelt belegt. |
+| R15 | Die Session kann nicht hören. Klänge werden **automatisch geprüft** (Pegel, NaN, Clipping, §9) und als **WAV an den Nutzer** gegeben; sein Urteil zählt. | Sonst bleibt Sound ungeprüft. |
 
 ---
 
@@ -60,11 +68,18 @@ ersten Morgen ohne Herrscher.
 Explosionen/Glows/Brandflecken/Screen-Shake und HUD-Karten, aber mit Nacht-Lightmap, Neon, Regen und kippenden
 Gebäuden im GTA-2-Stil. Das Morgengrauen im Finale bringt Ironclads warme Wüstenpalette zurück.
 
+**Zwei Säulen, die der Nutzer ausdrücklich betont hat:**
+- **Sound:** Die Stadt muss sich so lebendig anhören, wie sie aussieht – Regen, Motoren, Sirenen, Neon-Summen und vor allem
+  **Menschen**: Wer überfahren wird, schreit (Angstschrei, der beim Aufprall abreißt; Aufprall; Achsen-Doppelschlag),
+  Umstehende schreien und fliehen, Verletzte stöhnen am Boden (§4.10, `klangprobe.html`).
+- **Begehbare Gebäude:** Rund **10 % der Gebäude** kann man betreten. Dann verschwindet das Dach, und man sieht von oben in den
+  Grundriss – Räume, Wände, Möbel, Menschen und die eigene Figur (§5.9, `concept-innen.jpg`).
+
 ---
 
 ## 2. Entscheidungen
 
-Die mit **offen** markierten Punkte sind Vorschläge – der Nutzer sollte sie vor M7 bestätigen.
+Die mit **offen** markierten Punkte sind Vorschläge – der Nutzer sollte sie vor MS8 (Missionen) bestätigen.
 Technische Punkte (fix) sind durch den Konzept-Render belegt.
 
 | # | Thema | Entscheidung (Default) | Alternative | Status |
@@ -74,12 +89,14 @@ Technische Punkte (fix) sind durch den Konzept-Render belegt.
 | D3 | „Eine Art Polizei" | **Ordnungsdienst (OD)** = Tarnorganisation der Erben. Erklärt Polizei ohne Herrscher, macht Akt III konsequent. | neutrale Automaten-Polizei | **offen** |
 | D4 | Zeitpunkt der Enthüllung | Ende Akt II (Mission 10 von 15, ≈ 2/3). Danach Akt III „Abrechnung" = Finale-Bogen. | erst direkt vor dem Finale; Finale = eine lange Mehrphasen-Mission | **offen** |
 | D5 | „Alle aus der Bande zerstören" | Die **5 Anführer** (4 Leutnants frei wählbar + der Notar) samt Crews in ihren Missionen, dann das Versteck. | jeder Erbe stadtweit zählbar | **offen** |
-| D6 | Plattform | Desktop (Tastatur/Maus) + Gamepad zuerst; **Touch erst in M11**. Input-Abstraktion von Anfang an. | Touch ab M2 | **offen** |
+| D6 | Plattform | Desktop (Tastatur/Maus) + Gamepad zuerst; **Touch erst in MS12**. Input-Abstraktion von Anfang an. | Touch ab MS2 | **offen** |
 | D7 | Sprache | Deutsch | Englisch/zweisprachig | **offen** |
 | D8 | Technik | Multi-File (klassische Scripts), Canvas 2D, **Lightmap (½ Auflösung, multiply)**, kippende Gebäude per affiner Fassaden-Transformation | Single-File; WebGL | fix (gemessen) |
 | D9 | Tageszeit | Immer Nacht + Regen; **Morgengrauen nur im Ende** | Tag/Nacht-Zyklus | fix (Story) |
 | D10 | Gewalt | Stilisiert (dunkle Splats, keine Zerstückelung); Option „Blut aus" | – | fix |
 | D11 | Auto-Steuerung Tastatur | „Klassisch" (W/S Gas/Bremse, A/D lenken, fahrzeugrelativ); Option „Direkt" (bildschirmrelativ wie Ironclads Panzer). Stick/Touch: Default „Direkt". | – | fix |
+| D12 | Begehbare Gebäude | **10 %** der normalen Gebäude + alle Dienste (Kapselhotel, Waffenhändler, Klinik, OD-Wache, Kopfgeld-Büro) + Story-Orte (Untergrundklinik, Klinik Null, Mausoleum). Beim Betreten: Dach weg, Grundriss von oben, Kamera zoomt hinein. Nur Erdgeschoss. | mehrere Stockwerke | **Nutzer-Vorgabe** (im Konzept validiert) |
+| D13 | Klangquelle | Alles **synthetisch** wie in XFire/Ironclad (`klangprobe.html`). Nur wenn der Nutzer die Probe zu künstlich findet: Schreie als **CC0-Aufnahmen** (Lizenz pro Datei geprüft) in einem Base64-Bundle wie die Sprites (läuft von file://) | Aufnahmen von Anfang an | **offen** – Nutzer hört die Klangprobe |
 
 ---
 
@@ -123,9 +140,9 @@ Zeilennummern = Stand `f6bc224` (können sich verschieben; Funktionsnamen sind m
 
 | Was | Wo | Verwendung |
 |---|---|---|
-| Render-Scale/`fitCanvas` (Device-Auflösung, ganzzahlig) | 398–430 | Optional ab M11 für HiDPI. |
+| Render-Scale/`fitCanvas` (Device-Auflösung, ganzzahlig) | 398–430 | Optional ab MS12 für HiDPI. |
 | `toggleFullscreen` | 430–433 | Fullscreen-Button, Alt+Enter. |
-| **Gamepad**: `pollPads`, `rumble`, `padMenuNav` | 1360–1450 | Gamepad in M11 (Menü-Navigation inkl.). |
+| **Gamepad**: `pollPads`, `rumble`, `padMenuNav` | 1360–1450 | Gamepad in MS12 (Menü-Navigation inkl.). |
 | `THEMES` mit Farb-Grade | 2069–2076 | Idee für Distrikt-Stimmung (bei uns: Lightmap-Umgebungsfarbe). |
 | `renderLighting` (Dunkelheit + Löcher, Lichtliste mit Flackern/Blinken, dynamische Lichter) | 5838–5880 | **Nur als Ideenquelle** für die Lichtliste. Ersetzt durch die Lightmap (§5.3) – gemessen 2–3× günstiger. |
 | Post: Vignette, Scanlines | 5605–5625, 5691 | Scanlines optional (Einstellung). |
@@ -142,6 +159,9 @@ Zeilennummern = Stand `f6bc224` (können sich verschieben; Funktionsnamen sind m
 | `radioVoice` (Funk-Geplapper) | `sfx.js` 479 | Vela, OD-Funk. |
 | Ansager | `sfx.js` 813 | Idee für MANDAT-Durchsagen. |
 | Decals (`splat`) | `render.js` 236–270 | Stil für Passanten-Splats. |
+| Klangbank-Baking `bake()` (OfflineAudioContext, alle Varianten parallel) | `sfx.js` 650–672 | Muster für die Klangbank (`02b-sfx.js`). |
+| `_spatial` (Panorama, Abstand, Luftdämpfung), Stimmen-Limits `SOUND_DEFS` | `sfx.js` 514–540, ~686 | Positionierung, Limits. |
+| **Schrei-Stimmmodell, Überfahren, Panik, Vollstreckung, MANDAT** | `docs/neon-regent/klangprobe.html` | **1:1** als Rezepte übernehmen (`scream`, `groan`, `runOver`, `panic`, `execution`, `mandatCall`). |
 
 ### 3.4 Asset-Baker (`tools/asset-baker/`)
 
@@ -165,11 +185,14 @@ Zeilennummern = Stand `f6bc224` (können sich verschieben; Funktionsnamen sind m
 neonregent.html                 Shell: Canvas, HUD-DOM, Menüs, CSS, Script-Tags (?v=NR_VERSION)
 neonregent/00-core.js           Namespace, C (Konstanten), Mathe, seeded RNG, Event-Bus, Settings/Storage-Helfer
 neonregent/01-input.js          Tastatur/Maus/Gamepad/Touch → Intent-Objekt (§4.9)
-neonregent/02-audio.js          Snd/SFX (aus Ironclad + XFire-Rezepte), Musik, Motor-/Sirenen-Loops, Stimmen
+neonregent/02-audio.js          Audio-Engine: Busse, Mix/Ducking, Positionierung, Verdeckung, Innen/Außen, Stimmen-Verwaltung, Loops
+neonregent/02b-sfx.js           Klangrezepte (klangprobe.html + Ironclad/XFire) und Klangbank-Baking (Varianten)
+neonregent/02c-music.js         Musik (Synthwave-Layer nach Fahndung/Kampf) und Autoradio
 neonregent/03-sprites.js        Sprite-Cache, FX-Sprites, prozedurale Fallback-Art, Pack-Loader (NEONREGENT_ASSETS)
 neonregent/04-data.js           VEHICLES, WEAPONS, POWERUPS, UNITS, PROPS, LIGHT_TYPES, HEAT, ECONOMY (aus WORLD.md)
 neonregent/05-citygen.js        Zonenplan → Kacheln, Straßen/Spuren, Gehwege, Grundstücke, Gebäude, Props, Lichter, Landmarken
 neonregent/06-world.js          Kachel-Abfragen, Collider-Raster, Raycast/LOS, Flow-Field, Straßengraph + A*, Spawn-Ring, Decal-Chunks
+neonregent/06b-interiors.js     Begehbare Gebäude: Auswahl, Grundriss (BSP/Templates), Möbel, Innenlichter, Bewohner, Beute, Dach-weg-Zustand
 neonregent/07-entities.js       Datenformen, Spatial-Hash, Spawn/Despawn, Lebenszyklus
 neonregent/08-vehicles.js       Fahrphysik, Schaden, Ein-/Aussteigen/Kapern, Verkehrs-KI
 neonregent/09-peds.js           Spieler zu Fuß, Passanten-KI, Fuß-KI für OD/Erben
@@ -204,6 +227,7 @@ Limousine 70×30 px, Passant r = 7 px, Stockwerk 22 px. Karte 306 × 96 Kacheln 
 - `G.state`: `boot` → `menu` → `intro` (Zwischensequenz) ↔ `play` ↔ `paused` · `cutscene` · `dying` (Ironclad-Zeitlupe) ·
   `executed` (Vollstreckungssequenz) · `busted` · `wasted` · `missionFail` · `missionDone` · `ending` · `credits`.
 - In `cutscene`/`executed` läuft die Welt weiter (Verkehr, Regen), Eingaben sind gesperrt.
+- Drinnen sein ist **kein** eigener Zustand: `G.inside = gebäudeId | null` (Spiel läuft normal weiter, §5.9).
 - Kamera: Zoom zu Fuß `C.ZOOM_FOOT` (1.35); im Auto `lerp(C.ZOOM_CAR_SLOW, C.ZOOM_CAR_FAST, speed/topSpeed)` (1.15 → 0.80),
   geglättet; Vorausschau = Geschwindigkeit × 22 (max 260 px) bzw. zu Fuß Ironclads Ziel-Lead (0.2 × Zielabstand).
 
@@ -221,6 +245,10 @@ Limousine 70×30 px, Passant r = 7 px, Stockwerk 22 px. Karte 306 × 96 Kacheln 
 - **Gehweg-Graph**: Nachbarschaft der SIDEWALK/CROSSWALK-Kacheln (Passanten).
 - **Spatial-Hash** für dynamische Entitäten (128-px-Zellen, jeden Tick neu).
 - **Flow-Field** (Ironclad) auf 32-px-Raster in einem 64×64-Zellen-Fenster um den Spieler, alle 15 Ticks.
+- **Begehbare Gebäude** (§5.9): `b.enterable = true` (10 % + Dienste + Story-Orte). `b.interior` wird **lazy** erzeugt, sobald der
+  Spieler < 900 px herankommt (deterministisch aus `seed`): `{ kind, rooms, doors, walls, floor, lights, npcs, loot, entrance }`.
+  Statt des soliden Grundriss-Colliders bekommt ein begehbares Gebäude Außenwände als dünne AABBs mit Türlücke.
+  Missionspositionen innerhalb eines begehbaren Gebäudes bleiben drinnen (Innenboden) statt herausgeschnappt zu werden.
 - **Decal-Chunks**: Boden in 512-px-Chunks, LRU-Cache; Decals (Brandflecken, Splats, Bremsspuren) werden in den Chunk
   gestempelt **und** pro Chunk als Liste gespeichert (max. 40), damit ein neu erzeugter Chunk sie wieder bekommt.
 
@@ -228,7 +256,8 @@ Limousine 70×30 px, Passant r = 7 px, Stockwerk 22 px. Karte 306 × 96 Kacheln 
 
 ```js
 ped     = { id, kind:'ped', type, x, y, vx, vy, a, r:7, hp, maxHp, ai, state, tag?, team:'civ'|'od'|'erbe'|'ally'|'player',
-            weapon?, ammo?, frame, anim, panic, down, inCar:null, chipOn:true, coat:'#…', sees, lastSeen }
+            weapon?, ammo?, frame, anim, panic, down, inCar:null, chipOn:true, coat:'#…', sees, lastSeen,
+            voice:{ type:'mann'|'frau'|'alt'|'jung', seed, peak }, inside: gebäudeId|null }
 vehicle = { id, kind:'veh', cls, x, y, vx, vy, a, w (Winkelgeschw.), hp, maxHp, paint, driver:pedId|null, team,
             ai, lane, target, boost, burning, lights:{head, brake, siren}, tag? }
 prop    = { id, kind:'prop', type, x, y, hp?, collider, tag?, solid:true }
@@ -261,6 +290,9 @@ a  += w ; v = f*vf + r*vr ; Position += v
 
 **Zu Fuß**: Ironclad-Inertia (`v += (ziel − v) × 0.2`), Kreis gegen AABBs, Sprint mit Ausdauer, Ausweichrolle (0.35 s, i-Frames, 1 s Cooldown).
 
+**Innenräume**: Wände sind dünne AABBs (6 px) im Collider-Raster; Türen 28 px (innen) / 32 px (Eingang) lassen nur Personen durch,
+Autos passen nicht. Projektile prüfen Segment-gegen-AABB mit der Wandliste des Gebäudes (Kachel-DDA ist für dünne Wände zu grob).
+
 ### 4.8 KI
 
 | Wer | Basis | Verhalten |
@@ -275,6 +307,8 @@ a  += w ; v = f*vf + r*vr ; Position += v
 | Erben | Ironclad `shoot`/`charge`/`circle` | ab Akt III bei Sicht feindlich; Garde mit Schrotflinte. |
 | Bosse | Ironclad `updateBoss` | Muster je Boss (STORY.md), Enrage-Schwelle konfigurierbar. |
 | Verbündete (`ally`) | neu, einfach | folgen Spieler/Missionspunkt, schießen auf Feinde in Sicht. |
+| Bewohner (Innenräume) | neu | sitzen/arbeiten/stehen; bei gezogener Waffe oder Schuss: Schrei + Flucht durch die Tür; Ladenbesitzer bleiben; Erben-Verstecke feindlich. Navigation drinnen auf 16-px-Raster nur über den Grundriss. |
+| OD im Haus | Ironclad `huntAngle` | ab Fahndungsstufe 2 folgen Fußstreifen nach 3–6 s durch die Tür; Fahrzeuge warten draußen. |
 
 ### 4.9 Eingabe (Intent-Abstraktion)
 
@@ -289,7 +323,7 @@ G.in = { mx, my,               // Bewegung/Lenken (−1..1), bildschirmrelativ
          weaponSlot }           // 1–8 oder 0
 ```
 
-| Aktion | Tastatur/Maus | Gamepad (Standard-Mapping) | Touch (M11) |
+| Aktion | Tastatur/Maus | Gamepad (Standard-Mapping) | Touch (MS12) |
 |---|---|---|---|
 | Laufen / Lenken | WASD | linker Stick | linker Stick |
 | Gas / Bremse (Auto) | W / S | R2 / L2 | Stick-Auslenkung |
@@ -302,16 +336,62 @@ G.in = { mx, my,               // Bewegung/Lenken (−1..1), bildschirmrelativ
 | Waffe wechseln | Mausrad, 1–8, Q (letzte) | R1/L1 (zu Fuß) | Knopf |
 | Hupe | H | L3 | – |
 | Karte | Tab | Steuerkreuz ↑ | Knopf |
-| Radiosender (M11) | C | Steuerkreuz ←/→ | – |
+| Radiosender (MS12) | C | Steuerkreuz ←/→ | – |
 | Pause | P / Esc | OPTIONS | Knopf |
 | Ton aus · Hilfe · Vollbild | M · F1 · Alt+Enter | – | Knopf |
 
-### 4.10 Audio
+### 4.10 Sound-Design (Kernsäule)
 
-`Snd`/`SFX` aus Ironclad (Synth, Abstand, Panning, Gates, Explosions-Budget). Neue Loops (Motor, Sirene, Regen, Stadt)
-als dauerhafte Oszillator-/Rauschknoten mit Lautstärke-Rampen, **max. 3 Motor-Loops** (Spieler + 2 nächste). Stimmen:
-MANDAT = Vocoder-Rezept aus `sfx.js` (tiefer, kalt), Vela = `radioVoice`; Text immer als Untertitel. Optional
-`speechSynthesis` (de-DE, pitch 0.4) für MANDAT – Einstellung, Default aus. Liste: WORLD.md §13.
+Referenz: **`klangprobe.html`** (Stimmmodell, Überfahren, Panik, Vollstreckung, MANDAT – dort live anhörbar). Wie in XFire wird
+**jeder Klang beim Laden einmal offline synthetisiert** (OfflineAudioContext, mehrere Varianten pro Klang, im Hintergrund,
+Ziel ≤ 3 s) und dann aus der Bank abgespielt. Pro Frame wird nichts synthetisiert außer den Loops (Motor, Regen, Sirene).
+
+**Signalfluss**
+
+```
+Quelle → Kategorie-Bus → [Innen/Außen-Filter] → Master → Kompressor/Limiter → Ausgang
+Busse: sfx · stimmen (Schreie, Stöhnen, MANDAT, Vela) · ambience · musik · ui
+Hall-Sends: Straße (1.6 s, frühe Fassaden-Reflexionen) · Raum (0.4 s) · Mausoleum (2.8 s)
+```
+
+- Lautstärke je Bus in den Einstellungen (Musik, Effekte, Stimmen, Ambiente).
+- **Ducking**: tödlicher Treffer, Explosion ≥ 1.6, MANDAT-Ansage → Musik −6 dB für 1 s; MANDAT-Ansage → Ambiente −4 dB.
+- **Positionierung** (XFire `_spatial`): Panorama nach Bildschirm-x, Abstand zum Kamerazentrum (rausgezoomt = weiter weg),
+  Luftdämpfung (Tiefpass sinkt mit Abstand). **Verdeckung**: liegt ein Gebäude zwischen Hörer und Quelle (Kachel-DDA),
+  dann −6 dB und Tiefpass 1.2 kHz.
+- **Innen/Außen**: Ist der Spieler drinnen, laufen sfx/ambience von draußen durch Tiefpass 900 Hz und −8 dB, Quellen im selben
+  Gebäude bekommen Raumhall. Von draußen hört man Innenräume gedämpft (Bar-Musik als dumpfer Bass an der Tür).
+- **Stimmen-Verwaltung**: Priorität Spieler > Mission > Schreie > Waffen > Fahrzeuge > Ambiente. Limits: Schreie 4, Schüsse 8,
+  Explosionen 4 (Ironclad-Budget), Motoren 3, Sirenen 2, gesamt 32. Bei Überlauf wird die leiseste/entfernteste Stimme beendet.
+- **Varianten statt Wiederholung**: ≥ 5 Varianten je häufigem Klang, Round-Robin + Tonhöhen-Streuung ±4 %.
+
+**Schreie und Überfahren (Herzstück)**
+
+| Ereignis | Klang | Regeln |
+|---|---|---|
+| Auto rast auf eine Person zu (Tempo > 5, Zeit bis Aufprall < 0.6 s, < 140 px) | **Angstschrei** + Hechtsprung zur Seite | jede Person hat einen festen Stimm-Seed (Typ `mann`/`frau`/`alt`/`jung`, Tonhöhe) – sie klingt immer gleich |
+| Tödlich überfahren | Angstschrei **reißt im Aufprall ab** · Masse-Schlag 62→30 Hz + **Punch 190→85 Hz** (hörbar auf Handys) · Körper (Bandpass 750 Hz) · Knacken · **Achsen-Doppelschlag** (Vorder-, Hinterachse) · nasser Splat · Bremsenquietschen | Musik-Ducking; Shake wie Ironclad |
+| Angefahren, überlebt | Aufprall · Abrollen (3 Schläge, Schleifen) · Schmerzschrei (kurz, tiefer) · **Stöhnen** am Boden alle 2–4 s, bis die Person aufsteht | |
+| Umstehende (< 300 px) | 30–60 % schreien zeitversetzt (0.4–1.6 s), **entfernt** (−10 dB, Tiefpass 1.8–3 kHz, viel Hall), dann Laufschritte | max. 3 gleichzeitig |
+| Schuss oder Explosion nahe einer Menge | Panikschreie + Laufschritte | ansteckend wie die Panik-KI |
+| Person brennt | langer, sehr rauer Schrei + Feuerknistern | |
+| Spieler getroffen / stirbt | eigene Stimme (Schmerzlaut, Keuchen) | nie dieselbe Stimme wie Passanten |
+| Vollstreckung durch den Treuechip | Summen, 3 Pieptöne, Entladung, erstickter Laut, Sturz, Tinnitus | Ambient-Vollstreckungen leiser |
+
+**Stimmmodell** (`klangprobe.html` → `scream()`): Sägezahn mit Tonhöhenbogen (Anstieg 50–100 ms, Spitze bei 25–40 %, Absinken
+auf 55–70 %), starker Jitter (Tiefpass 40 Hz) und langsame Drift statt gleichmäßigem Vibrato (sonst klingt es nach Synth-Sirene),
+0–2 Stimmbrüche, Subharmonische (Knurren), unregelmäßige Rauheit (AM 35–95 Hz mit verrauschter Frequenz), Sättigung,
+4 Formanten (F1 folgt hoher Tonhöhe, leichte Formant-Drift), Atemrauschen (wird gegen Ende stärker), „h"-Anlaut.
+Stimmtypen: `mann` 430–520 Hz · `frau` 760–960 Hz · `alt` 360–430 Hz (rau) · `jung` 900–1120 Hz.
+
+**Weitere Klangwelt** (Liste WORLD.md §13): Motoren je Klasse, Reifen, Crash nach Aufprallstärke, Hupe, Sirenen mit Doppler,
+Waffen je Typ, Einschläge je Material (Fleisch, Metall, Beton, Glas), Regen nach Intensität, Stadt-Brummen je Distrikt,
+Neon-Summen, Dampf, Schritte je Untergrund, Schiebetüren, Innenraum-Atmosphären (WORLD.md §14), MANDAT-Jingle und
+Maschinenstimme, Vela-Funk, Musik in Layern, Radio.
+
+**Plan B (D13), falls synthetisch nicht reicht:** optionales Bundle `assets/sound/neonregent.sound.js` (Base64-OGG →
+`decodeAudioData`, funktioniert von file://), **nur CC0-Quellen**, Herkunft je Datei in `assets/sound/QUELLEN.md`. Dann sind nur
+die Schreie Aufnahmen, alles andere bleibt synthetisch.
 
 ### 4.11 Speichern
 
@@ -333,9 +413,11 @@ Steuerungsmodus, TTS, Blut, Scanlines, Blitz-Reduktion.
   F9 Nacht/Morgengrauen, F10 Mission überspringen.
 - `?mission=M05`: startet direkt in Mission M05 (setzt alle Voraussetzungs-Flags).
 - `?scene=<name>`: **deterministische Testszenen** (fester Seed, `Math.random` → seeded PRNG, feste Kamera/Zeit):
-  `docks_street`, `neon_crossing`, `krone_palace`, `police_l3`, `police_l5`, `mandat_call`, `execution`, `dawn`.
+  `docks_street`, `neon_crossing`, `krone_palace`, `police_l3`, `police_l5`, `mandat_call`, `execution`, `dawn`,
+  `runover` (reproduzierbares Überfahren mit Umstehenden), `interior` (Spieler in einem begehbaren Gebäude).
 - `?seed=7741` (Default) für den Stadtgenerator. Ablation wie im Konzept: `#nolightmap,norain,…` schaltet Passes ab.
-- `window.NR_TEST = { state(), setIntent(o), frames(n), teleport(x,y), give(weapon), setHeat(n), completeStep(), mission(), perf() }`.
+- `window.NR_TEST = { state(), setIntent(o), frames(n), teleport(x,y), give(weapon), setHeat(n), completeStep(), mission(), perf(),
+  enter(gebäudeId), interiorCheck(gebäudeId), audioWav(szene) }` – `audioWav` rendert eine Klang-Szene offline und liefert Base64-WAV.
 
 ---
 
@@ -344,22 +426,25 @@ Steuerungsmodus, TTS, Blut, Scanlines, Blitz-Reduktion.
 ### 5.1 Reihenfolge pro Frame
 
 1. **Boden**: sichtbare 512-px-Chunks (Albedo, hell gemalt – die Lightmap macht die Nacht). Decals sind eingestempelt.
-2. **Grube/Ruinen-Böden** (falls sichtbar): dunkler Boden, Innenwände als nach innen kippende Fassaden (§5.2).
+2. **Innenböden**: das offene Gebäude (Boden + Möbel-Textur, §5.9) und Ruinen-Böden.
 3. **Bodenobjekte**: niedrige Props, Wracks, Pickups, Minen.
-4. **Boden-Entitäten**: Schattenblob → Fahrzeuge → Passanten (Sprites aus dem Pack, sonst Fallback).
+4. **Boden-Entitäten**: Schattenblob → Fahrzeuge → Passanten und Bewohner (Sprites aus dem Pack, sonst Fallback); danach die
+   **Innenwände** des offenen Gebäudes (niedrig, kippend) – noch vor der Lightmap, damit Innenlichter sie beleuchten.
 5. **Lightmap** (½ Auflösung): Umgebungsfarbe + Vignette (vorgerendert) per `copy`, dann alle Lichter additiv
-   (Radial-Sprites, Scheinwerferkegel), dann **einmal** `globalCompositeOperation = 'multiply'` hochskaliert über das Bild.
+   (Radial-Sprites, Scheinwerferkegel, Innenlichter × (1 − cut)), dann **einmal** `globalCompositeOperation = 'multiply'`
+   hochskaliert über das Bild.
 6. **Kleine additive Glows am Boden**: Scheinwerfer-/Rücklichtpunkte, Blaulicht-Kern, Treuechip-Punkte, Mündungsfeuer,
    Marker-Ring. (Vor den Gebäuden, damit Dächer sie verdecken.)
 7. **Höhen-Props, die niedriger als jedes Gebäude sind** (Laternen): alle Masten, dann alle Leuchtköpfe in einem additiven Batch.
 8. **Gebäude** sortiert (Höhe aufsteigend, bei gleicher Höhe weiter entfernt zuerst): sichtbare Fassaden (≤ 2), dann Dach.
    Fassaden/Dächer sind **vorkomponiert** (Nacht-Albedo + Seitenschattierung + statisches Emissive in einer Textur).
-   Nur animierte Teile (Hologramm-Plakate, Laufschrift) als eigene additive Ebene.
+   Nur animierte Teile (Hologramm-Plakate, Laufschrift) als eigene additive Ebene. Das **offene Gebäude** mit Alpha = cut und
+   abhebendem Dach; Nachbarn, deren Dach in das offene Gebäude ragt, mit Alpha 0.3 (Röntgen).
 9. **Röntgen-Silhouette** des Spielers (und Missionsziele), wenn er von einem Dachüberhang verdeckt ist (cyan, 50 %).
 10. **Luft**: Drohnen, Gunships (vorab nacht-getönte Sheet-Variante), Granaten/Granatwerfer-Bögen.
 11. **Additiver FX-Pass** (Ironclad `drawLights`, `drawBullets`, `drawBeams`): Glows, Funken, Glut, Ringe, Tracer.
 12. **Rauch** (normal geblendet, Ironclad `smokeSprite`).
-13. **Regen** (Bildschirmraum-Striche + Bodenspritzer), Dampf aus Gullys.
+13. **Regen** (Bildschirmraum-Striche + Bodenspritzer; drinnen Alpha × 0.4), Dampf aus Gullys.
 14. **Marker & Texte**: schwebende Zielpfeile, Klammern um Ziele, Floating-Texts, Telegraphs (Ironclad).
 15. **Bildschirmraum**: Hurt-Vignette, Glitch-Streifen, Letterbox, optionale Scanlines, Radar, Randpfeile, Touch-Sticks.
 16. **DOM-HUD** (eigene Ebene über dem Canvas).
@@ -387,7 +472,7 @@ Regeln aus dem Konzept:
 - **Kein echter Text auf Fassaden** (Orientierung wechselt je Seite) → Pseudo-Glyphen. Lesbarer Text nur auf Dächern.
 - Missionsmarker **nicht** als kippende Lichtsäule (hat nahe der Bildmitte keine Länge) → Bodenring + schwebender Pfeil.
 - Laternen/Kräne: Mast als Linie von Bodenpunkt zu Bodenpunkt + D, Kopf-Sprite am Ende; Licht fällt auf den Boden unter dem Kopf.
-- Gruben (`h < 0`): dieselbe Formel ergibt nach innen kippende Wände – im Boden-Pass zeichnen (vor Entitäten).
+- Das Mausoleum ist **keine Grube**, sondern ein Innenraum des Palasts (§5.9) – negative Höhen braucht es nicht.
 - Ruinen (M09): Mauern als schmale Gebäude (Höhe 2–3 Stockwerke), kein Dach → Innenraum sichtbar und begehbar.
 
 ### 5.3 Lightmap (Nachtlicht)
@@ -467,6 +552,35 @@ ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(lm, 0, 0, VIEW_W, VIEW_
   den Straßengraph zum Ziel, als Linie, alle 30 Ticks neu).
 - Vollkarte (Tab): ganze Stadt, Legende, alle bekannten Orte, gesperrte Distrikte grau mit Schloss.
 
+### 5.9 Begehbare Gebäude: Dach weg, Grundriss sichtbar (im Konzept validiert)
+
+**Welche:** 10 % der normalen Gebäude (deterministisch per `seed`, gleichmäßig über die Distrikte, nie in `D`, `P`, `.`), alle
+Dienste (`1`–`5`, `7`) und die Story-Orte `u`, `n`, `p` (optional `g`, `q`). Von außen erkennbar an einer **beleuchteten Tür**
+(warmes Licht, kleines Türsymbol im Radar ab < 400 px).
+
+**Grundriss** (`concept.html` → `makeInterior`): Gebäudefläche per BSP teilen (Mindestraum `C.ROOM_MIN` = 96 px, Tiefe ≤ 3).
+Pro Teilung **genau eine Tür** in der Mitte des längsten gemeinsamen Wandstücks zweier angrenzender Räume – so trifft eine Tür
+nie eine Querwand, und alle Räume sind verbunden. Eingangstür (32 px) in der Außenwand zur Straße. Wände = Raumkanten minus
+Türlücken als dünne AABBs (6 px), zugleich Collider. Raumtypen je Gebäudetyp: WORLD.md §14. Boden und Möbel werden in **eine
+Textur** gemalt (2× Auflösung für den Zoom, helle Albedo – die Lightmap macht die Stimmung). Story-Orte (Untergrundklinik,
+Klinik Null, Mausoleum) nutzen **handgebaute Templates** im selben Datenformat.
+
+**Zustand und Übergang:**
+- `b.cut`: 1 = geschlossen, 0 = offen. Steht der Spieler im Grundriss → Ziel 0, sonst 1; `cut += (ziel − cut) · 0.08` pro Frame (≈ 0.4 s).
+- Gleichzeitig: Kamera-Zoom → `C.ZOOM_INSIDE` (1.65), Kamera auf den Spieler, Regen-Alpha × 0.4, HUD-Karte
+  „INNENRAUM · Name", Audio schaltet auf innen (§4.10). Immer nur **ein** Gebäude offen – das, in dem der Spieler ist.
+
+**Zeichnen** (Reihenfolge §5.1): Innenboden nach dem Straßenboden; Bewohner mit den Entitäten; danach die Innenwände, aber **vor**
+der Lightmap – alle Wände eines Hauses mit demselben `D` für Höhe `C.WALL_H` (24 px): erst alle Seitenflächen (dunkel `#3e434e`),
+dann alle Oberkanten (hell `#aab2c0`). Niedrige Wände dürfen nach den Entitäten kommen: Ihre Fläche liegt immer auf der
+Kamera-abgewandten Seite und verdeckt nur, was wirklich dahinter steht. Innenlichter gehen in die Lightmap (× (1 − cut)).
+Das Gebäude selbst wird im Gebäude-Pass mit Alpha = cut gezeichnet, das Dach hebt dabei ab (Neigung × (1 + 0.5 · (1 − cut))).
+Nachbarn, deren Dach über das offene Gebäude ragt, bekommen Alpha `C.XRAY_ALPHA` (0.3).
+
+**Gemessen im Konzept** (headless, Software-Raster): drinnen 18.2 ms, Übergang 20.6 ms, draußen 19.7 ms rAF – im Budget.
+
+**Nur Erdgeschoss.** Treppen und Obergeschosse sind ausdrücklich nicht geplant (Aufwand, Lesbarkeit von oben).
+
 ---
 
 ## 6. Asset-Pipeline (Baker)
@@ -507,6 +621,8 @@ abgefaste Kanten), aber als Stadt-Modelle. Laufzeit lädt `assets/sprites/neonre
    Marktstand, MANDAT-Terminal, Holo-Säule, Automat, Bank, toter Baum, Holo-Baum, Poller, Mülltonne, Zellentor,
    Schildgenerator, Server-Pylon, MANDAT-Kern, Thron (mit Skelett). Ironclads `barrel`/`crate` direkt übernehmen.
 4. **Notar-Mech** (Läufer, zweibeinig) – optional; Fallback: Ironclads `boss`-Modell in Erben-Farben.
+5. **Möbel/Innen-Props**: zuerst prozedural in die Boden-Textur gemalt (wie im Konzept); baken nur, wenn Zeit bleibt
+   (Theke, Tische, Betten, Regale, Kapseln, Serverschränke, Thron).
 
 ### 6.3 Ablauf
 
@@ -583,7 +699,7 @@ gehen weiter. MANDAT-Pager: „Bürger ####: Mandat nicht erfüllt. Die Ordnung 
 
 | Typ | Parameter | Erfüllt, wenn … |
 |---|---|---|
-| `goto` | `at, r=48, foot?, vehicleTag?` | Spieler im Radius (ggf. zu Fuß / im markierten Fahrzeug) |
+| `goto` | `at, r=48, foot?, vehicleTag?` oder `inside: lm` | Spieler im Radius (ggf. zu Fuß / im markierten Fahrzeug) bzw. im Innenraum der Landmarke |
 | `enter` | `tag` \| `cls` | Spieler fährt das Fahrzeug |
 | `deliver` | `tag, at, r, minHp?` | markiertes Fahrzeug im Radius mit HP ≥ minHp × max |
 | `kill` | `tags` \| `{ count, type, area }` | alle Ziele tot |
@@ -667,94 +783,132 @@ Start nur Docks. `tor1` (Brücken Spalte 12) nach M04, `tor2` (Brücken Spalte 2
 OD-Kontrollpunkt mit Schranke (solide Props) + Hinweis „Passierschein erforderlich". Distrikt-Banner beim Überqueren.
 Akt-Titelkarten: „AKT I · GEHORSAM", „AKT II · ZWEIFEL", „AKT III · ABRECHNUNG", „FINALE · DAS MAUSOLEUM".
 
+### 7.11 Begehbare Gebäude (Spielmechanik)
+- **Rein und raus**: einfach zu Fuß durch die Tür gehen; die Schiebetür öffnet sich automatisch (Zischen). Fahrzeuge passen nicht
+  durch (Ausnahme Chip-Wäsche: Garage, das Auto fährt hinein).
+- **Bewohner** (Typen WORLD.md §14): sitzen, arbeiten, stehen. Mit gezogener Waffe oder nach einem Schuss: Schreie, Flucht durch
+  die Tür. Ladenbesitzer bleiben hinter der Theke. Erben-Verstecke sind feindlich.
+- **Beute**: pro Innenraum 0–2 Pickups (Credits 20–150, Munition, Medikit, selten eine Waffe); einige Datenchips liegen drinnen.
+  Plündern, während jemand zusieht: +3 Fahndung („Diebstahl").
+- **Verstecken**: Draußen stehende OD-Einheiten sehen nicht hinein (Sichtlinie endet an Außenwänden) → „VERBORGEN" wird möglich.
+  Ab Stufe 2 folgen Fußstreifen nach 3–6 s ins Haus; Fahrzeuge warten vor der Tür.
+- **Dienste sind Innenräume**: Kapselhotel (Gang mit Schlafkapseln, Speichern an der eigenen Kapsel), Waffenhändler (Theke, Regale),
+  Klinik (Respawn im Behandlungsraum), OD-Wache (Respawn nach Verhaftung in der Zelle), Kopfgeld-Büro.
+- **Missionen** nutzen Innenräume: M07 (Ärztin in der Untergrundklinik), M12 (Zellen in der Klinik Null), M14 (Mausoleum).
+
 ---
 
 ## 8. Meilensteine
 
-Jeder Meilenstein endet **spielbar**. Größe: S ≈ halbe Session, M ≈ eine Session, L ≈ eine volle Session.
+Meilensteine heißen **MS0–MS12**, Missionen **M00–M14** (R14). Jeder Meilenstein endet **spielbar** und **mit Sound** (R13).
+Größe: S ≈ halbe Session, M ≈ eine Session, L ≈ eine volle Session.
 
-### M0 – Grundgerüst (S) · lies: §3, §4.1–4.4, §4.12, §9
-- `neonregent.html` (Shell, CSS aus Ironclad mit Neon-Palette, HUD-Skelett, Hauptmenü), alle 18 Dateien als Stubs mit Kopfkommentar.
+### MS0 – Grundgerüst (S) · lies: §3, §4.1–4.4, §4.10, §4.12, §9
+- `neonregent.html` (Shell, CSS aus Ironclad mit Neon-Palette, HUD-Skelett, Hauptmenü), alle Dateien aus §4.1 als Stubs mit Kopfkommentar.
 - Aus Ironclad portiert: `fitCanvas`, fixer Loop, Pause, Mute, Vollbild, Sprite-Cache, Partikel/`explosion`, Kamera, `adaptQuality`.
-- Debug-Overlay, `NR_TEST`, `?scene=`-Gerüst. Menü-Links in `index.html` und `ironclad.html`.
-- `tools/neonregent-test/smoke.mjs` (§9).
-- **DoD:** Seite lädt von file:// ohne Konsolenfehler; NEUES SPIEL zeigt eine dunkle Fläche mit steuerbarem Platzhalter-Spieler;
-  Explosion per Debug-Taste sieht aus wie in Ironclad; Smoke-Test grün.
+- **Audio-Engine**: Busse, Kompressor, Klangbank-Baking (XFire-Muster), Rezepte aus `klangprobe.html`, Lautstärke je Bus.
+- Debug-Overlay, `NR_TEST`, `?scene=`-Gerüst. Menü-Links in `index.html` und `ironclad.html`. `tools/neonregent-test/smoke.mjs` (§9).
+- **DoD:** lädt von file:// ohne Konsolenfehler; NEUES SPIEL zeigt eine dunkle Fläche mit steuerbarem Platzhalter-Spieler;
+  Debug-Taste löst eine Explosion aus, die aussieht **und klingt** wie in Ironclad; Debug-Taste spielt einen Schrei aus der Bank;
+  Smoke-Test grün.
 
-### M1 – Stadt und Darstellung (L) · lies: §4.5, §5, WORLD.md §1–§4, §11–§12, concept.html
+### MS1 – Stadt und Darstellung (L) · lies: §4.5, §5.1–5.8, WORLD.md §1–§4, §11–§12, concept.html
 - Zonenplan-Parser + Generator (seeded): Kacheln, Straßen, Spuren, Gehwege, Zebrastreifen, Grundstücke, Gebäude (Höhe/Stil),
   Collider, Landmarken, Dienste, Laternen, Gullys, Tore.
 - Boden-Chunks (LRU), Gebäude kippend (§5.2) mit Fassaden-/Dachtexturen (LRU), Laternen-Batch.
 - Lightmap mit Laternen/Neon/Spieler-Eigenlicht (§5.3), Regen, Distrikt-Umgebungsfarben.
 - Spieler zu Fuß (Fallback-Art), Kollision, Kamera; Radar mit Straßen; Vollkarte (Tab).
+- **Sound:** Regen-Loop, Stadt-Brummen je Distrikt, Neon-Summen nahe Schildern, Schritte je Untergrund.
 - **DoD:** Alle drei Distrikte begehbar (Debug: Tore offen); Gebäude kippen korrekt, keine Spiegelschrift; man läuft nicht durch
-  Wände; Vollkarte entspricht dem ASCII-Plan; Szenen `docks_street`, `neon_crossing`, `krone_palace` als Screenshots;
-  rAF-Budget §10 eingehalten.
+  Wände; Vollkarte entspricht dem ASCII-Plan; Szenen `docks_street`, `neon_crossing`, `krone_palace` als Screenshots; man hört
+  Regen, Stadt und Schritte; rAF-Budget §10 eingehalten.
 
-### M2 – Fahrzeuge (L) · lies: §4.7, §7.2, WORLD.md §5
+### MS2 – Fahrzeuge (L) · lies: §4.7, §7.2, WORLD.md §5, §13
 - Fahrphysik je Klasse, Fallback-Art (Draufsicht-Autos im `VEHICLE_ART`-Stil), Ein-/Aussteigen/Kapern, Kamera-Zoom nach Tempo,
   Kollisionen (Gebäude, Auto–Auto), Schaden → Rauch → Feuer → Explosion → Wrack, Bremsspuren/Spritzwasser, Boost, Hupe,
-  Scheinwerfer/Rücklichter als Lichter, Motor-Loop + Reifenquietschen, geparkte Autos.
-- **DoD:** Jede Klasse fahrbar (F8), Handbremsen-Drift, Crash-Kette bis Explosion, Kapern eines geparkten und eines fahrenden Autos.
+  Scheinwerfer/Rücklichter als Lichter, geparkte Autos.
+- **Sound:** Motor-Loop je Klasse (Drehzahl), Reifenquietschen nach Querschlupf, Crash nach Aufprallstärke, Hupe, Türen, Brand, Explosion.
+- **DoD:** Jede Klasse fahrbar (F8) und klingt eigen; Handbremsen-Drift; Crash-Kette bis zur Explosion sicht- und hörbar;
+  Kapern eines geparkten und eines fahrenden Autos.
 
-### M3 – Look: Baker und Licht (L) · lies: §6, §5.3, WORLD.md §5, §11
+### MS3 – Look: Baker und Licht (L) · lies: §6, §5.3, WORLD.md §5, §11
 - Baker-Erweiterung (§6.1), Modelle Prio 1–2 (Fahrzeuge + Passanten-Rig), Bundle, Laufzeit-Loader inkl. Frames/Emitter.
 - Lichtregister komplett (Scheinwerferkegel, Bremslichter, Blaulicht, Fenster/Neon, Feuer), Neon-Schilder + Holo-Plakate,
   Dampf, Pfützen-Spritzer, Distrikt-Stimmung.
+- **Sound:** Dampf-Zischen, Holo-Plakat-Brummen, Pfützen-Spritzer.
 - **DoD:** Szenen-Screenshots erreichen Konzept-Qualität mit echten Stadtmodellen; Spiel läuft weiterhin ohne Bundle; Budget §10.
 
-### M4 – Leben: Passanten und Verkehr (L) · lies: §4.8, §7.4–7.5, WORLD.md §1, §8
-- Passanten (Spawn-Ring, Gehweg-Wandern, Zebrastreifen, Panik, Umstoßen, Tod + Splat + Schrei, Chip-Punkte),
-  Verkehr (Spuren, Kreuzungen, Vorausschau, Hupen, Reaktionen, Sackgassen-Meidung), Dichte je Distrikt,
-  Ambient-Vollstreckung, Ambient-Audio (Regen, Stadt, Neon-Summen, Schritte).
-- **DoD:** 5-min-Soak (`soak.mjs`) ohne Fehler, kein Dauerstau (Zähler für blockierte Autos < 3), Überfahren funktioniert,
-  Budget §10 bei voller Dichte.
+### MS4 – Leben: Passanten, Verkehr, Schreie (L) · lies: §4.8, §4.10, §7.4–7.5, WORLD.md §1, §8, §13, klangprobe.html
+- Passanten (Spawn-Ring, Gehweg-Wandern, Zebrastreifen, Panik, Umstoßen, Tod + Splat, Chip-Punkte), Verkehr (Spuren, Kreuzungen,
+  Vorausschau, Hupen, Reaktionen, Sackgassen-Meidung), Dichte je Distrikt, Ambient-Vollstreckung.
+- **Schrei-System** (§4.10): Stimm-Seed je Person; Angstschrei + Ausweichsprung; tödliches Überfahren (Schrei reißt ab, Aufprall,
+  Punch, Achsen-Doppelschlag, Splat, Bremse); Angefahren (Schmerzschrei, Stöhnen bis zum Aufstehen); Umstehende; Panik der Menge;
+  Stimmen-Verwaltung und Ducking; Vollstreckungs-Sound.
+- **DoD:** 5-min-Soak (`soak.mjs`) ohne Fehler; kein Dauerstau (blockierte Autos < 3); Überfahren funktioniert sicht- und hörbar;
+  `?scene=runover` reproduzierbar; **WAV-Export** der Szene (`tools/neonregent-test/audio.mjs`) liegt dem Bericht bei, damit der
+  Nutzer abhört; Budget §10 bei voller Dichte.
 
-### M5 – Fahndung und Ordnungsdienst (L) · lies: §7.6, WORLD.md §8–§9
-- Punkte/Stufen/Abklingen/Sicht, HUD-Schlüssel + VERBORGEN, Disponent, alle Einheiten je Stufe (Fußstreife, Streife, Abfangjäger,
-  Sperren, Drohnen, Sturmwagen, Gunship, Tribunal), Sirenen (Audio + Licht), Verhaften/Ausgelöscht + Respawn, Chip-Wäsche, Bestechungschips.
-- **DoD:** Überfahren → Stufe 1; Eskalation bis 5 reproduzierbar (`police_l3`, `police_l5`); Abschütteln durch Sichtbruch;
-  beide Respawn-Wege; Budget bei Stufe 5.
+### MS5 – Begehbare Gebäude (L) · lies: §5.9, §7.11, §4.10 (Innen/Außen), WORLD.md §14, concept.html (`makeInterior`, `#inside`)
+- Auswahl (10 % + Dienste + Story-Orte), lazy Grundriss (BSP + Template-Format), Möbel-Texturen je Raumtyp, Schiebetüren,
+  Wände als Collider, Innen-Navigation (16 px), Bewohner-KI, Beute, Innenlichter, Übergang (Dach weg, Zoom, Röntgen der Nachbarn),
+  HUD-Ortskarte, Türsymbol im Radar.
+- **Sound:** Innen-Akustik (draußen gedämpft, Raumhall), Atmosphäre je Raumtyp (WORLD.md §14), Türzischen, gedämpfte Bar-Musik an der Tür.
+- **DoD:** In jedem Distrikt mehrere Gebäude betretbar; `interiors.mjs` grün (200 Grundrisse: alle Räume von der Eingangstür
+  erreichbar, keine Tür blockiert); Szene `interior` als Screenshot; Innen klingt hörbar anders; Budget drinnen ≤ 20 ms.
 
-### M6 – Kampf (M) · lies: §7.3, WORLD.md §6–§8
+### MS6 – Fahndung und Ordnungsdienst (L) · lies: §7.6, §7.11, WORLD.md §8–§9, §13
+- Punkte/Stufen/Abklingen/Sicht, HUD-Schlüssel + VERBORGEN, Disponent, alle Einheiten je Stufe (Fußstreife, Streife,
+  Abfangjäger, Sperren, Drohnen, Sturmwagen, Gunship, Tribunal), Verhaften/Ausgelöscht + Respawn, Chip-Wäsche,
+  Bestechungschips, Verstecken in Gebäuden, OD folgt ins Haus.
+- **Sound:** Sirenen mit Doppler, OD-Funk (`radioVoice`), Megafon-Durchsagen (Glitch-Vocoder), Rotor, Drohnen-Surren.
+- **DoD:** Überfahren → Stufe 1; Eskalation bis 5 reproduzierbar (`police_l3`, `police_l5`); Abschütteln durch Sichtbruch und
+  durch Hineingehen; beide Respawn-Wege; Budget bei Stufe 5.
+
+### MS7 – Kampf (M) · lies: §7.3, WORLD.md §6–§8, §13
 - Waffen + Munition + Wechsel, Drive-by, Pickups/Power-up-Kisten, Erben-KI, rote Fässer (Kettenreaktion wie Ironclad),
   Waffenhändler, Hit-Stop/Shake/Zoom-Punch wie Ironclad.
-- **DoD:** Straßenkampf fühlt sich wie Ironclad an (Screenshots von Explosionen), Flammenwerfer zündet Autos, Raketen sprengen Autos.
+- **Sound:** jede Waffe eigen, Einschläge je Material, Querschläger, Hülsen; Schüsse drinnen mit Raumhall.
+- **DoD:** Straßenkampf fühlt sich wie Ironclad an (Screenshots von Explosionen); Flammenwerfer zündet Autos; Raketen sprengen Autos.
+  **Nach MS7 ist die Sandbox komplett** (Stadt, Autos, Leben, Gebäude, Polizei, Kampf – noch ohne Story).
 
-### M7 – Mandats-System + Prolog, M01, M02 (L) · lies: §7.7, STORY.md §1–§5 (M00–M02), §6.1–§6.2
+### MS8 – Mandats-System + Prolog, M01, M02 (L) · lies: §7.7, STORY.md §1–§5 (M00–M02), §6.1–§6.2
 - Interpreter mit allen Schritt-Typen der ersten drei Missionen (+ Gerüst für alle anderen), Marker + Navi-Route, Missionskarte,
-  Pager mit Schreibmaschine + Stimmen, Anruf-/Frist-Ablauf, Terminals, Immunität, **Vollstreckungssequenz**, Checkpoint/Retry,
+  Pager mit Schreibmaschine, Anruf-/Frist-Ablauf, Terminals, Immunität, **Vollstreckungssequenz**, Checkpoint/Retry,
   Erfolgsbildschirm, Akt-Titel.
-- **DoD:** M00 → M02 am Stück spielbar; jeder Fehlschlag-Weg (Zeit, Zerstörung, Flucht) löst Vollstreckung aus, Retry stellt
-  den Zustand her; `missions.mjs` grün für M00–M02.
+- **Sound:** MANDAT-Jingle, Maschinenstimme zum Pager, Pager-Klicks, Frist-Piepen, Vollstreckung (Klangprobe).
+- **DoD:** M00 → M02 am Stück spielbar; jeder Fehlschlag-Weg (Zeit, Zerstörung, Flucht) löst Vollstreckung aus, Retry stellt den
+  Zustand her; `missions.mjs` grün für M00–M02.
 
-### M8 – Wirtschaft, Speichern, Distrikte (M) · lies: §4.11, §7.8–7.10, WORLD.md §4, §10
+### MS9 – Wirtschaft, Speichern, Distrikte (M) · lies: §4.11, §7.8–7.10, WORLD.md §4, §10
 - Credits, Läden-UI, Kapselhotel speichern/laden, Autosave, FORTSETZEN im Menü, Tore + Banner, Verhaften/Tod-Kosten,
-  Einstellungen (Lautstärken, Shake, Qualität, Steuerung, TTS, Blut, Blitze), Datenchips + Archiv.
+  Einstellungen (Lautstärken je Bus, Shake, Qualität, Steuerung, TTS, Blut, Blitze), Datenchips + Archiv.
+- **Sound:** UI-Klänge, Laden-Atmosphären, Kauf-Kassenklang, Speichern-Bestätigung.
 - **DoD:** Speichern → Neuladen → Fortsetzen reproduziert den Zustand; Tore sperren/öffnen nach Flags.
 
-### M9 – Akt I und II (M03–M09) (L) · lies: STORY.md §3, §5 (M03–M09), §6
+### MS10 – Akt I und II (M03–M09) (L) · lies: STORY.md §3, §5 (M03–M09), §6
 - Restliche Schritt-Typen (`follow`, `chase`, `escort`, `race`, `hold`, `survive`), Ruinen-Gebäudetyp, verbündete Einheiten,
-  MANDAT-Glitch mit menschlicher Stimme (M08), **Enthüllung + Störsender** (M09), Weltzustand je Akt (Plakate, Graffiti,
-  Ticker), Nebenaufgaben (Kurier, Kopfgeld, Exportgarage).
+  Innenraum-Template Untergrundklinik (M07), MANDAT-Glitch mit menschlicher Stimme (M08), **Enthüllung + Störsender** (M09),
+  Weltzustand je Akt (Plakate, Graffiti, Ticker), Nebenaufgaben (Kurier, Kopfgeld, Exportgarage).
+- **Sound:** Glitch-Stimme (M08), Projektor-Brummen und Störsender-Welle (M09), Renn-Countdown (M06), Zwischensequenz-Mischung.
 - **DoD:** Akt I + II komplett spielbar; Screenshots der Schlüsselszenen (Flugblatt M03, Glitch M08, Enthüllung M09).
 
-### M10 – Akt III, Finale, Ende (L) · lies: STORY.md §5 (M10–M14), §7
-- Erben-Liste, freie Missionswahl, Boss-Kämpfe (Ironclad `updateBoss`-Muster), Weltzustand Akt III (Krone-Untergrenze,
-  gehackte Plakate), systemische Folgen je Leutnant, Finale (Palastgarten → Kuppelsturz → Mausoleum-Grube → Notar → Kern),
-  **Ende**: alle Chip-Punkte erlöschen, Morgengrauen (Ironclad-Palette), Regen hört auf, Text, Abspann.
+### MS11 – Akt III, Finale, Ende (L) · lies: STORY.md §5 (M10–M14), §7, WORLD.md §14
+- Erben-Liste, freie Missionswahl, Boss-Kämpfe (Ironclad-`updateBoss`-Muster), Weltzustand Akt III (Krone-Untergrenze,
+  gehackte Plakate), systemische Folgen je Leutnant, Innenraum-Templates Klinik Null (M12) und **Mausoleum** (M14),
+  Finale (Palastgarten → Kuppelsturz = Dach weg für immer → Mausoleum → Notar → Kern), **Ende**: alle Chip-Punkte erlöschen,
+  Morgengrauen (Ironclad-Palette), Regen hört auf, Text, Abspann.
+- **Sound:** Boss-Sounds, Server-Lüfter und Kern-Puls, **Erlöschen der Chips als hörbare Welle**, Regen klingt aus, Morgengrauen-Musik.
 - **DoD:** Story vollständig durchspielbar ohne Softlock (`missions.mjs` alle grün); Szene `dawn` als Screenshot.
 
-### M11 – Feinschliff (M) · lies: §4.9, §4.10, §10
+### MS12 – Feinschliff (M) · lies: §4.9, §4.10, §10
 - Gamepad (Underworks-Port inkl. Menü-Navigation, Rumble), Touch (Ironclad-Sticks + Kontextknöpfe), Autoradio (3 Sender),
   Musik-Layer (Synthwave, Fahndungs-Layer, Finale, Morgengrauen), Balancing-Pass, Qualitätsstufen für schwache Geräte,
   optional Render-Scale (Underworks), README-Abschnitt, Abspann-Credits, optional „Freies Spiel – Morgengrauen".
+- **Sound:** **Mix-Pass** über alle Busse (Lautheit, Ducking, Prioritäten), optional CC0-Schreie (D13).
 - **DoD:** Auf einem Handy (Querformat) spielbar; Gamepad vollständig; README beschreibt das Spiel.
 
-**Grobe Gesamtgröße:** 11–13 Sessions. Nach M6 existiert eine spielbare Sandbox (GTA-artig ohne Story); M7–M10 legen die
-Story darüber. Wenn der Nutzer kürzen will: M11 zuerst streichen, dann Nebenaufgaben, dann Akt-II-Missionen M06/M08.
-
----
+**Grobe Gesamtgröße:** 12–14 Sessions. Nach MS7 existiert eine spielbare Sandbox; MS8–MS11 legen die Story darüber.
+Wenn der Nutzer kürzen will: MS12 zuerst streichen, dann Nebenaufgaben, dann die Akt-II-Missionen M06/M08.
 
 ## 9. Testen
 
@@ -782,6 +936,12 @@ const SCENES = ['docks_street', 'neon_crossing', 'krone_palace', 'police_l3', 'm
 - **Missionen** `missions.mjs`: je Mission `?mission=Mxx&debug=1`, `NR_TEST.completeStep()` bis Erfolg, Flags prüfen; zusätzlich
   einen Fehlschlag (Zeit ablaufen lassen) und Retry-Zustand prüfen.
 - **Soak** `soak.mjs`: 5 min Zufallseingaben im Auto/zu Fuß; keine Exceptions, Entitätszahlen begrenzt, blockierte Autos < 3.
+- **Audio** `audio.mjs` (Muster: der Klangprobe-Export): rendert festgelegte Klang-Szenen offline als WAV nach
+  `tools/neonregent-test/out/` (Überfahren tödlich/verletzt, Panik, Vollstreckung, Sirene, Explosion, Innenraum-Schuss) und
+  prüft automatisch: kein NaN, Spitzenpegel vor Normalisierung 0.05–4 (nicht stumm, nicht explodiert), Länge plausibel.
+  Optional Spektrogramm-PNG (numpy + PIL, siehe Planungs-Session). **Die WAVs gehören in den Bericht – der Nutzer hört ab** (R15).
+- **Innenräume** `interiors.mjs`: 200 zufällige Gebäude → Grundriss erzeugen → Flood-Fill auf dem 16-px-Raster ab der
+  Eingangstür: alle Räume erreichbar, keine Tür blockiert, keine Wand außerhalb des Grundrisses.
 - **Screenshots** für den Bericht: Szenen-PNGs (deviceScaleFactor 2, wenn der Nutzer sie sehen soll).
 - Ironclad als **Baseline** im selben Lauf messen (gleiche rAF-Methode).
 
@@ -802,6 +962,8 @@ const SCENES = ['docks_street', 'neon_crossing', 'krone_palace', 'police_l3', 'm
 | Verlaufs-Vignette pro Frame / vorgerendert | 1.6 / 0.44 ms (→ in Lightmap-Basis einbacken) |
 | 18 Gebäude (≤ 2 Fassaden + Dach, vorkomponiert) | ≈ 4 ms |
 | Boden-Blit 1280×720 | 0.4–0.75 ms |
+| Konzept mit begehbarem Gebäude: draußen / Übergang / drinnen | 19.7 / 20.6 / **18.2 ms** rAF |
+| Klangprobe: eine Klang-Szene (Überfahren inkl. Passanten) offline rendern | 0.2–0.5 s (im Hintergrund beim Laden) |
 
 **Messfallen:** `performance.now()` um Canvas-Aufrufe misst nur das Aufzeichnen (Chromium rastert verzögert);
 `getImageData` pro Frame schaltet Chromium in einen Readback-Modus und verfälscht alles. **Richtig:** mittleres
@@ -811,7 +973,8 @@ rAF-Intervall über 120 Frames + Ablation einzelner Passes über URL-Hash.
 - Standardszenen ≤ **20 ms** rAF im headless Chromium (Ironclad-Baseline 16.7); schlimmste Szene (`police_l5` + Regen) ≤ 25 ms.
 - Entitäten: Passanten ≤ 48 + Mission, Verkehr ≤ 22 + OD ≤ 12, Partikel ≤ 1600 (Ironclad), Lichter ≤ 140 pro Frame,
   sichtbare Gebäude typ. 15–40.
-- Texturen: Fassaden/Dächer LRU ≤ 24 Mpx, Boden-Chunks 24–48.
+- Texturen: Fassaden/Dächer LRU ≤ 24 Mpx, Boden-Chunks 24–48, ein Innenraum-Boden (2×) ≤ 2 Mpx.
+- Audio: Klangbank-Baking ≤ 3 s im Hintergrund; gleichzeitige Stimmen ≤ 32.
 
 ### 10.3 Adaptive Qualität (Reihenfolge beim Absenken)
 Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lightmap ⅓ statt ½ → Passanten/Verkehr −30 %
@@ -823,10 +986,10 @@ Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lig
 
 | Risiko | Gegenmaßnahme |
 |---|---|
-| Umfang sprengt alles, Spiel bleibt halbfertig | Strikte Meilensteine, jeder spielbar; nach M6 fertige Sandbox. |
+| Umfang sprengt alles, Spiel bleibt halbfertig | Strikte Meilensteine, jeder spielbar; nach MS7 fertige Sandbox. |
 | Verkehr verkeilt sich | Vorausschau, Blockade-Timer + Despawn außer Sicht, Sackgassen-Meidung, Soak-Test. |
-| Leistung auf Handys | Lightmap ½/⅓, Budgets, adaptive Qualität, Touch erst M11. |
-| Baker-Aufwand/Zeit | Fallback-Art zuerst (R11), Baken in M3, `--only` inkrementell, Preview-Bögen. |
+| Leistung auf Handys | Lightmap ½/⅓, Budgets, adaptive Qualität, Touch erst MS12. |
+| Baker-Aufwand/Zeit | Fallback-Art zuerst (R11), Baken in MS3, `--only` inkrementell, Preview-Bögen. |
 | Missions-Softlocks | Jeder Schritt hat Zeit-/Fehlbedingung, Debug-Skip, `missions.mjs`. |
 | Wendung zündet nicht | Vorausdeutungs-Fahrplan (STORY.md §3) als Checkliste umsetzen. |
 | Pager-Texte zu lang | Max. 140 Zeichen pro Zeile, automatisch teilen. |
@@ -835,6 +998,10 @@ Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lig
 | Dateien wachsen zu Monolithen | R4 (≤ 1500 Zeilen), Aufteilung nach §4.1. |
 | Fonts fehlen (Linux) | R12. |
 | Kontextgrenze der Session | Plan ist in 3 Dateien geteilt; nur nötige Abschnitte lesen. |
+| Synthetische Schreie klingen billig | Klangprobe vom Nutzer abhören lassen (D13); Stimmmodell iterieren (Spektrogramm zeigt z. B. zu regelmäßiges Vibrato); Plan B: CC0-Aufnahmen per Bundle. |
+| Session kann nicht hören | Automatische Pegel-/NaN-Prüfung, Spektrogramme, WAVs an den Nutzer (R15). |
+| Innenräume wirken alle gleich | Raumtypen je Gebäudetyp, Möbel-Varianten, Namen, handgebaute Story-Innenräume; bewusst nur 10 %. |
+| Dach-Überhang der Nachbarn verdeckt den offenen Innenraum | Röntgen-Alpha 0.3 (im Konzept gelöst). |
 
 ---
 
@@ -843,13 +1010,14 @@ Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lig
 ```
 Du arbeitest im Repo c134r3r/xfire am neuen Spiel NEON REGENT.
 1. Lies docs/neon-regent/PLAN.md: §0–§5 und §8–§10 vollständig.
-2. Lies docs/neon-regent/concept.html (Referenzcode) und sieh dir concept.jpg an (Ziel-Look).
+2. Lies docs/neon-regent/concept.html und klangprobe.html (Referenzcode) und sieh dir concept.jpg und concept-innen.jpg an.
 3. Prüfe in PLAN.md §14, welcher Meilenstein als Nächstes dran ist.
 4. Lies die beim Meilenstein angegebenen Abschnitte in WORLD.md / STORY.md.
-5. Setze genau diesen Meilenstein um und halte die Regeln aus §0 ein.
-6. Teste nach §9 (Smoke-Test, Screenshots, rAF-Messung, keine Konsolenfehler).
-7. Trage Ergebnis, Messwerte, Abweichungen und offene Punkte in §14 ein; committe ("Neon Regent Mx: …") und pushe.
-8. Berichte kurz: was fertig ist, Screenshots, Messwerte, was ich entscheiden muss.
+5. Setze genau diesen Meilenstein um (Meilensteine heißen MS0–MS12, Missionen M00–M14) und halte die Regeln aus §0 ein –
+   auch R13: Der Meilenstein ist erst fertig, wenn seine Klänge drin sind.
+6. Teste nach §9 (Smoke-Test, Screenshots, rAF-Messung, keine Konsolenfehler, Audio-Prüfung + WAVs zum Abhören).
+7. Trage Ergebnis, Messwerte, Abweichungen und offene Punkte in §14 ein; committe ("Neon Regent MSx: …") und pushe.
+8. Berichte kurz: was fertig ist, Screenshots, WAVs, Messwerte, was ich entscheiden muss.
 Beginne nicht mit dem nächsten Meilenstein.
 ```
 
@@ -857,8 +1025,8 @@ Beginne nicht mit dem nächsten Meilenstein.
 
 ## 13. Offene Fragen an den Nutzer
 
-Siehe §2, Punkte **D1–D7**. Ohne Antwort gelten die Defaults. Spätestens vor **M7** (Missionen) sollten D1–D5 feststehen,
-vor **M2** D6 und D11.
+Siehe §2, Punkte **D1–D7** und **D13**. Ohne Antwort gelten die Defaults. Spätestens vor **MS8** (Missionen) sollten D1–D5
+feststehen, vor **MS2** D6 und D11. D13 entscheidet der Nutzer nach dem Abhören der Klangprobe (spätestens vor MS4).
 
 ---
 
@@ -867,3 +1035,4 @@ vor **M2** D6 und D11.
 | Datum | Meilenstein | Ergebnis | Messwerte | Abweichungen vom Plan | Offen |
 |---|---|---|---|---|---|
 | 2026-11-26 | Planung | Plan (PLAN/WORLD/STORY), Konzept-Render validiert | Ironclad 16.7 ms, Konzept 17.4 ms rAF | – | D1–D7 bestätigen |
+| 2026-11-26 | Planung, Ergänzung | Sound als Kernsäule (R13, §4.10, `klangprobe.html` mit Schrei-Stimmmodell, per Spektrogramm geprüft); begehbare Gebäude (D12, §5.9, §7.11, neuer MS5; im Konzept validiert); Meilensteine → MS0–MS12; Mausoleum = Innenraum statt Grube | drinnen 18.2 ms rAF; Klang-Szene 0.2–0.5 s Rendern | – | D13 nach Abhören der Klangprobe |

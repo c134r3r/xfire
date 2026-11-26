@@ -37,6 +37,17 @@ Alle Zahlen hier sind **Startwerte**. Sie gehören in `C.*` (`neonregent/00-core
 | `TEX_BUDGET` | 24 Mpx | LRU für Fassaden/Dächer |
 | `CHUNK`, `CHUNKS_MAX` | 512 px, 24–48 | Boden-Chunks |
 | `RAIN_DROPS` | 420 (Qualität 1) | Bildschirmraum-Regen |
+| `INTERIOR_SHARE` | 0.10 | Anteil begehbarer normaler Gebäude (plus Dienste und Story-Orte) |
+| `ZOOM_INSIDE` | 1.65 | Kamera-Zoom drinnen |
+| `ROOF_FADE` | 0.08 pro Frame (≈ 0.4 s) | Übergang Dach weg / Dach zurück |
+| `WALL_H`, `WALL_T` | 24, 6 | Innenwände: Höhe für die Neigung, Dicke |
+| `DOOR_W` | 28 innen, 32 Eingang | Türbreite (nur Personen passen durch) |
+| `ROOM_MIN` | 96 | BSP-Mindestraumgröße |
+| `INDOOR_NAV` | 16 | Navigationsraster drinnen |
+| `XRAY_ALPHA` | 0.3 | Nachbardächer über dem offenen Gebäude |
+| `VOICES_MAX` | Schreie 4 · Schüsse 8 · Explosionen 4 · Motoren 3 · Sirenen 2 · gesamt 32 | Stimmen-Verwaltung |
+| `REVERB` | Straße 1.6 s · Raum 0.4 s · Mausoleum 2.8 s | Hallzeiten |
+| `DUCK` | Musik −6 dB / 1 s bei tödlichem Treffer, großer Explosion, MANDAT | Ducking |
 
 ---
 
@@ -82,6 +93,9 @@ Westen und Süden sind Wasser (Meer bzw. Fluss).
 | `.` | Parkplatz | Markierungen, 4–8 geparkte Autos, 2 Lichtmasten |
 | `1`–`7` | Dienste (§4) | C-Gebäude mit eigenem Schild + Eingangsmarker auf dem Gehweg |
 | `a`–`z` | **Landmarken** (§3) | eigenes Template; gleiche Buchstaben nebeneinander = **ein** zusammengelegtes Grundstück |
+
+**Begehbar** (PLAN §5.9): 10 % der Gebäude in `R`, `C`, `I`, `S`, `V` (deterministisch per Seed), alle Dienste und die
+Story-Orte `u`, `n`, `p` (optional `g`, `q`). Nie begehbar: `D`, `P`, `.`, Wasser. Innenraum-Typen: §14.
 
 ### 2.3 Generatorregeln
 
@@ -131,13 +145,13 @@ Koordinaten = Zellen (Spalte, Zeile). Missionspositionen `{ lm, dx, dy }` bezieh
 | `g` | Casino „Goldene Krone" | (16–17, 1–2) | Hochhaus 12 Stockwerke, Kronen-Hologramm, Vorplatz mit Brunnen, Tiefgaragen-Rampe, Parkplatz | M05, M10 |
 | `s` | Sendeturm Neonmeile | (21, 1) | schlanker Turm (Höhen-Prop 30 Stockwerke, rote Blinklichter), Sockelbau, Hof für den Sendewagen | M08 |
 | `r` | Rennplatz | (19, 2) | Startaufstellung (Gittermarkierung), niedrige Tribüne, Holo-Werbung „NACHTRENNEN" | M06 |
-| `u` | Untergrundklinik | (21, 3) | unscheinbarer Bau in der Gasse, 4 Generatoren im Hof, Plane mit rotem Kreuz, Feldbetten | M07 |
+| `u` | Untergrundklinik | (21, 3) | unscheinbarer Bau in der Gasse, 4 Generatoren im Hof; **begehbar** (Template: Behandlungsraum mit Feldbetten, Lager, Hinterausgang) | M07 |
 | `b` | Bibliotheksruine | (19–20, 5) | Ruine ohne Dach (Ruinen-Typ), Regalreste, Innenhof, Projektor; nur zu Fuß (Poller) | M09 |
 | `q` | OD-Hauptquartier | (27–28, 1–2) | Festung 8 Stockwerke, Fahrzeughof mit Streifen + 2 geparkten Tribunal-Panzern, Funkmast, Mauer mit Toren; OD-Spawn der Krone | M11 |
 | `m` | MANDAT-Turm | (35–36, 1) | 40 Stockwerke (höchstes Gebäude), MANDAT-Auge als Dach-Hologramm, 4 Uplink-Schüsseln auf Lot/Nachbarflächen | M13 |
-| `p` | Regentenpalast / Mausoleum | (31–33, 3–5) | Palast 14 Stockwerke mit Kuppel + Holo-Krone, Garten, Mauern, 4 Schildgeneratoren, Haupttor im Westen. **Mausoleum**: Grube unter dem Palast (sichtbar nach dem Kuppelsturz), Serverhallen, Thronsaal, MANDAT-Kern | M14 |
+| `p` | Regentenpalast / Mausoleum | (31–33, 3–5) | Palast 14 Stockwerke mit Kuppel + Holo-Krone, Garten, Mauern, 4 Schildgeneratoren, Haupttor im Westen. **Mausoleum** = Innenraum-Template des Palasts (Thronsaal, 2 Serverhallen, Gänge, Kernraum); wird beim Kuppelsturz geöffnet und bleibt offen | M14 |
 | `z` | Ewige Flamme | (30, 4) | Monument mit Flamme (Feuerlicht), Platz; Sammelpunkt im Finale | M14 |
-| `n` | Klinik Null | (35–36, 7) | weißer Komplex 7 Stockwerke, Zellentrakt im Hof (3 Zellentore), Garage mit Panzer-Ambulanz | M12 |
+| `n` | Klinik Null | (35–36, 7) | weißer Komplex 7 Stockwerke, **begehbar** (Template: Labor, Flur, Zellentrakt mit 3 Zellentoren), Garage mit Panzer-Ambulanz | M12 |
 
 ---
 
@@ -155,7 +169,7 @@ Koordinaten = Zellen (Spalte, Zeile). Missionspositionen `{ lm, dx, dy }` bezieh
 | `6` | Exportgarage | (10, 10) | (22, 8) | – |
 | `7` | Kopfgeld-/Kurier-Terminal | (8, 9) | (20, 9) | (30, 8) |
 
-Ab M09 zusätzlich: `e` (Archiv) = Safehouse + sichere Zone.
+Ab M09 zusätzlich: `e` (Archiv) = Safehouse + sichere Zone. **Alle Dienste sind begehbare Innenräume** (§14).
 
 ### 4.2 Datenchips (12)
 
@@ -412,10 +426,36 @@ der Timer startet neu. HUD: Schlüssel blinken, solange dich ein OD sieht; „�
 | Gunship-Rotor | amplitudenmoduliertes Rauschen 18 Hz |
 | Schritte | kurze Rausch-Ticks, Filter je Untergrund (Asphalt, Pfütze, Metall) |
 | Regen, Stadt, Neon | gefiltertes Rauschen (Regen-Loop), Tiefpass-Brummen + ferne Hupen, 120-Hz-Summen nahe Neon |
-| Passanten-Schrei | XFire `cry` (Formant) |
-| Treuechip | Sinus 1.6 kHz; Vollstreckung: 3 Pieptöne 1.2/1.4/1.6 kHz, dann Saw-Sweep 2 kHz → 60 Hz + Rauschschlag |
-| MANDAT | Jingle E5–B4–E4 (Rechteck + Hall); Stimme = XFire-Vocoder (Series 9), tiefer; Pager-Klicks |
+| **Schreie** (Angst, Schmerz, Todesschrei, Panik, Brand) | `klangprobe.html` → `scream()`; Stimmtypen und Regeln: PLAN §4.10 |
+| **Überfahren** (tödlich / verletzt) | `klangprobe.html` → `runOver()`: Motor, Angstschrei (reißt ab), Masse 62→30 Hz, Punch 190→85 Hz, Körper 750 Hz, Knacken, Achsen-Doppelschlag, Splat, Bremse, Umstehende |
+| Stöhnen am Boden | `klangprobe.html` → `groan()` |
+| Panik der Menge | `klangprobe.html` → `panic()`: 7 Stimmen, Laufschritte, Straßenhall |
+| Verdeckung / Innen-Außen | Tiefpass 1.2 kHz −6 dB (Gebäude dazwischen) / Tiefpass 900 Hz −8 dB (Spieler drinnen) |
+| Innenraum-Atmosphären | WORLD.md §14, je Raumtyp |
+| Schiebetür | Bandpass-Rauschen 1.2 → 3 kHz, 0.25 s, + Klick |
+| Treuechip | Sinus 1.6 kHz; Vollstreckung: `klangprobe.html` → `execution()` (Summen, 3 Pieptöne 1.2/1.4/1.6 kHz, Entladung 2.6 kHz → 55 Hz, erstickter Laut, Sturz, Tinnitus 3.8 kHz) |
+| MANDAT | `klangprobe.html` → `mandatCall()`: Jingle E5–B4–E4 (Rechteck + Hall), Maschinenstimme (XFire-Vocoder, ~100 Hz); Pager-Klicks |
 | Vela / OD-Funk | XFire `radioVoice` |
 | Glitch | gestuftes Rauschen (Bitcrush-artig), 80–200 ms |
 | Musik | Ironclad-Sequencer als Synthwave (Arp, Pad, Bass); Layer nach Fahndung/Kampf; Finale-Thema; Morgengrauen (Dur) |
 | Radio (M11) | NEON FM (Synthwave) · KRACH 9 (Industrial) · STIMME DES REGENTEN (Jingle, Vocoder-Geplapper, Ticker als Untertitel) |
+
+## 14. Innenräume (begehbare Gebäude)
+
+| Gebäude (Zone/Code) | Innenraum-Arten (Gewicht) | Räume | Möbel / Props | Licht | Bewohner | Beute | Klang |
+|---|---|---|---|---|---|---|---|
+| `C` Kommerz | Nudelbar 3 · Bar 3 · Spielhalle 2 · Pfandhaus 1 · Imbiss 2 | Gastraum (Eingang), Küche, Lager, WC, Hinterzimmer | Theke, Hocker, Tische, Automaten, Regale | warm + Neon (pink/cyan) | Wirt, 2–4 Gäste, Koch | Credits, Medikit | Bar-Musik (draußen dumpfer Bass), Gläser, leises Formant-Gemurmel |
+| `R` Wohnen | Wohnungen (Flur + 2–3 Zimmer) 5 · Waschküche 1 | Flur, Wohnzimmer, Schlafzimmer, Küche, Bad | Sofa, Bett, Tisch, Fernseher (flackerndes Blau), Kühlschrank | warm, TV-Blau | 1–3 Bewohner | Credits, Munition | TV-Geplapper, Kühlschrank-Brummen |
+| `I` Industrie | Lagerhalle 3 · Werkstatt 2 · Schlachterei 1 | eine große Halle + Büro | Kisten, Regale, Maschinen, Gabelstapler (steht), rote Fässer | kalte Röhren, flackernd | 1–2 Arbeiter | Munition, Fässer | Maschinen-Brummen, Tropfen |
+| `S` Slum | Hütte 4 · Hinterhof-Werkstatt 1 | 1–2 Räume | Matratzen, Feuertonne, Kisten | Feuer | 1–3 | wenig | Feuerknistern, Regen auf Blech (laut) |
+| `V` Villa (Krone) | Villa 1 | Flur + 4–6 Räume | Teppiche, Sofas, Flügel, Statuen | warm, Kronleuchter | Diener; Akt III: Erben (feindlich) | viel Credits | leise synthetische Klassik, Uhrticken |
+| `1` Kapselhotel | fest | Empfang + Kapselgang | Schlafkapseln (64 × 32 px), Automaten | kaltes Cyan | Empfang | – | Lüftung, Schnarchen |
+| `3` Waffenhändler | fest | Laden + Lager | Theke, Wandregale mit Waffen | warm | Händler | – | Metallklicken |
+| `5` Klinik | fest | Empfang, Behandlung, Betten | Betten, Geräte | kaltes Weiß | Personal, Patienten | Medikits | Piepen, Lüftung |
+| `4` OD-Wache | fest | Wache, Zellentrakt | Zellen, Schreibtische, Spinde | kalt | OD | – | Funk, Gittertüren |
+| `7` Kopfgeld-Büro | fest | ein Raum | Terminal-Wand, Stühle | magenta (MANDAT) | Schreiber | – | Terminal-Piepen |
+| `u` Untergrundklinik (M07) | Template | Behandlungsraum, Lager, Hinterausgang | Feldbetten, Generator-Kabel | warm, flackernd | Dr. Marten, Patienten | Datenchip 7 am Hinterausgang | Generatorbrummen |
+| `n` Klinik Null (M12) | Template | Labor, Flur, Zellentrakt (3 Zellen) | OP-Tisch, Chip-Regale, Zellentore | kaltes Weiß | Wachen, Gefangene | Chip-Schlüssel | Piepen, Rufe der Gefangenen |
+| `p` Mausoleum (M14) | Template | Thronsaal, 2 Serverhallen, Gänge, Kernraum | Thron mit Skelett, Server-Pylone, MANDAT-Kern | Kern-Cyan, rotes Notlicht | Erben-Garde, Notar | Datenchip 12 | Server-Lüfter, Kern-Puls, großer Hall (2.8 s) |
+
+Namen der Innenräume (HUD-Karte „INNENRAUM · …"): STORY.md §6.2.

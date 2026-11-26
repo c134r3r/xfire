@@ -54,6 +54,9 @@ canvas { display: block; border-radius: 6px; box-shadow: 0 0 0 1px rgba(63,232,2
 #pager .who { font-size: 10px; letter-spacing: 4px; color: var(--accent2); margin-bottom: 4px; }
 #pager .msg { font-family: var(--font-ui); font-size: 13px; line-height: 1.45; color: var(--text); }
 #weapon { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); }
+#place { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
+#place.on { opacity: 1; }
+#place .val { font-size: 14px; letter-spacing: 3px; color: #ffb3d9; text-shadow: 0 0 12px rgba(255,63,164,0.6); }
 </style>
 </head>
 <body>
@@ -80,6 +83,7 @@ canvas { display: block; border-radius: 6px; box-shadow: 0 0 0 1px rgba(63,232,2
         <div class="msg">Nummer 7741. Drei Händler am Fischmarkt sind mit der Regentensteuer im Rückstand. Treiben Sie sie ein. Der Regent wacht.</div></div>
     </div>
     <div id="weapon" class="card"><span class="lbl">PISTOLE</span><span class="val">84</span></div>
+    <div id="place" class="card"><span class="lbl">INNENRAUM</span><span class="val" id="placeName"></span></div>
   </div>
 </div>
 <script src="../../assets/sprites/ironclad.bundle.js"></script>
@@ -198,6 +202,11 @@ for (const [x0, y0, x1, y1] of lots) {
       h: floors * FLOOR_H, style: PICK(['concrete', 'concrete', 'glass', 'neon', 'neon']), id: buildings.length });
   }
 }
+// Betretbares Gebäude (Nudelbar): Grundstück oben Mitte neu belegen - 4 Kacheln Laden + 2 Kacheln Nachbar
+for (let i = buildings.length - 1; i >= 0; i--) { const b = buildings[i]; if (b.x0 >= 12 * T - 4 && b.x1 <= 18 * T + 4 && b.y1 < 400) buildings.splice(i, 1); }
+const shop = { x0: 12 * T + 2, y0: 2, x1: 16 * T - 2, y1: 6 * T - 2, h: 7 * FLOOR_H, style: 'neon', enterable: true, cut: 1, name: 'NUDELBAR ‚SUZU‘' };
+buildings.push(shop, { x0: 16 * T + 2, y0: 2, x1: 18 * T - 2, y1: 6 * T - 2, h: 12 * FLOOR_H, style: 'concrete' });
+buildings.forEach((b, i) => b.id = i);
 // ein Turm mit dem Regenten-Hologramm auf dem Dach
 const tower = buildings.filter(b => b.x0 >= 12 * T - 4 && b.x1 <= 18 * T + 4 && b.y0 > 600).reduce((m, b) => ((b.x1 - b.x0) * (b.y1 - b.y0) > (m.x1 - m.x0) * (m.y1 - m.y0) ? b : m));
 tower.h = 24 * FLOOR_H; tower.style = 'glass'; tower.regent = true;
@@ -361,6 +370,102 @@ for (const b of buildings) {
 }
 
 // ------------------------------------------------------------------
+// Innenraum (PLAN §5.9): BSP-Räume, Türen, Wände, Möbel, Innenlichter, Personen
+// ------------------------------------------------------------------
+function makeInterior(b) {
+  const leaves = [], doors = [], MIN = 96;
+  const split = (r, depth) => {
+    const w = r.x1 - r.x0, h = r.y1 - r.y0, canV = w >= MIN * 2, canH = h >= MIN * 2;
+    if (depth >= 3 || (!canV && !canH) || (depth >= 2 && rnd() < 0.3)) { leaves.push(r); return [r]; }
+    const vert = canV && (!canH || w > h * 1.15 || (w * 1.15 >= h && rnd() < 0.5));
+    const sp = Math.round(vert ? r.x0 + w * R(0.4, 0.6) : r.y0 + h * R(0.4, 0.6));
+    const A = vert ? { x0: r.x0, y0: r.y0, x1: sp, y1: r.y1 } : { x0: r.x0, y0: r.y0, x1: r.x1, y1: sp };
+    const B = vert ? { x0: sp, y0: r.y0, x1: r.x1, y1: r.y1 } : { x0: r.x0, y0: sp, x1: r.x1, y1: r.y1 };
+    const la = split(A, depth + 1), lb = split(B, depth + 1);
+    // Tür: das Raumpaar (je eins pro Seite) mit dem längsten gemeinsamen Wandstück; Tür in dessen Mitte
+    // -> trifft nie eine querlaufende Wand. Jeder Split bekommt genau eine Tür -> alle Räume verbunden.
+    let best = null;
+    for (const a of la) for (const c of lb) {
+      const touch = vert ? a.x1 === sp && c.x0 === sp : a.y1 === sp && c.y0 === sp; if (!touch) continue;
+      const lo = vert ? Math.max(a.y0, c.y0) : Math.max(a.x0, c.x0), hi = vert ? Math.min(a.y1, c.y1) : Math.min(a.x1, c.x1);
+      if (hi - lo >= 44 && (!best || hi - lo > best.hi - best.lo)) best = { lo, hi };
+    }
+    if (best) { const mid = (best.lo + best.hi) / 2; doors.push({ vert, at: sp, from: mid - 14, to: mid + 14 }); }
+    return la.concat(lb);
+  };
+  split({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 }, 0);
+  // Eingang: Südwand des breitesten vorderen Raums, nahe der Westseite (zur Straßenecke hin)
+  const front = leaves.filter(r => r.y1 === b.y1).sort((p, q) => (q.x1 - q.x0) - (p.x1 - p.x0))[0];
+  const ex = front.x0 + Math.min(54, (front.x1 - front.x0) / 2);
+  doors.push({ vert: false, at: b.y1, from: ex - 16, to: ex + 16, entrance: true });
+  // Wände = alle Raumkanten minus Türen (dünne AABBs; im Spiel zugleich Collider)
+  const walls = [];
+  for (const r of leaves) for (const sg of [{ vert: false, at: r.y0, from: r.x0, to: r.x1 }, { vert: false, at: r.y1, from: r.x0, to: r.x1 },
+                                           { vert: true, at: r.x0, from: r.y0, to: r.y1 }, { vert: true, at: r.x1, from: r.y0, to: r.y1 }]) {
+    let parts = [[sg.from, sg.to]];
+    for (const d of doors) if (d.vert === sg.vert && Math.abs(d.at - sg.at) < 1)
+      parts = parts.flatMap(([a, c]) => (d.to <= a || d.from >= c) ? [[a, c]] : [[a, d.from], [d.to, c]].filter(([u, v]) => v - u > 2));
+    for (const [a, c] of parts) walls.push(sg.vert ? { x0: sg.at - 3, y0: a - 3, x1: sg.at + 3, y1: c + 3 } : { x0: a - 3, y0: sg.at - 3, x1: c + 3, y1: sg.at + 3 });
+  }
+  // Raumtypen: Eingangsraum = Gastraum, der Rest nach Größe
+  const rest = leaves.filter(r => r !== front).sort((p, q) => (q.x1 - q.x0) * (q.y1 - q.y0) - (p.x1 - p.x0) * (p.y1 - p.y0));
+  front.type = 'bar'; ['kueche', 'lager', 'hinterzimmer', 'wc'].forEach((t, i) => { if (rest[i]) rest[i].type = t; });
+  if (rest.length >= 2) rest[rest.length - 1].type = 'wc';
+  // Boden + Möbel als Textur (2x für Schärfe beim Hineinzoomen). Albedo hell - die Lightmap macht die Stimmung.
+  const S2 = 2, W = b.x1 - b.x0, H = b.y1 - b.y0, floor = mk(W * S2, H * S2), g = floor.getContext('2d');
+  g.scale(S2, S2); g.translate(-b.x0, -b.y0);
+  const lights = [], npcs = [];
+  const box = (x, y, w, h, top, edge) => { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x + 2, y + 3, w, h); g.fillStyle = top; g.fillRect(x, y, w, h);
+    if (edge) { g.strokeStyle = edge; g.lineWidth = 1.5; g.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5); } };
+  const disc = (x, y, r, col, edge) => { g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(x + 2, y + 3, r, 0, TAU); g.fill();
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); if (edge) { g.strokeStyle = edge; g.lineWidth = 1.2; g.stroke(); } };
+  for (const r of leaves) {
+    const w = r.x1 - r.x0, h = r.y1 - r.y0, cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+    if (r.type === 'bar') {                    // Schachbrett-Fliesen, Theke, Hocker, Tische
+      for (let y = r.y0; y < r.y1; y += 16) for (let x = r.x0; x < r.x1; x += 16) { g.fillStyle = ((x - r.x0) / 16 + (y - r.y0) / 16) % 2 ? '#7a4a58' : '#4a2c36'; g.fillRect(x, y, 16, 16); }
+      box(r.x0 + 14, r.y0 + 12, w - 28, 18, '#8a6a52', '#d8a070');
+      for (let x = r.x0 + 26; x < r.x1 - 20; x += 26) disc(x, r.y0 + 42, 6, '#2e2e34', '#8a8f99');
+      for (const [tx, ty] of [[r.x0 + w * 0.3, r.y0 + h * 0.62], [r.x0 + w * 0.7, r.y0 + h * 0.62]]) {
+        disc(tx, ty, 15, '#6a5040', '#c09070');
+        for (const a of [0, 2.1, 4.2]) box(tx + Math.cos(a) * 24 - 5, ty + Math.sin(a) * 24 - 5, 10, 10, '#3a3a44', '#6a6a78');
+        lights.push([tx, ty, 90, '#ffb070', 0.9]);
+      }
+      lights.push([cx, r.y0 + 30, 110, '#ff3fa4', 0.85]);
+      npcs.push({ x: cx, y: r.y0 + 2 + 6, a: Math.PI / 2, coat: '#e8e0d0' }, { x: r.x0 + w * 0.3 + 22, y: r.y0 + h * 0.62 - 10, a: Math.PI, coat: '#9a4a4a' },
+                { x: r.x0 + w * 0.7 - 24, y: r.y0 + h * 0.62 + 8, a: 0, coat: '#3f7a8f' });
+    } else if (r.type === 'kueche') {          // Stahlboden, Arbeitsflächen, Herd, Kühlschrank
+      g.fillStyle = '#8a9098'; g.fillRect(r.x0, r.y0, w, h); g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1;
+      for (let x = r.x0; x < r.x1; x += 8) { g.beginPath(); g.moveTo(x, r.y0); g.lineTo(x, r.y1); g.stroke(); }
+      box(r.x0 + 8, r.y0 + 8, w - 16, 20, '#b8bec6', '#e0e6ee'); box(r.x0 + 8, r.y0 + 8, 20, h - 16, '#b8bec6', '#e0e6ee');
+      for (const [x, y] of [[r.x0 + 48, r.y0 + 14], [r.x0 + 64, r.y0 + 14], [r.x0 + 48, r.y0 + 24], [r.x0 + 64, r.y0 + 24]]) disc(x, y, 5, '#1a1a1e', '#5a5f66');
+      box(r.x1 - 30, r.y1 - 34, 22, 26, '#dfe3ea', '#ffffff');
+      lights.push([cx, cy, Math.max(w, h) * 0.7, '#d8ecff', 0.9]);
+      npcs.push({ x: r.x0 + 56, y: r.y0 + 40, a: -Math.PI / 2, coat: '#f0f0f0' });
+    } else if (r.type === 'lager') {           // Beton, Kisten, Fässer
+      g.fillStyle = '#6a6a70'; g.fillRect(r.x0, r.y0, w, h);
+      for (let i = 0; i < w * h / 500; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},0.06)`; g.fillRect(R(r.x0, r.x1), R(r.y0, r.y1), 2, 2); }
+      for (let i = 0; i < 4; i++) { const x = R(r.x0 + 10, r.x1 - 34), y = R(r.y0 + 10, r.y1 - 34); box(x, y, 24, 24, '#9a7a4a', '#5a4020');
+        g.strokeStyle = '#5a4020'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 24, y + 24); g.moveTo(x + 24, y); g.lineTo(x, y + 24); g.stroke(); }
+      disc(r.x1 - 22, r.y0 + 22, 10, '#a03a2a', '#e06a50');
+      lights.push([cx, cy, Math.max(w, h) * 0.6, '#ffcf8a', 0.55]);
+    } else if (r.type === 'wc') {
+      for (let y = r.y0; y < r.y1; y += 8) for (let x = r.x0; x < r.x1; x += 8) { g.fillStyle = ((x + y) / 8) % 2 ? '#c8ccd4' : '#b4b8c0'; g.fillRect(x, y, 8, 8); }
+      disc(cx, r.y0 + 18, 8, '#f4f6fa', '#9aa0aa'); box(r.x0 + 8, cy - 8, 14, 16, '#e8ecf2', '#9aa0aa');
+      lights.push([cx, cy, Math.max(w, h) * 0.7, '#cfe6ff', 0.6]);
+    } else {                                    // Hinterzimmer: Teppich, Sofa, Tisch mit Geld
+      g.fillStyle = '#5a4a72'; g.fillRect(r.x0, r.y0, w, h);
+      box(r.x0 + 10, r.y0 + 10, Math.min(70, w - 20), 22, '#8a3a52', '#c06a82');
+      box(cx - 22, cy - 14, 44, 28, '#5a4030', '#a07050'); for (let i = 0; i < 5; i++) box(cx - 16 + i * 7, cy - 6, 6, 10, '#3f9a5a');
+      lights.push([cx, cy, Math.max(w, h) * 0.6, '#ffd08a', 0.75]);
+      npcs.push({ x: cx + 30, y: cy, a: Math.PI, coat: '#1a1a1f' });
+    }
+  }
+  return { leaves, doors, walls, floor, lights, npcs, wallH: 24, entrance: { x: ex, y: b.y1 } };
+}
+shop.interior = makeInterior(shop);
+const insideNpcs = shop.interior.npcs.map(n => ({ ...n, v: 0, ph: R(0, TAU) }));
+
+// ------------------------------------------------------------------
 // Leben: Autos (Ironclad-Sprites als Platzhalter), Passanten, Streife
 // ------------------------------------------------------------------
 const PAINT = ['#3a6ea5', '#b0305e', '#d8d2c4', '#2a2a30', '#c9a227', '#3f9a8a', '#7a3fb0'];
@@ -394,8 +499,11 @@ const lmBase = mk(VIEW_W / 2, VIEW_H / 2);   // Umgebungsfarbe + Vignette, einma
   const vg = g.createRadialGradient(VIEW_W / 4, VIEW_H / 4, VIEW_H * 0.16, VIEW_W / 4, VIEW_H / 4, VIEW_W * 0.36);
   vg.addColorStop(0, 'rgba(10,12,24,0)'); vg.addColorStop(1, 'rgba(10,12,24,0.85)'); g.fillStyle = vg; g.fillRect(0, 0, lmBase.width, lmBase.height); }
 let time = 0;
-// Ablation für Messungen: concept.html#dark,rain schaltet diese Passes ab
+// Ablation für Messungen: concept.html#dark,rain schaltet diese Passes ab.
+// Innenraum-Demo: #inside (drin, Dach weg) · #cut50 (Übergang eingefroren) · #enter (rein/raus im Wechsel)
 const OFF = new Set(location.hash.slice(1).split(','));
+let zoom = 1, insideT = 0;
+const doorOut = { x: shop.interior.entrance.x, y: shop.y1 + 28 }, doorIn = { x: shop.interior.entrance.x + 6, y: shop.y1 - 40 };
 function lean(x, y, h, C) {
   let dx = (x - C.x) * h * LEAN_K, dy = (y - C.y) * h * LEAN_K;
   const m = Math.hypot(dx, dy), lim = LEAN_MAX * h;
@@ -412,8 +520,9 @@ function face(img, p0, p1, D) {
   ctx.drawImage(img, 0, 0);
   ctx.restore();
 }
-function drawBuilding(b, C) {
-  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, D = lean(cx, cy, b.h, C);
+function lerpN(a, b, t) { return a + (b - a) * t; }
+function drawBuilding(b, C, lift = 1) {
+  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, D0 = lean(cx, cy, b.h, C), D = { x: D0.x * lift, y: D0.y * lift };
   const P = (x, y) => ({ x, y });
   if (D.y > 0.5) face(b.tex.N, P(b.x0, b.y0), P(b.x1, b.y0), D);
   if (D.y < -0.5) face(b.tex.S, P(b.x0, b.y1), P(b.x1, b.y1), D);
@@ -440,14 +549,27 @@ function drawPed(p) {
 }
 function render() {
   time++;
-  // Kamera: langsame Kreisfahrt, damit man die Neigung der Häuser sieht
-  const C = { x: WORLD_W / 2 + Math.sin(time * 0.004) * 150, y: WORLD_H / 2 + Math.cos(time * 0.003) * 90 };
-  const cam = { x: C.x - VIEW_W / 2, y: C.y - VIEW_H / 2 };
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
-  // 1) Boden
-  { const sx = clamp(Math.floor(cam.x), 0, WORLD_W), sy = clamp(Math.floor(cam.y), 0, WORLD_H), sw = Math.min(WORLD_W - sx, VIEW_W + 2), sh = Math.min(WORLD_H - sy, VIEW_H + 2);
+  // Innenraum-Zustand: Spieler geht durch die Tür, Dach blendet aus, Kamera zoomt hinein
+  let inside = OFF.has('inside') || OFF.has('cut50');
+  if (OFF.has('enter')) { const ph = (time % 480) / 480; inside = ph > 0.25 && ph < 0.75;
+    const k = ph < 0.25 ? 0 : ph < 0.4 ? (ph - 0.25) / 0.15 : ph < 0.6 ? 1 : ph < 0.75 ? 1 - (ph - 0.6) / 0.15 : 0;
+    player.x = lerpN(doorOut.x, doorIn.x, k); player.y = lerpN(doorOut.y, doorIn.y, k); player.a = k > 0 && ph < 0.5 ? -Math.PI / 2 : Math.PI / 2; }
+  else if (inside) { player.x = doorIn.x; player.y = doorIn.y; player.a = -1.9; }
+  insideT += ((inside ? 1 : 0) - insideT) * 0.08;
+  shop.cut = OFF.has('cut50') ? 0.5 : 1 - insideT;
+  zoom = 1 + (OFF.has('cut50') ? 0.3 : 0.65 * insideT);
+  document.getElementById('place').classList.toggle('on', shop.cut < 0.5);
+  document.getElementById('placeName').textContent = shop.name;
+  // Kamera: draußen langsame Kreisfahrt (zeigt die Neigung), drinnen auf dem Spieler
+  const orbit = { x: WORLD_W / 2 + Math.sin(time * 0.004) * 150, y: WORLD_H / 2 + Math.cos(time * 0.003) * 90 };
+  const C = { x: lerpN(orbit.x, player.x, insideT), y: lerpN(orbit.y, player.y - 60, insideT) };
+  const Z = zoom, cam = { x: C.x - VIEW_W / 2 / Z, y: C.y - VIEW_H / 2 / Z };
+  ctx.setTransform(Z, 0, 0, Z, -cam.x * Z, -cam.y * Z);
+  // 1) Boden (+ Innenboden, solange das Dach offen ist)
+  { const sx = clamp(Math.floor(cam.x), 0, WORLD_W), sy = clamp(Math.floor(cam.y), 0, WORLD_H), sw = Math.min(WORLD_W - sx, VIEW_W / Z + 2), sh = Math.min(WORLD_H - sy, VIEW_H / Z + 2);
     ctx.drawImage(ground, sx, sy, sw, sh, sx, sy, sw, sh); }
+  const I = shop.interior, open = shop.cut < 0.999;
+  if (open) ctx.drawImage(I.floor, shop.x0, shop.y0, shop.x1 - shop.x0, shop.y1 - shop.y0);
   // 2) Fahrzeuge und Passanten
   for (const c of cars) { if (OFF.has('cars')) break;
     c.x += Math.cos(c.a) * c.v; c.y += Math.sin(c.a) * c.v;
@@ -463,20 +585,34 @@ function render() {
       if (t !== WALK) { p.x -= Math.cos(p.a) * p.v * 2; p.y -= Math.sin(p.a) * p.v * 2; p.a += Math.PI / 2 * (rnd() < 0.5 ? 1 : -1); } }
     p.ph += 0.18; drawPed(p);
   }
+  if (open) {
+    for (const n of insideNpcs) { n.ph += 0.02; drawPed(n); }
+    // Innenwände: niedrig (24 px), kippen wie Gebäude (alle mit dem D des Hauses), erst Seiten, dann helle Oberkanten.
+    // Vor der Lightmap gezeichnet -> Innenlichter beleuchten sie.
+    const D = lean((shop.x0 + shop.x1) / 2, (shop.y0 + shop.y1) / 2, I.wallH, C);
+    ctx.fillStyle = '#3e434e';
+    ctx.beginPath();
+    for (const w of I.walls) for (const [ax, ay, bx, by] of [[w.x0, w.y0, w.x1, w.y0], [w.x1, w.y0, w.x1, w.y1], [w.x1, w.y1, w.x0, w.y1], [w.x0, w.y1, w.x0, w.y0]]) {
+      ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx + D.x, by + D.y); ctx.lineTo(ax + D.x, ay + D.y); ctx.closePath(); }
+    ctx.fill();
+    ctx.fillStyle = '#aab2c0';
+    for (const w of I.walls) ctx.fillRect(w.x0 + D.x, w.y0 + D.y, w.x1 - w.x0, w.y1 - w.y0);
+  }
   // 3) Lightmap aufbauen (halbe Auflösung) und per multiply anwenden
-  const S = (x, y) => ({ x: (x - cam.x) / 2, y: (y - cam.y) / 2 });
+  const S = (x, y) => ({ x: (x - cam.x) * Z / 2, y: (y - cam.y) * Z / 2 });
   lg.globalCompositeOperation = 'copy'; lg.globalAlpha = 1; lg.drawImage(lmBase, 0, 0);
   lg.globalCompositeOperation = 'lighter';
-  const light = (x, y, r, color, k) => { const p = S(x, y); lg.globalAlpha = k; lg.drawImage(lightSprite(color), p.x - r, p.y - r, r * 2, r * 2); };
-  for (const l of lamps) light(l.x, l.y, 64, l.color, l.flick && Math.random() < 0.08 ? 0.15 : 0.95);
-  for (const b of buildings) if (b.neonSpill) { const cx = (b.x0 + b.x1) / 2; light(cx, b.y1 + 26, 62, b.neonSpill, 1); light(cx, b.y0 - 26, 62, b.neonSpill, 1); }
+  const light = (x, y, rw, color, k) => { const p = S(x, y), r = rw * Z / 2; lg.globalAlpha = k; lg.drawImage(lightSprite(color), p.x - r, p.y - r, r * 2, r * 2); };
+  for (const l of lamps) light(l.x, l.y, 128, l.color, l.flick && Math.random() < 0.08 ? 0.15 : 0.95);
+  for (const b of buildings) if (b.neonSpill) { const cx = (b.x0 + b.x1) / 2; light(cx, b.y1 + 26, 124, b.neonSpill, 1); light(cx, b.y0 - 26, 124, b.neonSpill, 1); }
+  if (open) for (const [x, y, r, c, k] of I.lights) light(x, y, r, c, k * (1 - shop.cut));
   for (const c of cars) {
     const p = S(c.x + Math.cos(c.a) * c.size * 0.9, c.y + Math.sin(c.a) * c.size * 0.9);
-    lg.save(); lg.translate(p.x, p.y); lg.rotate(c.a); lg.globalAlpha = 0.9; lg.drawImage(coneSprite('#fff2c8'), 0, -40, 130, 80); lg.restore();
-    if (c.police) light(c.x, c.y, 120, (time >> 4) % 2 ? '#2a6bff' : '#ff2a3a', 1);
+    lg.save(); lg.translate(p.x, p.y); lg.rotate(c.a); lg.globalAlpha = 0.9; lg.drawImage(coneSprite('#fff2c8'), 0, -40 * Z, 130 * Z, 80 * Z); lg.restore();
+    if (c.police) light(c.x, c.y, 240, (time >> 4) % 2 ? '#2a6bff' : '#ff2a3a', 1);
   }
-  light(player.x, player.y, 30, '#bfe8ff', 0.6);       // Spieler bleibt immer lesbar
-  light(marker.x, marker.y, 46, '#3fe8ff', 1);
+  light(player.x, player.y, 60, '#bfe8ff', 0.6);       // Spieler bleibt immer lesbar
+  light(marker.x, marker.y, 92, '#3fe8ff', 1);
   lg.globalAlpha = 1;
   if (!OFF.has('dark')) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.imageSmoothingEnabled = true; ctx.drawImage(lm, 0, 0, VIEW_W, VIEW_H); ctx.restore(); }
   // 4) kleine additive Glows (Scheinwerfer, Rücklichter, Chips) - vor den Gebäuden, damit Dächer sie verdecken
@@ -514,7 +650,14 @@ function render() {
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   const list = buildings.map(b => ({ b, h: b.h, d: Math.hypot((b.x0 + b.x1) / 2 - C.x, (b.y0 + b.y1) / 2 - C.y) }));
   list.sort((p, q) => p.h - q.h || q.d - p.d);
-  if (!OFF.has('buildings')) for (const it of list) drawBuilding(it.b, C);
+  if (!OFF.has('buildings')) for (const it of list) {
+    const b = it.b;
+    if (b === shop) { if (shop.cut > 0.001) { ctx.globalAlpha = shop.cut; drawBuilding(b, C, 1 + 0.5 * (1 - shop.cut)); ctx.globalAlpha = 1; } continue; }
+    let a = 1;
+    if (open) { const D = lean((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, b.h, C);       // Dach ragt über den offenen Laden -> Röntgen
+      if (b.x0 + D.x < shop.x1 + 20 && b.x1 + D.x > shop.x0 - 20 && b.y0 + D.y < shop.y1 + 20 && b.y1 + D.y > shop.y0 - 20) a = 0.3 + 0.7 * shop.cut; }
+    ctx.globalAlpha = a; drawBuilding(b, C); ctx.globalAlpha = 1;
+  }
   // schwebender Mandats-Pfeil über allem (Bildschirmraum-Oben, wippt)
   { const bob = Math.sin(time * 0.1) * 5, mx = marker.x, my = marker.y - 44 + bob;
     ctx.fillStyle = '#3fe8ff'; ctx.strokeStyle = '#0a2a33'; ctx.lineWidth = 2;
@@ -523,7 +666,7 @@ function render() {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
   // 6) Regen (Bildschirmraum)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (!OFF.has('rain')) { ctx.strokeStyle = 'rgba(160,190,230,0.22)'; ctx.lineWidth = 1;
+  if (!OFF.has('rain')) { ctx.strokeStyle = `rgba(160,190,230,${0.22 * (1 - 0.6 * insideT)})`; ctx.lineWidth = 1;
   ctx.beginPath();
   for (let i = 0; i < 420; i++) { const x = (i * 197 + time * 3.1 * (1 + (i % 3) * 0.2)) % (VIEW_W + 40) - 20, y = (i * 263 + time * 17 * (1 + (i % 4) * 0.15)) % (VIEW_H + 40) - 20;
     ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 13); }
