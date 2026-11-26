@@ -19,6 +19,7 @@ so landet nie eine Datei mit unklarer Lizenz im öffentlichen Repo.
   pip install numpy soundfile soxr lameenc
   python3 tools/sound-packer/pack.py                      # Standardpfade (siehe oben)
   python3 tools/sound-packer/pack.py --raw DIR --quellen FILE --out FILE --kbps 96
+  python3 tools/sound-packer/pack.py --preview vorschau.mp3  # zusätzlich alle Takes nacheinander (Abhören, Aussortieren)
 """
 import argparse
 import base64
@@ -90,9 +91,41 @@ def to_mp3(x, kbps):
     return bytes(enc.encode(pcm) + enc.flush())
 
 
+def natural(s):
+    """m2 vor m10"""
+    m = re.match(r'([a-z]*)(\d*)', s)
+    return (m.group(1), int(m.group(2) or 0), s)
+
+
 def show(path):
     p = os.path.abspath(path)
     return os.path.relpath(p, ROOT) if p.startswith(ROOT + os.sep) else p
+
+
+def write_preview(clips, path):
+    """Alle Takes nacheinander, so wie das Spiel sie hört (gleiche Verarbeitung und Lautheit) - zum Aussortieren."""
+    if not clips:
+        print('Vorschau: keine Takes')
+        return
+
+    def key(c):
+        return (list(CATS).index(c[1]), natural(c[2]), c[0])
+    parts, lines, t, last = [], [], 0.0, None
+    for fn, cat, speaker, x in sorted(clips, key=key):
+        if cat != last:
+            if last is not None:
+                parts.append(np.zeros(int(SR * 1.2), 'float32'))
+                t += 1.2
+            lines.append(f'{int(t // 60)}:{t % 60:04.1f}  - {cat} -')
+            last = cat
+        lines.append(f'{int(t // 60)}:{t % 60:04.1f}  {fn}')
+        parts += [x, np.zeros(int(SR * 0.45), 'float32')]
+        t += len(x) / SR + 0.45
+    with open(path, 'wb') as f:
+        f.write(to_mp3(np.concatenate(parts), 128))
+    print(f'Vorschau -> {show(path)} ({t:.0f} s)')
+    for line in lines:
+        print('  ' + line)
 
 
 def main():
@@ -101,10 +134,11 @@ def main():
     ap.add_argument('--quellen', default=os.path.join(ROOT, 'assets/sound/QUELLEN.md'))
     ap.add_argument('--out', default=os.path.join(ROOT, 'assets/sound/neonregent.sound.js'))
     ap.add_argument('--kbps', type=int, default=96)
+    ap.add_argument('--preview', metavar='MP3', help='zusätzlich alle Takes nacheinander als eine MP3 schreiben')
     args = ap.parse_args()
 
     sources = read_sources(args.quellen)
-    items, errors = [], []
+    items, errors, clips = [], [], []
     for fn in sorted(os.listdir(args.raw)):
         if fn.startswith('.') or fn.lower().endswith(('.md', '.txt')):
             continue
@@ -132,6 +166,7 @@ def main():
         items.append({'file': fn, 'cat': cat, 'speaker': speaker, 'n': nr, 'dur': round(len(x) / SR, 3),
                       'gainDb': round(20 * float(np.log10(g)), 1), 'bytes': len(data),
                       'data': 'data:audio/mpeg;base64,' + base64.b64encode(data).decode()})
+        clips.append((fn, cat, speaker, x))
     if errors:
         print('FEHLER - nichts geschrieben:')
         for e in errors:
@@ -148,7 +183,9 @@ def main():
     for cat in CATS:
         n = sum(1 for it in items if it['cat'] == cat)
         if n:
-            print(f'  {cat:9s} {n:3d} Takes, Sprecher: {", ".join(sorted(per[cat]))}')
+            print(f'  {cat:9s} {n:3d} Takes, Sprecher: {", ".join(sorted(per[cat], key=natural))}')
+    if args.preview:
+        write_preview(clips, args.preview)
 
 
 if __name__ == '__main__':

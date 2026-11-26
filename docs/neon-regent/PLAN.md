@@ -100,7 +100,7 @@ Technische Punkte (fix) sind durch den Konzept-Render belegt.
 | D10 | Gewalt | Stilisiert (dunkle Splats, keine Zerstückelung); Option „Blut aus" | – | fix |
 | D11 | Auto-Steuerung Tastatur | „Klassisch" (W/S Gas/Bremse, A/D lenken, fahrzeugrelativ); Option „Direkt" (bildschirmrelativ wie Ironclads Panzer). Stick/Touch: Default „Direkt". | – | fix |
 | D12 | Begehbare Gebäude | **10 %** der normalen Gebäude + alle Dienste (Kapselhotel, Waffenhändler, Klinik, OD-Wache, Kopfgeld-Büro) + Story-Orte (Untergrundklinik, Klinik Null, Mausoleum). Beim Betreten: Dach weg, Grundriss von oben, Kamera zoomt hinein. Nur Erdgeschoss. | mehrere Stockwerke | **Nutzer-Vorgabe** (im Konzept validiert) |
-| D13 | Klangquelle | **Entschieden (Nutzer, 2026-11-26): menschliche Laute = Aufnahmen**, alles andere synthetisch (`klangprobe.html`). Die synthetische Stimme bleibt nur Rückfall bei leerem Bundle. **Offen ist die Quelle:** A selbst aufnehmen (empfohlen) · B CC0 (Freesound, OpenGameArt) · C gemischt (`AUFNAHMEN.md`) | alles synthetisch (abgelehnt: „klingt synthetisch") | **Quelle offen** |
+| D13 | Klangquelle | **Entschieden (Nutzer, 2026-11-26): menschliche Laute = Aufnahmen**, alles andere synthetisch (`klangprobe.html`). Die synthetische Stimme bleibt nur Rückfall. **Quelle vorerst B (CC0):** 55 Takes von Freesound im Bundle (§6.4, Nutzer-Anweisung „im Notfall nimm die Schreie"). Lücken (deutsche Rufe, Keuchen, Spielfigur) per Weg A ergänzen; einzelne Takes jederzeit ersetzbar (`AUFNAHMEN.md`) | alles synthetisch (abgelehnt: „klingt synthetisch") | **entschieden** (Quelle CC0, ergänzbar) |
 
 ---
 
@@ -165,7 +165,7 @@ Zeilennummern = Stand `f6bc224` (können sich verschieben; Funktionsnamen sind m
 | Decals (`splat`) | `render.js` 236–270 | Stil für Passanten-Splats. |
 | Klangbank-Baking `bake()` (OfflineAudioContext, alle Varianten parallel) | `sfx.js` 650–672 | Muster für die Klangbank (`02b-sfx.js`). |
 | `_spatial` (Panorama, Abstand, Luftdämpfung), Stimmen-Limits `SOUND_DEFS` | `sfx.js` 514–540, ~686 | Positionierung, Limits. |
-| **Überfahren, Panik, Vollstreckung, MANDAT; Aufnahmen-Pfad; Schrei-Stimmmodell (Rückfall)** | `docs/neon-regent/klangprobe.html` | **1:1** übernehmen: `runOver`, `panic`, `execution`, `mandatCall`, `playRec`/`recPool`/`loadBundle` (Aufnahmen), `scream`/`groan` (synthetischer Rückfall). |
+| **Überfahren, Panik, Vollstreckung, MANDAT; Aufnahmen-Pfad; Schrei-Stimmmodell (Rückfall)** | `docs/neon-regent/klangprobe.html` | **1:1** übernehmen: `runOver`, `panic`, `execution`, `mandatCall`, `playRec`/`recPool`/`pickRec`/`VOICE_CHAIN`/`loadBundle` (Aufnahmen), `scream`/`groan` (synthetischer Rückfall). |
 
 ### 3.4 Asset-Baker (`tools/asset-baker/`)
 
@@ -386,9 +386,13 @@ Hall-Sends: Straße (1.6 s, frühe Fassaden-Reflexionen) · Raum (0.4 s) · Maus
 die Laute der Spielfigur kommen aus dem Bundle `assets/sound/neonregent.sound.js` (Takeliste und Quellen: `AUFNAHMEN.md`,
 Packen: §6.4). Laufzeit wie in `klangprobe.html` (`loadBundle`, `recPool`, `playRec`): Bundle beim Laden dekodieren
 (`decodeAudioData`), nach Kategorie und Sprecher ordnen; jede Person bekommt beim Spawnen einen Sprecher passend zu ihrem
-Stimmtyp (`m*`, `f*`, `a*`, `j*`) und behält ihn; pro Ereignis zufälliger Take (nie zweimal derselbe hintereinander),
-`playbackRate` 0.95–1.05; **Todesschrei** = `angst`-Take, der im Aufprall mit 15 ms Blende abreißt. Fehlende Kategorien
-fallen auf `angst` zurück (`treffer`, `schmerz`, `brennen`, `ruf`).
+Stimmtyp (`m*`, `f*`, `a*`, `j*`) **aus den Sprechern mit `angst`-Takes** und behält ihn. Pro Ereignis ein Take dieses
+Sprechers; hat er die Kategorie nicht, ein Take **gleichen Geschlechts** (erst die Kategorie, dann ihr Rückfall `angst` für
+`treffer`, `schmerz`, `brennen`, `ruf`). **Stimmtyp schlägt Kategorie** (`VOICE_CHAIN` in der Klangprobe): `alt` ohne eigene
+Sprecher → Männer, `jung` → Frauen; **nie das andere Geschlecht** – passt nichts, synthetischer Rückfall. Zufall nur unter
+der länger nicht gespielten Hälfte des Pools (`pickRec`: keine hörbare Wiederholung), `playbackRate` 0.95–1.05.
+**Todesschrei** = `angst`-Take, der im Aufprall mit 15 ms Blende abreißt. **Angefahren:** der `angst`-Take bricht im Aufprall
+weich ab (90 ms – ihr bleibt die Luft weg), dann `schmerz`, dann `stoehnen` (zwei Takes nacheinander, 0.35–0.7 s Pause).
 
 **Synthetischer Rückfall** (`scream()`/`groan()`, nur bei leerem Bundle – damit das Spiel immer Ton hat): Sägezahn mit
 Tonhöhenbogen, Jitter und Drift statt Vibrato, Stimmbrüche, Subharmonische, unregelmäßige Rauheit, Sättigung, 4 Formanten,
@@ -662,7 +666,13 @@ python3 tools/sound-packer/pack.py                  → assets/sound/neonregent.
   ab und schreibt nichts; zu kurze oder stumme Takes ebenso.
 - **Geprüft in der Planungs-Session:** Lizenzsperre greift, kaputte Takes werden abgelehnt, gutes Material wird gepackt
   (~12 KB je Take), Chromium dekodiert das Bundle, die Klangprobe spielt die Takes im Zusammenhang (Schrei reißt im Aufprall ab).
-- Stand: Bundle ist **leer** (noch keine Aufnahmen) – Quelle wählt der Nutzer (D13).
+- **Stand 2026-11-26: 55 CC0-Takes** von Freesound, 35 Sprecher (21 Männer `m1`–`m21`, 14 Frauen `f1`–`f14`), 1.07 MB:
+  `angst` 17 (6 Frauen) · `treffer` 14 (4) · `stoehnen` 12 (7) · `schmerz` 7 (1) · `brennen` 5 (2). Lizenz auf der Seite jedes
+  einzelnen Sounds geprüft, Ausschnitt in `QUELLEN.md`. Ausgeschlossen: Kinder oder unklares Alter, Kampf-, Comic- und
+  bearbeitete Schreie, Übersteuertes, Verrauschtes. Quelle ist die HQ-Vorschau (MP3 128 kbit/s); bessere Qualität: Original
+  mit Freesound-Konto laden und unter demselben Namen ersetzen.
+- **Lücken:** `ruf` (deutsche Rufe; Rückfall `angst`), `keuchen`, `spieler` (Stimme der Spielfigur – Nutzerentscheidung),
+  Frauen-`schmerz` nur 1 Take. Eigene Aufnahmen bekommen die nächsten freien Nummern (`m22`, `f15`, `a1`, `p1`).
 
 ---
 
@@ -874,8 +884,8 @@ Größe: S ≈ halbe Session, M ≈ eine Session, L ≈ eine volle Session.
   Person; Angstschrei + Ausweichsprung; tödliches Überfahren (Aufnahme reißt im Aufprall ab, darunter Aufprall, Punch,
   Achsen-Doppelschlag, Splat, Bremse); Angefahren (Schmerz-Take, Stöhnen bis zum Aufstehen); Umstehende; Panik der Menge
   (Rufe „Hilfe!", „Weg hier!"); Stimmen-Verwaltung und Ducking; Vollstreckungs-Sound.
-- **Voraussetzung:** Aufnahmen liegen vor (Nutzer, Weg A/B/C in `AUFNAHMEN.md`). Fehlen sie, wird MS4 mit dem Rückfall gebaut
-  und die Aufnahmen werden später nur noch gepackt – Code muss dafür nicht mehr angefasst werden.
+- **Voraussetzung erfüllt:** 55 CC0-Takes im Bundle (§6.4). Was fehlt (Rufe, Keuchen, Spielfigur), läuft über den Rückfall
+  und wird später nur noch gepackt – Code muss dafür nicht mehr angefasst werden.
 - **DoD:** 5-min-Soak (`soak.mjs`) ohne Fehler; kein Dauerstau (blockierte Autos < 3); Überfahren funktioniert sicht- und hörbar;
   `?scene=runover` reproduzierbar; **WAV-Export** der Szene (`tools/neonregent-test/audio.mjs`) liegt dem Bericht bei, und
   der **Nutzer bestätigt nach dem Abhören**, dass die Schreie menschlich klingen; Budget §10 bei voller Dichte.
@@ -1033,8 +1043,9 @@ Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lig
 | Fonts fehlen (Linux) | R12. |
 | Kontextgrenze der Session | Plan ist in 3 Dateien geteilt; nur nötige Abschnitte lesen. |
 | Synthetische Schreie klingen billig | **Eingetreten** (Nutzer-Urteil) → menschliche Laute sind Aufnahmen (D13, §6.4). |
-| Aufnahmen: Beschaffung und Lizenz | Weg A (selbst aufnehmen) empfohlen; Lizenzsperre im Packer (R16); `QUELLEN.md` je Datei; keine kommerziellen Bibliotheken (Weitergabe verboten). |
-| Zu wenige Sprecher → hörbare Wiederholung | mind. 3, besser 5 Sprecher; Takes zufällig ohne direkte Wiederholung; Tonhöhe ±5 %. |
+| Aufnahmen: Beschaffung und Lizenz | CC0-Set liegt vor (55 Takes, Lizenz je Sound-Seite geprüft); Lizenzsperre im Packer (R16); `QUELLEN.md` je Datei; keine kommerziellen Bibliotheken (Weitergabe verboten). |
+| Zu wenige Sprecher → hörbare Wiederholung | 35 Sprecher, aber Frauen nur 6 Angst- und 1 Schmerz-Take → Weg A ergänzen; Zufall nur unter der länger nicht gespielten Hälfte; Tonhöhe ±5 %. |
+| CC0-Stimmen passen nicht zueinander | Takes aus 35 Quellen klingen verschieden (Raum, Mikrofon). Gegenmittel: Kategorie-Lautheit im Packer, gemeinsamer Straßenhall; was heraussticht, löschen (Datei + Zeile) und neu packen. |
 | Session kann nicht hören | Automatische Pegel-/NaN-Prüfung, Spektrogramme, WAVs an den Nutzer (R15). |
 | Innenräume wirken alle gleich | Raumtypen je Gebäudetyp, Möbel-Varianten, Namen, handgebaute Story-Innenräume; bewusst nur 10 %. |
 | Dach-Überhang der Nachbarn verdeckt den offenen Innenraum | Röntgen-Alpha 0.3 (im Konzept gelöst). |
@@ -1062,8 +1073,8 @@ Beginne nicht mit dem nächsten Meilenstein.
 ## 13. Offene Fragen an den Nutzer
 
 Siehe §2, Punkte **D1–D7** und **D13**. Ohne Antwort gelten die Defaults. Spätestens vor **MS8** (Missionen) sollten D1–D5
-feststehen, vor **MS2** D6 und D11. Bei D13 ist nur noch die **Quelle der Aufnahmen** offen (A selbst aufnehmen, B CC0,
-C gemischt) – am besten vor MS4, damit die Schreie dort gleich echt sind.
+feststehen, vor **MS2** D6 und D11. D13 ist entschieden: vorerst CC0 (55 Takes). Offen ist nur, ob du **eigene Aufnahmen
+ergänzt** (deutsche Rufe, Stimme der Spielfigur) und welche CC0-Takes nach dem Abhören raus sollen – am besten vor MS4.
 
 ---
 
@@ -1072,5 +1083,6 @@ C gemischt) – am besten vor MS4, damit die Schreie dort gleich echt sind.
 | Datum | Meilenstein | Ergebnis | Messwerte | Abweichungen vom Plan | Offen |
 |---|---|---|---|---|---|
 | 2026-11-26 | Planung | Plan (PLAN/WORLD/STORY), Konzept-Render validiert | Ironclad 16.7 ms, Konzept 17.4 ms rAF | – | D1–D7 bestätigen |
+| 2026-11-26 | Planung, CC0-Schreie | Auf ausdrückliche Anweisung von Freesound geladen: ~170 Kandidaten, Lizenz je Sound-Seite geprüft (nur CC0), Beschreibungen gelesen (Kinder oder unklares Alter, Kampf-/Karate-, Comic-, bearbeitete Schreie raus), Rauschabstand, Übersteuerung, Hall und Mehrfach-Laute gemessen, Segmente geschnitten → **55 Takes, 35 Sprecher**. `recPool` korrigiert (vorher konnte eine Frau mit Männerstimme schreien), `pickRec` gegen Wiederholung, weicher Abbruch beim Überleben. Hörproben und alle Takes an den Nutzer | Bundle 1.07 MB; Szene 0.2–0.3 s Rendern | – | Nutzer-Urteil nach Abhören; eigene Rufe/Spielfigur (Weg A) |
 | 2026-11-26 | Planung, Aufnahmen | Nutzer-Urteil: synthetische Schreie klingen künstlich → menschliche Laute = Aufnahmen (D13). `tools/sound-packer/pack.py` (Lizenzsperre, MP3-Bundle) gebaut und mit Stellvertreter-Takes geprüft; Klangprobe spielt Aufnahmen (Bundle + Drag & Drop); `AUFNAHMEN.md` mit Takeliste. Freesound-Download aus der Session: Host freigegeben, Abruf aber von der Sicherheitsprüfung gestoppt (nicht ausdrücklich beauftragt) | ~12 KB je Take | – | Quelle der Aufnahmen (A/B/C) |
 | 2026-11-26 | Planung, Ergänzung | Sound als Kernsäule (R13, §4.10, `klangprobe.html` mit Schrei-Stimmmodell, per Spektrogramm geprüft); begehbare Gebäude (D12, §5.9, §7.11, neuer MS5; im Konzept validiert); Meilensteine → MS0–MS12; Mausoleum = Innenraum statt Grube | drinnen 18.2 ms rAF; Klang-Szene 0.2–0.5 s Rendern | – | D13 nach Abhören der Klangprobe |

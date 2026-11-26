@@ -7,6 +7,29 @@ Rückfall, solange das Bundle leer ist.
 
 Kette: `assets/sound/raw/` → `tools/sound-packer/pack.py` → `assets/sound/neonregent.sound.js` → Spiel und Klangprobe.
 
+## 0. Stand: 55 CC0-Takes im Bundle (2026-11-26)
+
+Auf Anweisung des Nutzers („im Notfall nimm die Schreie") aus Freesound geladen (Weg B). Jede Lizenz wurde auf der Seite des
+einzelnen Sounds als CC0 geprüft, jede Beschreibung gelesen. Herkunft und Ausschnitt je Datei stehen in `assets/sound/QUELLEN.md`.
+
+| Kategorie | Takes | davon Frauen | Sprecher |
+|---|---|---|---|
+| `angst` | 17 | 6 | m1–m6, m8, f1–f6 |
+| `treffer` | 14 | 4 | m2–m4, m14–m19, f10–f12 |
+| `stoehnen` | 12 | 7 | m2, m20, m21, f13, f14 |
+| `schmerz` | 7 | 1 | m3, m9–m13, f9 |
+| `brennen` | 5 | 2 | m1, m7, f7, f8 |
+| `ruf`, `keuchen`, `spieler` | 0 | – | **Lücke** – Rückfall `angst` bzw. Synthese |
+
+- **Ausgeschlossen:** alles mit Hinweis auf Kinder oder unklarem Alter, Kampf-/Karate-Schreie (Aggression statt Angst), Comic-
+  und Cartoon-Stimmen, bearbeitete Aufnahmen, Übersteuerung über 1 %, Rauschabstand unter ~21 dB, englische Wörter („Ouch").
+- **Anhören:** `klangprobe.html` (lädt das Bundle automatisch) – oder alle Takes nacheinander als eine Datei (siehe §6).
+- **Einen Take loswerden:** Datei in `raw/` löschen, Zeile in `QUELLEN.md` löschen, neu packen. Nummern dürfen Lücken haben.
+- **Ergänzen:** eigene Sprecher bekommen die nächsten freien Nummern (`m22`, `f15`, `a1` …), die Spielfigur `p1`.
+  Am meisten fehlen: deutsche Rufe (`ruf`), Frauen-`schmerz`, `keuchen` und die Stimme der Spielfigur.
+- **Qualität:** Quelle ist die HQ-Vorschau (MP3 128 kbit/s). Wer ein Freesound-Konto hat, lädt das Original und ersetzt die Datei
+  unter demselben Namen (den Ausschnitt aus der Spalte „Quelle" übernehmen).
+
 ---
 
 ## 1. Was gebraucht wird (Takeliste)
@@ -64,7 +87,10 @@ findet, und Takes, die zueinander passen. Aufwand: 15–20 Minuten pro Person.
   das Original laden (bei Freesound mit kostenlosem Konto) statt der Vorschau.
 - **Nachteil:** deutsche Rufe gibt es kaum, und Stimmen aus verschiedenen Quellen passen oft nicht zueinander.
 - **Cloud-Session:** `freesound.org` und `cdn.freesound.org` sind in der Umgebung „2026" freigegeben. Ein automatischer Download
-  braucht aber eine **ausdrückliche Anweisung** des Nutzers – ohne sie stoppt die Sicherheitsprüfung den Abruf.
+  braucht aber eine **ausdrückliche Anweisung** des Nutzers – ohne sie stoppt die Sicherheitsprüfung den Abruf. (So ist das
+  jetzige Set entstanden, §0.)
+- **Achtung bei Tags:** „girl" steht auf Freesound oft bei erwachsenen Frauen („28 years old girl"), „young man" bei Erwachsenen.
+  Entscheidend ist die Beschreibung auf der Sound-Seite – im Zweifel weglassen.
 
 ## 4. Weg C: gemischt
 
@@ -94,11 +120,16 @@ Eigene Aufnahmen für die Hauptstimmen, CC0-Aufnahmen für Umstehende im Hinterg
 4. **Anhören im Zusammenhang:** `docs/neon-regent/klangprobe.html` öffnen – das Bundle wird automatisch geladen, alle Szenen
    (Überfahren, Panik, Vollstreckung) benutzen dann die Aufnahmen. Einzelne Dateien kann man auch direkt auf die Seite ziehen;
    ein Schalter vergleicht mit der synthetischen Stimme.
+5. **Alle Takes nacheinander** (zum Aussortieren): `python3 tools/sound-packer/pack.py --preview vorschau.mp3` schreibt jeden Take
+   so, wie das Spiel ihn hört (gleiche Verarbeitung und Lautheit), mit 0.45 s Pause, und gibt eine Zeitliste aus.
 
 ## 7. Wie das Spiel die Aufnahmen benutzt
 
-- Jede Person hat einen Stimmtyp (`mann`, `frau`, `alt`, `jung`) und wird einem passenden Sprecher fest zugeordnet.
-- Pro Ereignis ein zufälliger Take der Kategorie, Tonhöhe ±5 %, nie zweimal hintereinander derselbe.
+- Jede Person hat einen Stimmtyp (`mann`, `frau`, `alt`, `jung`) und wird einem passenden Sprecher mit `angst`-Takes fest zugeordnet.
+- Hat der Sprecher eine Kategorie nicht, kommt ein Take **gleichen Geschlechts** (erst die Kategorie, dann `angst`). `alt` ohne
+  eigene Sprecher klingt wie ein Mann, `jung` wie eine Frau. **Nie das andere Geschlecht** – passt nichts, springt die Synthese ein.
+- Pro Ereignis ein zufälliger Take unter den länger nicht gespielten, Tonhöhe ±5 % – keine hörbare Wiederholung.
 - **Todesschrei** = ein `angst`-Take, der im Aufprall mit 15 ms Blende abreißt; darunter liegen die synthetischen Aufprall-Schichten.
+- **Angefahren und überlebt:** Der Angstschrei bricht im Aufprall weich ab, dann ein `schmerz`-Take, dann zweimal `stoehnen`.
 - Entfernung über Lautstärke, Tiefpass und Hall (PLAN §4.10); drinnen Raumhall, draußen gedämpft.
-- Rückfall: Ist das Bundle leer, nimmt das Spiel die synthetische Stimme aus `klangprobe.html` (läuft immer, klingt aber künstlich).
+- Rückfall: Fehlt eine passende Aufnahme, nimmt das Spiel die synthetische Stimme aus `klangprobe.html` (läuft immer, klingt aber künstlich).
