@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON REGENT – Konzept-Render</title>
+<!--
+  Konzept-Render für NEON REGENT (siehe PLAN.md). KEIN Spielcode, sondern eine
+  Referenz für die zwei neuen Render-Techniken, die Ironclad nicht hat:
+    1. Pseudo-3D-Gebäude im GTA-2-Stil: Dach um D = (B - C) * h * LEAN_K
+       verschoben, sichtbare Fassaden als Parallelogramme, Textur per
+       ctx.transform() affin gemappt (exakt, 1 drawImage pro Fassade).
+    2. Nacht-Licht aus Underworks: Dunkelheitsschicht (halbe Auflösung) mit
+       destination-out-Löchern, danach farbige additive Lichtpfützen.
+  Fahrzeuge sind die echten Ironclad-Sprites (assets/sprites/ironclad.bundle.js),
+  per Lackmaske umgefärbt - genau so soll die Pipeline später mit eigenen
+  Stadtmodellen aussehen. Läuft auch von file://.
+-->
+<style>
+:root {
+  --accent: #3fe8ff; --accent-hi: #a8f6ff; --accent2: #ff3fa4;
+  --bg: #06070c; --panel: rgba(8, 10, 18, 0.80); --line: rgba(63, 232, 255, 0.30);
+  --text: #e6ecf5; --muted: #8a93a6; --danger: #ff3b4a; --good: #57e07a;
+  --font-display: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Verdana, sans-serif;
+  --font-ui: 'Segoe UI', 'Trebuchet MS', 'DejaVu Sans', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); overflow: hidden; }
+#wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #121626 0%, #06070c 70%); }
+canvas { display: block; border-radius: 6px; box-shadow: 0 0 0 1px rgba(63,232,255,0.18), 0 30px 80px rgba(0,0,0,0.6); }
+#hud { position: absolute; pointer-events: none; font-family: var(--font-display); }
+.col { position: absolute; display: flex; flex-direction: column; gap: 6px; }
+.tl { left: 12px; top: 12px; } .tr { right: 12px; top: 12px; align-items: flex-end; }
+.card { background: linear-gradient(180deg, rgba(12,14,26,0.80), rgba(6,8,14,0.80)); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.lbl { font-size: 10px; letter-spacing: 3px; color: var(--muted); }
+.val { font-size: 18px; color: var(--accent-hi); letter-spacing: 1px; text-shadow: 0 0 12px rgba(63,232,255,0.55); }
+.bar { position: relative; width: 170px; height: 10px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }
+#vital { width: 72%; background: linear-gradient(90deg, #36c763, #a6ff6a); box-shadow: 0 0 10px rgba(87,224,122,0.6); }
+#armor { width: 35%; background: linear-gradient(90deg, #3aa8ff, #9fe6ff); }
+.chip { color: var(--danger); font-size: 11px; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,59,74,0.9); }
+.chip b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 10px var(--danger); margin-right: 6px; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.keys { display: flex; gap: 4px; }
+.keys svg { width: 18px; height: 18px; }
+#mandate { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; }
+#mandate .t { font-size: 10px; letter-spacing: 5px; color: var(--accent2); text-shadow: 0 0 12px rgba(255,63,164,0.85); }
+#mandate .c { font-size: 26px; letter-spacing: 4px; color: #ffd84a; text-shadow: 0 0 16px rgba(255,200,60,0.8); }
+#pager { position: absolute; left: 12px; bottom: 12px; width: 430px; padding: 10px 14px; display: flex; gap: 12px; align-items: flex-start;
+  background: linear-gradient(180deg, rgba(20,6,18,0.86), rgba(8,4,10,0.86)); border: 1px solid rgba(255,63,164,0.45); border-radius: 6px;
+  box-shadow: 0 0 24px rgba(255,63,164,0.18); }
+#pager .who { font-size: 10px; letter-spacing: 4px; color: var(--accent2); margin-bottom: 4px; }
+#pager .msg { font-family: var(--font-ui); font-size: 13px; line-height: 1.45; color: var(--text); }
+#weapon { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); }
+#place { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
+#place.on { opacity: 1; }
+#place .val { font-size: 14px; letter-spacing: 3px; color: #ffb3d9; text-shadow: 0 0 12px rgba(255,63,164,0.6); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <div class="col tl">
+      <div class="card"><span class="lbl">VITAL</span><div class="bar"><i id="vital"></i></div></div>
+      <div class="card"><span class="lbl">PANZER</span><div class="bar" style="height:5px"><i id="armor"></i></div></div>
+      <div class="card"><span class="chip"><b></b>TREUECHIP AKTIV</span></div>
+    </div>
+    <div id="mandate" class="card" style="flex-direction:column;gap:2px">
+      <div class="t">MANDAT 02 · TRIBUTEINTREIBUNG</div>
+      <div class="c">02:31</div>
+    </div>
+    <div class="col tr">
+      <div class="card"><span class="lbl">CREDITS</span><span class="val">12.450</span></div>
+      <div class="card"><span class="lbl">FAHNDUNG</span><span class="keys" id="keys"></span></div>
+    </div>
+    <div id="pager">
+      <svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="17" fill="none" stroke="#ff3fa4" stroke-width="2"/>
+        <ellipse cx="19" cy="19" rx="12" ry="6" fill="none" stroke="#ff3fa4" stroke-width="2"/><circle cx="19" cy="19" r="3.5" fill="#ff3fa4"/></svg>
+      <div><div class="who">MANDAT ▸ EINGEHEND</div>
+        <div class="msg">Nummer 7741. Drei Händler am Fischmarkt sind mit der Regentensteuer im Rückstand. Treiben Sie sie ein. Der Regent wacht.</div></div>
+    </div>
+    <div id="weapon" class="card"><span class="lbl">PISTOLE</span><span class="val">84</span></div>
+    <div id="place" class="card"><span class="lbl">INNENRAUM</span><span class="val" id="placeName"></span></div>
+  </div>
+</div>
+<script src="../../assets/sprites/ironclad.bundle.js"></script>
+<script>
+'use strict';
+// ------------------------------------------------------------------
+// Setup + helpers
+// ------------------------------------------------------------------
+const VIEW_W = 1280, VIEW_H = 720, T = 64;
+const LEAN_K = 1 / 1000;        // Gebäude-Neigung: D = (Mitte - Kamera) * Höhe * LEAN_K
+const LEAN_MAX = 0.65;          // |D| <= 0.65 * Höhe (Bildrand nicht zu extrem)
+const FLOOR_H = 22;             // px pro Stockwerk
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+canvas.width = VIEW_W; canvas.height = VIEW_H;
+const hud = document.getElementById('hud');
+function fit() {
+  const s = Math.min((innerWidth - 24) / VIEW_W, (innerHeight - 24) / VIEW_H);
+  const w = Math.floor(VIEW_W * s), h = Math.floor(VIEW_H * s);
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  const r = canvas.getBoundingClientRect();
+  Object.assign(hud.style, { left: r.left + 'px', top: r.top + 'px', width: w + 'px', height: h + 'px' });
+}
+fit(); addEventListener('resize', fit);
+
+let seed = 7741;
+function rnd() { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+const R = (a, b) => a + rnd() * (b - a), RI = (a, b) => Math.floor(R(a, b + 1)), PICK = (a) => a[(rnd() * a.length) | 0];
+const TAU = Math.PI * 2, clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function mk(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+const SPR = new Map();
+function sprite(key, w, h, fn) { let c = SPR.get(key); if (c) return c; c = mk(w, h); const g = c.getContext('2d'); g.translate(w / 2, h / 2); fn(g); SPR.set(key, c); return c; }
+function lightSprite(color) {
+  return sprite('light|' + color, 128, 128, g => { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 64);
+    gr.addColorStop(0, rgba(color, 0.9)); gr.addColorStop(0.5, rgba(color, 0.3)); gr.addColorStop(1, rgba(color, 0)); g.fillStyle = gr; g.fillRect(-64, -64, 128, 128); });
+}
+function glowSprite(color) {
+  return sprite('glow|' + color, 128, 128, g => { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, rgba(color, 0.95)); gr.addColorStop(0.45, rgba(color, 0.35)); gr.addColorStop(1, rgba(color, 0)); g.fillStyle = gr; g.fillRect(-64, -64, 128, 128); });
+}
+function coneSprite(color) {   // Scheinwerferkegel, Spitze links-mittig, öffnet nach +x
+  return sprite('cone|' + color, 256, 160, g => {
+    g.translate(-128, 0);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 256);
+    gr.addColorStop(0, rgba(color, 0.95)); gr.addColorStop(0.6, rgba(color, 0.35)); gr.addColorStop(1, rgba(color, 0));
+    g.fillStyle = gr; g.filter = 'blur(6px)';
+    g.beginPath(); g.moveTo(4, -6); g.lineTo(250, -70); g.lineTo(250, 70); g.lineTo(4, 6); g.closePath(); g.fill();
+    g.filter = 'none';
+  });
+}
+
+// ------------------------------------------------------------------
+// Ironclad-Spritepack (16 Ansichten + Lackmaske) - Code aus ironclad.html
+// ------------------------------------------------------------------
+const PACK = { ready: false, src: {}, sheets: new Map() }, PACK_OUT = 2;
+function grayToAlpha(img) { const c = mk(img.width, img.height), g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) { a[i + 3] = a[i] > 6 ? a[i] : 0; a[i] = a[i + 1] = a[i + 2] = 0; }
+  g.putImageData(d, 0, 0); return c; }
+function loadPack(cb) {
+  const A = window.IRONCLAD_ASSETS; if (!A) { cb(); return; }
+  let left = 0; const done = () => { if (--left > 0) return;
+    for (const e of Object.values(PACK.src)) { e.mask = grayToAlpha(e.maskImg); e.shadow = e.shadowImg ? grayToAlpha(e.shadowImg) : null; }
+    PACK.ready = true; cb(); };
+  const img = (u) => { if (!u) return null; left++; const i = new Image(); i.onload = done; i.src = u; return i; };
+  for (const n in A) PACK.src[n] = { ...A[n], colorImg: img(A[n].color), maskImg: img(A[n].mask), shadowImg: img(A[n].shadow) };
+}
+function packSheet(name, color) {
+  if (!PACK.ready) return null; const e = PACK.src[name]; if (!e) return null;
+  const key = name + '|' + color; let ps = PACK.sheets.get(key); if (ps) return ps;
+  const sheet = mk(e.colorImg.width, e.colorImg.height), g = sheet.getContext('2d'); g.drawImage(e.colorImg, 0, 0);
+  if (color) { const t = mk(sheet.width, sheet.height), tg = t.getContext('2d'); tg.drawImage(e.mask, 0, 0);
+    tg.globalCompositeOperation = 'source-in'; tg.fillStyle = color; tg.fillRect(0, 0, t.width, t.height);
+    g.globalCompositeOperation = 'multiply'; g.drawImage(t, 0, 0); g.globalCompositeOperation = 'destination-in'; g.drawImage(e.colorImg, 0, 0); g.globalCompositeOperation = 'source-over'; }
+  ps = { key, sheet, shadow: e.shadow, cell: e.cell * PACK_OUT, dirs: e.dirs, ref: e.ref }; PACK.sheets.set(key, ps); return ps;
+}
+function drawPack(g, ps, layer, x, y, ang, size, alpha = 1) {
+  const img = ps[layer]; if (!img) return;
+  const step = TAU / ps.dirs, d0 = Math.round(ang / step), d = ((d0 % ps.dirs) + ps.dirs) % ps.dirs, rest = ang - d0 * step;
+  const c = ps.cell, k = size / ps.ref / PACK_OUT;
+  g.save(); g.translate(x, y); g.rotate(rest); g.scale(k, k); if (alpha !== 1) g.globalAlpha *= alpha;
+  g.drawImage(img, d * c, 0, c, c, -c / 2, -c / 2, c, c); g.restore();
+}
+
+// ------------------------------------------------------------------
+// Welt: 26x16 Kacheln, Straßen (2 Spuren), Gehwege (1 Kachel), Grundstücke
+// ------------------------------------------------------------------
+const GW = 26, GH = 16, WORLD_W = GW * T, WORLD_H = GH * T;
+const ROAD = 1, WALK = 2, LOT = 0;
+const roadCols = [9, 10, 19, 20], roadRows = [7, 8];
+const grid = new Uint8Array(GW * GH);
+for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (roadCols.includes(x) || roadRows.includes(y)) grid[y * GW + x] = ROAD;
+for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+  if (grid[y * GW + x] === ROAD) continue;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && ny >= 0 && nx < GW && ny < GH && grid[ny * GW + nx] === ROAD) grid[y * GW + x] = WALK;
+  }
+}
+// Gebäude: jedes Grundstück entlang der langen Achse in 2-3 Blöcke teilen, ab und zu eine Gasse
+const buildings = [];
+const lots = [];
+for (const [x0, x1] of [[0, 7], [12, 17], [22, 25]]) for (const [y0, y1] of [[0, 5], [10, 15]]) lots.push([x0, y0, x1 + 1, y1 + 1]);
+for (const [x0, y0, x1, y1] of lots) {
+  const horiz = (x1 - x0) >= (y1 - y0);
+  const len = horiz ? x1 - x0 : y1 - y0;
+  const cuts = [0]; let p = 0;
+  while (p < len) { const s = clamp(RI(2, 4), 1, len - p); p += s; cuts.push(p); }
+  for (let i = 0; i < cuts.length - 1; i++) {
+    let a = cuts[i], b = cuts[i + 1];
+    const alley = b - a >= 3 && rnd() < 0.35;          // 1/2 Kachel Gasse
+    const bx0 = horiz ? x0 + a : x0, bx1 = horiz ? x0 + b : x1, by0 = horiz ? y0 : y0 + a, by1 = horiz ? y1 : y0 + b;
+    const inset = 2, gap = alley ? T / 2 : 0;
+    const floors = RI(5, 15);
+    buildings.push({ x0: bx0 * T + inset, y0: by0 * T + inset, x1: bx1 * T - inset - (horiz ? gap : 0), y1: by1 * T - inset - (horiz ? 0 : gap),
+      h: floors * FLOOR_H, style: PICK(['concrete', 'concrete', 'glass', 'neon', 'neon']), id: buildings.length });
+  }
+}
+// Betretbares Gebäude (Nudelbar): Grundstück oben Mitte neu belegen - 4 Kacheln Laden + 2 Kacheln Nachbar
+for (let i = buildings.length - 1; i >= 0; i--) { const b = buildings[i]; if (b.x0 >= 12 * T - 4 && b.x1 <= 18 * T + 4 && b.y1 < 400) buildings.splice(i, 1); }
+const shop = { x0: 12 * T + 2, y0: 2, x1: 16 * T - 2, y1: 6 * T - 2, h: 7 * FLOOR_H, style: 'neon', enterable: true, cut: 1, name: 'NUDELBAR ‚SUZU‘' };
+buildings.push(shop, { x0: 16 * T + 2, y0: 2, x1: 18 * T - 2, y1: 6 * T - 2, h: 12 * FLOOR_H, style: 'concrete' });
+buildings.forEach((b, i) => b.id = i);
+// ein Turm mit dem Regenten-Hologramm auf dem Dach
+const tower = buildings.filter(b => b.x0 >= 12 * T - 4 && b.x1 <= 18 * T + 4 && b.y0 > 600).reduce((m, b) => ((b.x1 - b.x0) * (b.y1 - b.y0) > (m.x1 - m.x0) * (m.y1 - m.y0) ? b : m));
+tower.h = 24 * FLOOR_H; tower.style = 'glass'; tower.regent = true;
+
+// Laternen an den Bordsteinen, alle 3 Kacheln
+const lamps = [];
+for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+  if (grid[y * GW + x] !== WALK || (x + y) % 3) continue;
+  const cx = x * T + T / 2, cy = y * T + T / 2;
+  // Richtung zur Straße suchen -> Laterne an die Bordsteinkante setzen
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && ny >= 0 && nx < GW && ny < GH && grid[ny * GW + nx] === ROAD) {
+      lamps.push({ x: cx + dx * 22, y: cy + dy * 22, h: 70, color: rnd() < 0.8 ? '#ffb35c' : '#cfe6ff', flick: rnd() < 0.15 }); break;
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+// Boden (einmal gemalt, wie Ironclads buildDesert)
+// ------------------------------------------------------------------
+const ground = mk(WORLD_W, WORLD_H);
+(function paintGround() {
+  const g = ground.getContext('2d');
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const t = grid[y * GW + x], px = x * T, py = y * T;
+    g.fillStyle = t === ROAD ? '#5a5e69' : t === WALK ? '#727784' : '#43464f';
+    g.fillRect(px, py, T, T);
+    if (t === WALK) {      // Gehwegplatten
+      g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = 1;
+      for (let k = 0; k <= T; k += 16) { g.beginPath(); g.moveTo(px + k, py); g.lineTo(px + k, py + T); g.moveTo(px, py + k); g.lineTo(px + T, py + k); g.stroke(); }
+      for (let k = 0; k < 3; k++) { g.fillStyle = `rgba(255,255,255,${R(0.02, 0.05)})`; g.fillRect(px + RI(0, 3) * 16, py + RI(0, 3) * 16, 16, 16); }
+    }
+  }
+  // Asphalt-Rauschen
+  for (let i = 0; i < 26000; i++) { const x = R(0, WORLD_W), y = R(0, WORLD_H); g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},${R(0.03, 0.08)})`; g.fillRect(x, y, R(1, 3), R(1, 3)); }
+  // Bordsteinkanten
+  g.strokeStyle = 'rgba(205,212,228,0.55)'; g.lineWidth = 3;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    if (grid[y * GW + x] !== WALK) continue;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH || grid[ny * GW + nx] !== ROAD) continue;
+      const ex = x * T + (dx > 0 ? T : 0), ey = y * T + (dy > 0 ? T : 0);
+      g.beginPath(); if (dx) { g.moveTo(ex, y * T); g.lineTo(ex, y * T + T); } else { g.moveTo(x * T, ey); g.lineTo(x * T + T, ey); } g.stroke();
+    }
+  }
+  // Mittellinien (gestrichelt) und Zebrastreifen
+  g.setLineDash([18, 14]); g.strokeStyle = 'rgba(235,240,250,0.75)'; g.lineWidth = 2;
+  for (const r of [7]) { g.beginPath(); g.moveTo(0, (r + 1) * T); g.lineTo(WORLD_W, (r + 1) * T); g.stroke(); }
+  for (const c of [9, 19]) { g.beginPath(); g.moveTo((c + 1) * T, 0); g.lineTo((c + 1) * T, WORLD_H); g.stroke(); }
+  g.setLineDash([]);
+  g.fillStyle = 'rgba(235,240,250,0.62)';
+  for (const c of [9, 19]) {
+    for (const cx of [c - 1, c + 2]) for (let yy = 7 * T + 6; yy < 9 * T - 6; yy += 14) g.fillRect(cx * T + 6, yy, T - 12, 7);
+    for (const ry of [6, 9]) for (let xx = c * T + 6; xx < (c + 2) * T - 6; xx += 14) g.fillRect(xx, ry * T + 6, 7, T - 12);
+  }
+  // Pfützen, Ölflecken, Gullydeckel
+  for (let i = 0; i < 26; i++) {
+    let x, y, k = 0; do { x = R(0, WORLD_W); y = R(0, WORLD_H); k++; } while (grid[((y / T) | 0) * GW + ((x / T) | 0)] !== ROAD && k < 40);
+    const rx = R(10, 34), ry = rx * R(0.4, 0.7), a = R(0, 3);
+    g.fillStyle = 'rgba(20,26,44,0.26)'; g.beginPath(); g.ellipse(x, y, rx, ry, a, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(140,180,240,0.18)'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, rx, ry, a, 3.6, 5.4); g.stroke();
+  }
+  for (let i = 0; i < 30; i++) { const x = R(0, WORLD_W), y = R(0, WORLD_H); g.fillStyle = 'rgba(8,8,10,0.25)'; g.beginPath(); g.ellipse(x, y, R(6, 16), R(4, 10), R(0, 3), 0, TAU); g.fill(); }
+  for (const [x, y] of [[8.5, 7.6], [11.4, 8.4], [9.6, 3.5], [20.4, 12.5], [15, 8.3]]) {
+    g.fillStyle = '#1e2026'; g.beginPath(); g.arc(x * T, y * T, 11, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(150,160,175,0.35)'; g.lineWidth = 2; g.stroke();
+  }
+  // Kontaktschatten am Gebäudefuß
+  for (const b of buildings) {
+    g.save(); g.filter = 'blur(7px)'; g.fillStyle = 'rgba(0,0,0,0.55)';
+    g.fillRect(b.x0 - 6, b.y0 - 6, b.x1 - b.x0 + 12, b.y1 - b.y0 + 12); g.restore();
+  }
+})();
+
+// ------------------------------------------------------------------
+// Fassaden & Dächer: je eine diffuse (Nacht) und eine Emissive-Textur
+// Texturkoordinaten: x = entlang der Kante, y = 0 am Boden, y = h am Dach
+// ------------------------------------------------------------------
+const NEON = ['#ff3fa4', '#3fe8ff', '#9dff4a', '#a66bff', '#ffb35c'];
+function makeFacade(L, h, style, shade) {
+  const W = Math.max(8, Math.round(L)), H = Math.max(8, Math.round(h));
+  const d = mk(W, H), e = mk(W, H), dg = d.getContext('2d'), eg = e.getContext('2d');
+  dg.fillStyle = style === 'glass' ? '#141b29' : style === 'neon' ? '#1d1824' : '#1e2129'; dg.fillRect(0, 0, W, H);
+  // Straßenlicht färbt die unteren Stockwerke warm
+  const gr = dg.createLinearGradient(0, 0, 0, Math.min(H, 110)); gr.addColorStop(0, 'rgba(255,170,90,0.22)'); gr.addColorStop(1, 'rgba(255,170,90,0)');
+  dg.fillStyle = gr; dg.fillRect(0, 0, W, Math.min(H, 110));
+  const CW = style === 'glass' ? 10 : 14;
+  for (let f = 1; f * FLOOR_H < H - 4; f++) {
+    const y = f * FLOOR_H;
+    dg.fillStyle = 'rgba(0,0,0,0.4)'; dg.fillRect(0, y - 1, W, 2);
+    for (let x = 4; x + CW - 4 < W; x += CW) {
+      dg.fillStyle = '#0a0d15'; dg.fillRect(x, y + 5, CW - 5, 11);
+      if (rnd() < (style === 'glass' ? 0.34 : 0.27)) {
+        const col = rnd() < 0.62 ? '#ffc982' : rnd() < 0.6 ? '#9fdcff' : '#ff8fd0';
+        eg.fillStyle = rgba(col, R(0.45, 0.95)); eg.fillRect(x, y + 5, CW - 5, 11);
+      }
+    }
+  }
+  if (style === 'glass') { dg.fillStyle = 'rgba(120,170,230,0.08)'; for (let x = 0; x < W; x += 30) dg.fillRect(x, 0, 2, H); }
+  if (style !== 'glass') { eg.fillStyle = rgba(PICK(NEON), 0.8); eg.fillRect(3, 7, W - 6, 3); }        // Laden-Neonband
+  if (style === 'neon' && W > 50 && H > 110) {                                                          // senkrechtes Schild
+    const sx = R(8, W - 26), c = PICK(NEON), y0 = R(26, 50), len = Math.min(H - y0 - 10, R(70, 150));
+    dg.fillStyle = '#0d0b12'; dg.fillRect(sx, y0, 18, len);
+    eg.strokeStyle = rgba(c, 0.95); eg.lineWidth = 2; eg.strokeRect(sx + 1, y0 + 1, 16, len - 2);
+    eg.fillStyle = rgba(c, 0.9);
+    for (let yy = y0 + 8; yy < y0 + len - 12; yy += 14) {           // Pseudo-Glyphen statt Text (keine Spiegelschrift)
+      const k = RI(0, 3); if (k === 0) eg.fillRect(sx + 5, yy, 8, 2); else if (k === 1) { eg.fillRect(sx + 5, yy, 2, 9); eg.fillRect(sx + 5, yy + 7, 8, 2); }
+      else if (k === 2) { eg.fillRect(sx + 4, yy + 3, 10, 2); eg.fillRect(sx + 8, yy, 2, 9); } else { eg.strokeRect(sx + 5, yy, 8, 8); }
+    }
+  }
+  for (let i = 0; i < W / 9; i++) { dg.fillStyle = 'rgba(0,0,0,0.14)'; dg.fillRect(R(0, W), R(0, H * 0.6), 1.5, R(20, 90)); }   // Regenschlieren
+  // Seite abdunkeln (nach oben stärker), dann Emissive additiv einbacken -> 1 drawImage pro Fassade
+  const sg = dg.createLinearGradient(0, 0, 0, H); sg.addColorStop(0, `rgba(4,6,12,${shade * 0.6})`); sg.addColorStop(1, `rgba(4,6,12,${Math.min(0.8, shade + 0.25)})`);
+  dg.fillStyle = sg; dg.fillRect(0, 0, W, H);
+  dg.globalCompositeOperation = 'lighter'; dg.globalAlpha = 0.9; dg.drawImage(e, 0, 0); dg.globalAlpha = 1; dg.globalCompositeOperation = 'source-over';
+  return d;
+}
+function makeRoof(b) {
+  const w = b.x1 - b.x0, h = b.y1 - b.y0, d = mk(w, h), e = mk(w, h), dg = d.getContext('2d'), eg = e.getContext('2d');
+  dg.fillStyle = b.style === 'glass' ? '#161c28' : '#1b1e26'; dg.fillRect(0, 0, w, h);
+  for (let i = 0; i < w * h / 40; i++) { dg.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},${R(0.03, 0.07)})`; dg.fillRect(R(0, w), R(0, h), 2, 2); }
+  dg.strokeStyle = 'rgba(110,120,145,0.55)'; dg.lineWidth = 4; dg.strokeRect(2, 2, w - 4, h - 4);
+  dg.strokeStyle = 'rgba(0,0,0,0.5)'; dg.lineWidth = 2; dg.strokeRect(6, 6, w - 12, h - 12);
+  const box = (x, y, bw, bh, col) => { dg.fillStyle = 'rgba(0,0,0,0.45)'; dg.fillRect(x + 3, y + 4, bw, bh); dg.fillStyle = col; dg.fillRect(x, y, bw, bh);
+    dg.fillStyle = 'rgba(255,255,255,0.12)'; dg.fillRect(x, y, bw, 2); };
+  const n = 1 + Math.floor(w * h / 9000);
+  for (let i = 0; i < n; i++) {        // Klimageräte mit Lüfter
+    const x = R(10, w - 34), y = R(10, h - 30); box(x, y, 22, 16, '#2c313c');
+    dg.fillStyle = '#14171d'; dg.beginPath(); dg.arc(x + 11, y + 8, 6, 0, TAU); dg.fill();
+    dg.strokeStyle = '#4c5363'; dg.lineWidth = 1; dg.beginPath(); dg.moveTo(x + 5, y + 8); dg.lineTo(x + 17, y + 8); dg.moveTo(x + 11, y + 2); dg.lineTo(x + 11, y + 14); dg.stroke();
+  }
+  if (w > 90 && rnd() < 0.6) { const x = R(18, w - 40), y = R(18, h - 40); dg.fillStyle = 'rgba(0,0,0,0.45)'; dg.beginPath(); dg.arc(x + 4, y + 5, 15, 0, TAU); dg.fill();
+    dg.fillStyle = '#262b35'; dg.beginPath(); dg.arc(x, y, 15, 0, TAU); dg.fill(); dg.strokeStyle = '#424a59'; dg.lineWidth = 2; dg.stroke(); }
+  const ax = R(12, w - 12), ay = R(12, h - 12);   // Antenne mit Blinklicht
+  dg.strokeStyle = '#59606e'; dg.lineWidth = 2; dg.beginPath(); dg.moveTo(ax, ay); dg.lineTo(ax + 14, ay - 10); dg.stroke();
+  eg.fillStyle = 'rgba(255,40,50,0.95)'; eg.beginPath(); eg.arc(ax + 14, ay - 10, 2.2, 0, TAU); eg.fill();
+  if (b.regent) {                       // Propaganda-Hologramm: der Regent
+    const cx = w / 2, cy = Math.min(h / 2 - 10, 96), c = '#5ff0ff';
+    eg.strokeStyle = rgba(c, 0.85); eg.lineWidth = 2;
+    eg.beginPath(); eg.ellipse(cx, cy, 30, 38, 0, 0, TAU); eg.stroke();
+    eg.beginPath(); eg.moveTo(cx - 30, cy - 34); eg.lineTo(cx - 20, cy - 54); eg.lineTo(cx - 8, cy - 40); eg.lineTo(cx, cy - 58); eg.lineTo(cx + 8, cy - 40); eg.lineTo(cx + 20, cy - 54); eg.lineTo(cx + 30, cy - 34); eg.stroke();
+    eg.fillStyle = rgba(c, 0.9); eg.fillRect(cx - 16, cy - 8, 10, 4); eg.fillRect(cx + 6, cy - 8, 10, 4); eg.fillRect(cx - 8, cy + 16, 16, 3);
+    for (let y = cy - 60; y < cy + 44; y += 4) { eg.fillStyle = rgba(c, 0.07); eg.fillRect(cx - 44, y, 88, 1); }
+    eg.font = '900 13px "Arial Black", Verdana, "DejaVu Sans", sans-serif'; eg.textAlign = 'center'; eg.fillStyle = rgba(c, 0.95);
+    eg.fillText('DER REGENT WACHT', cx, cy + 66);
+  } else if (b.style === 'neon' && w > 100) {     // Dachschild, von oben lesbar
+    const txt = PICK(['KAPSELN', 'BAR 24', 'NUDELN', 'KREDIT', 'CHIPS', 'HOTEL']), c = PICK(NEON);
+    dg.fillStyle = '#0c0a10'; dg.fillRect(w / 2 - 46, h - 34, 92, 22);
+    eg.font = '900 14px "Arial Black", Verdana, "DejaVu Sans", sans-serif'; eg.textAlign = 'center'; eg.fillStyle = rgba(c, 0.95); eg.fillText(txt, w / 2, h - 17);
+    eg.strokeStyle = rgba(c, 0.7); eg.lineWidth = 1.5; eg.strokeRect(w / 2 - 46, h - 34, 92, 22);
+  }
+  if (!b.regent) { dg.globalCompositeOperation = 'lighter'; dg.drawImage(e, 0, 0); dg.globalCompositeOperation = 'source-over'; }   // statisches Emissive einbacken
+  return { d, e };
+}
+for (const b of buildings) {
+  const W = b.x1 - b.x0, H = b.y1 - b.y0;
+  b.tex = { N: makeFacade(W, b.h, b.style, 0.30), S: makeFacade(W, b.h, b.style, 0.12), W: makeFacade(H, b.h, b.style, 0.22), E: makeFacade(H, b.h, b.style, 0.16) };
+  b.roof = makeRoof(b);
+  b.neonSpill = b.style === 'neon' ? PICK(NEON) : null;
+}
+
+// ------------------------------------------------------------------
+// Innenraum (PLAN §5.9): BSP-Räume, Türen, Wände, Möbel, Innenlichter, Personen
+// ------------------------------------------------------------------
+function makeInterior(b) {
+  const leaves = [], doors = [], MIN = 96;
+  const split = (r, depth) => {
+    const w = r.x1 - r.x0, h = r.y1 - r.y0, canV = w >= MIN * 2, canH = h >= MIN * 2;
+    if (depth >= 3 || (!canV && !canH) || (depth >= 2 && rnd() < 0.3)) { leaves.push(r); return [r]; }
+    const vert = canV && (!canH || w > h * 1.15 || (w * 1.15 >= h && rnd() < 0.5));
+    const sp = Math.round(vert ? r.x0 + w * R(0.4, 0.6) : r.y0 + h * R(0.4, 0.6));
+    const A = vert ? { x0: r.x0, y0: r.y0, x1: sp, y1: r.y1 } : { x0: r.x0, y0: r.y0, x1: r.x1, y1: sp };
+    const B = vert ? { x0: sp, y0: r.y0, x1: r.x1, y1: r.y1 } : { x0: r.x0, y0: sp, x1: r.x1, y1: r.y1 };
+    const la = split(A, depth + 1), lb = split(B, depth + 1);
+    // Tür: das Raumpaar (je eins pro Seite) mit dem längsten gemeinsamen Wandstück; Tür in dessen Mitte
+    // -> trifft nie eine querlaufende Wand. Jeder Split bekommt genau eine Tür -> alle Räume verbunden.
+    let best = null;
+    for (const a of la) for (const c of lb) {
+      const touch = vert ? a.x1 === sp && c.x0 === sp : a.y1 === sp && c.y0 === sp; if (!touch) continue;
+      const lo = vert ? Math.max(a.y0, c.y0) : Math.max(a.x0, c.x0), hi = vert ? Math.min(a.y1, c.y1) : Math.min(a.x1, c.x1);
+      if (hi - lo >= 44 && (!best || hi - lo > best.hi - best.lo)) best = { lo, hi };
+    }
+    if (best) { const mid = (best.lo + best.hi) / 2; doors.push({ vert, at: sp, from: mid - 14, to: mid + 14 }); }
+    return la.concat(lb);
+  };
+  split({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 }, 0);
+  // Eingang: Südwand des breitesten vorderen Raums, nahe der Westseite (zur Straßenecke hin)
+  const front = leaves.filter(r => r.y1 === b.y1).sort((p, q) => (q.x1 - q.x0) - (p.x1 - p.x0))[0];
+  const ex = front.x0 + Math.min(54, (front.x1 - front.x0) / 2);
+  doors.push({ vert: false, at: b.y1, from: ex - 16, to: ex + 16, entrance: true });
+  // Wände = alle Raumkanten minus Türen (dünne AABBs; im Spiel zugleich Collider)
+  const walls = [];
+  for (const r of leaves) for (const sg of [{ vert: false, at: r.y0, from: r.x0, to: r.x1 }, { vert: false, at: r.y1, from: r.x0, to: r.x1 },
+                                           { vert: true, at: r.x0, from: r.y0, to: r.y1 }, { vert: true, at: r.x1, from: r.y0, to: r.y1 }]) {
+    let parts = [[sg.from, sg.to]];
+    for (const d of doors) if (d.vert === sg.vert && Math.abs(d.at - sg.at) < 1)
+      parts = parts.flatMap(([a, c]) => (d.to <= a || d.from >= c) ? [[a, c]] : [[a, d.from], [d.to, c]].filter(([u, v]) => v - u > 2));
+    for (const [a, c] of parts) walls.push(sg.vert ? { x0: sg.at - 3, y0: a - 3, x1: sg.at + 3, y1: c + 3 } : { x0: a - 3, y0: sg.at - 3, x1: c + 3, y1: sg.at + 3 });
+  }
+  // Raumtypen: Eingangsraum = Gastraum, der Rest nach Größe
+  const rest = leaves.filter(r => r !== front).sort((p, q) => (q.x1 - q.x0) * (q.y1 - q.y0) - (p.x1 - p.x0) * (p.y1 - p.y0));
+  front.type = 'bar'; ['kueche', 'lager', 'hinterzimmer', 'wc'].forEach((t, i) => { if (rest[i]) rest[i].type = t; });
+  if (rest.length >= 2) rest[rest.length - 1].type = 'wc';
+  // Boden + Möbel als Textur (2x für Schärfe beim Hineinzoomen). Albedo hell - die Lightmap macht die Stimmung.
+  const S2 = 2, W = b.x1 - b.x0, H = b.y1 - b.y0, floor = mk(W * S2, H * S2), g = floor.getContext('2d');
+  g.scale(S2, S2); g.translate(-b.x0, -b.y0);
+  const lights = [], npcs = [];
+  const box = (x, y, w, h, top, edge) => { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x + 2, y + 3, w, h); g.fillStyle = top; g.fillRect(x, y, w, h);
+    if (edge) { g.strokeStyle = edge; g.lineWidth = 1.5; g.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5); } };
+  const disc = (x, y, r, col, edge) => { g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(x + 2, y + 3, r, 0, TAU); g.fill();
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); if (edge) { g.strokeStyle = edge; g.lineWidth = 1.2; g.stroke(); } };
+  for (const r of leaves) {
+    const w = r.x1 - r.x0, h = r.y1 - r.y0, cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+    if (r.type === 'bar') {                    // Schachbrett-Fliesen, Theke, Hocker, Tische
+      for (let y = r.y0; y < r.y1; y += 16) for (let x = r.x0; x < r.x1; x += 16) { g.fillStyle = ((x - r.x0) / 16 + (y - r.y0) / 16) % 2 ? '#7a4a58' : '#4a2c36'; g.fillRect(x, y, 16, 16); }
+      box(r.x0 + 14, r.y0 + 12, w - 28, 18, '#8a6a52', '#d8a070');
+      for (let x = r.x0 + 26; x < r.x1 - 20; x += 26) disc(x, r.y0 + 42, 6, '#2e2e34', '#8a8f99');
+      for (const [tx, ty] of [[r.x0 + w * 0.3, r.y0 + h * 0.62], [r.x0 + w * 0.7, r.y0 + h * 0.62]]) {
+        disc(tx, ty, 15, '#6a5040', '#c09070');
+        for (const a of [0, 2.1, 4.2]) box(tx + Math.cos(a) * 24 - 5, ty + Math.sin(a) * 24 - 5, 10, 10, '#3a3a44', '#6a6a78');
+        lights.push([tx, ty, 90, '#ffb070', 0.9]);
+      }
+      lights.push([cx, r.y0 + 30, 110, '#ff3fa4', 0.85]);
+      npcs.push({ x: cx, y: r.y0 + 2 + 6, a: Math.PI / 2, coat: '#e8e0d0' }, { x: r.x0 + w * 0.3 + 22, y: r.y0 + h * 0.62 - 10, a: Math.PI, coat: '#9a4a4a' },
+                { x: r.x0 + w * 0.7 - 24, y: r.y0 + h * 0.62 + 8, a: 0, coat: '#3f7a8f' });
+    } else if (r.type === 'kueche') {          // Stahlboden, Arbeitsflächen, Herd, Kühlschrank
+      g.fillStyle = '#8a9098'; g.fillRect(r.x0, r.y0, w, h); g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1;
+      for (let x = r.x0; x < r.x1; x += 8) { g.beginPath(); g.moveTo(x, r.y0); g.lineTo(x, r.y1); g.stroke(); }
+      box(r.x0 + 8, r.y0 + 8, w - 16, 20, '#b8bec6', '#e0e6ee'); box(r.x0 + 8, r.y0 + 8, 20, h - 16, '#b8bec6', '#e0e6ee');
+      for (const [x, y] of [[r.x0 + 48, r.y0 + 14], [r.x0 + 64, r.y0 + 14], [r.x0 + 48, r.y0 + 24], [r.x0 + 64, r.y0 + 24]]) disc(x, y, 5, '#1a1a1e', '#5a5f66');
+      box(r.x1 - 30, r.y1 - 34, 22, 26, '#dfe3ea', '#ffffff');
+      lights.push([cx, cy, Math.max(w, h) * 0.7, '#d8ecff', 0.9]);
+      npcs.push({ x: r.x0 + 56, y: r.y0 + 40, a: -Math.PI / 2, coat: '#f0f0f0' });
+    } else if (r.type === 'lager') {           // Beton, Kisten, Fässer
+      g.fillStyle = '#6a6a70'; g.fillRect(r.x0, r.y0, w, h);
+      for (let i = 0; i < w * h / 500; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},0.06)`; g.fillRect(R(r.x0, r.x1), R(r.y0, r.y1), 2, 2); }
+      for (let i = 0; i < 4; i++) { const x = R(r.x0 + 10, r.x1 - 34), y = R(r.y0 + 10, r.y1 - 34); box(x, y, 24, 24, '#9a7a4a', '#5a4020');
+        g.strokeStyle = '#5a4020'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 24, y + 24); g.moveTo(x + 24, y); g.lineTo(x, y + 24); g.stroke(); }
+      disc(r.x1 - 22, r.y0 + 22, 10, '#a03a2a', '#e06a50');
+      lights.push([cx, cy, Math.max(w, h) * 0.6, '#ffcf8a', 0.55]);
+    } else if (r.type === 'wc') {
+      for (let y = r.y0; y < r.y1; y += 8) for (let x = r.x0; x < r.x1; x += 8) { g.fillStyle = ((x + y) / 8) % 2 ? '#c8ccd4' : '#b4b8c0'; g.fillRect(x, y, 8, 8); }
+      disc(cx, r.y0 + 18, 8, '#f4f6fa', '#9aa0aa'); box(r.x0 + 8, cy - 8, 14, 16, '#e8ecf2', '#9aa0aa');
+      lights.push([cx, cy, Math.max(w, h) * 0.7, '#cfe6ff', 0.6]);
+    } else {                                    // Hinterzimmer: Teppich, Sofa, Tisch mit Geld
+      g.fillStyle = '#5a4a72'; g.fillRect(r.x0, r.y0, w, h);
+      box(r.x0 + 10, r.y0 + 10, Math.min(70, w - 20), 22, '#8a3a52', '#c06a82');
+      box(cx - 22, cy - 14, 44, 28, '#5a4030', '#a07050'); for (let i = 0; i < 5; i++) box(cx - 16 + i * 7, cy - 6, 6, 10, '#3f9a5a');
+      lights.push([cx, cy, Math.max(w, h) * 0.6, '#ffd08a', 0.75]);
+      npcs.push({ x: cx + 30, y: cy, a: Math.PI, coat: '#1a1a1f' });
+    }
+  }
+  return { leaves, doors, walls, floor, lights, npcs, wallH: 24, entrance: { x: ex, y: b.y1 } };
+}
+shop.interior = makeInterior(shop);
+const insideNpcs = shop.interior.npcs.map(n => ({ ...n, v: 0, ph: R(0, TAU) }));
+
+// ------------------------------------------------------------------
+// Leben: Autos (Ironclad-Sprites als Platzhalter), Passanten, Streife
+// ------------------------------------------------------------------
+const PAINT = ['#3a6ea5', '#b0305e', '#d8d2c4', '#2a2a30', '#c9a227', '#3f9a8a', '#7a3fb0'];
+const cars = [
+  // Rechtsverkehr: Zeile 7 nach Westen, Zeile 8 nach Osten; Spalten 9/19 nach Süden, 10/20 nach Norden
+  { x: 240, y: 8 * T + 32, a: 0, v: 2.4, kind: 'truck' }, { x: 900, y: 7 * T + 32, a: Math.PI, v: 2.0, kind: 'armoredCar' },
+  { x: 9 * T + 32, y: 180, a: Math.PI / 2, v: 1.8, kind: 'apc' }, { x: 10 * T + 32, y: 820, a: -Math.PI / 2, v: 2.2, kind: 'buggy' },
+  { x: 1080, y: 8 * T + 32, a: 0, v: 2.6, kind: 'armoredCar' }, { x: 19 * T + 32, y: 760, a: Math.PI / 2, v: 1.6, kind: 'truck' },
+  { x: 20 * T + 32, y: 300, a: -Math.PI / 2, v: 2.0, kind: 'bomber' }, { x: 1400, y: 7 * T + 32, a: Math.PI, v: 2.3, kind: 'buggy' },
+  { x: 470, y: 7 * T + 32, a: Math.PI, v: 2.9, kind: 'armoredCar', police: true }
+].map(c => ({ ...c, paint: c.police ? '#e4e8f0' : PICK(PAINT), size: c.kind === 'truck' ? 38 : c.kind === 'apc' ? 36 : 33 }));
+const peds = [];
+for (let i = 0; i < 34; i++) {
+  let x, y, k = 0; do { x = R(0, WORLD_W); y = R(0, WORLD_H); k++; } while (grid[((y / T) | 0) * GW + ((x / T) | 0)] !== WALK && k < 50);
+  peds.push({ x, y, a: PICK([0, Math.PI / 2, Math.PI, -Math.PI / 2]) + R(-0.2, 0.2), v: R(0.35, 0.7), coat: PICK(['#7a5a9c', '#3f7a8f', '#9a4a4a', '#6a6a78', '#a08a50', '#4c4c5c', '#b05a80']), ph: R(0, TAU) });
+}
+const player = { x: 11 * T + 30, y: 6 * T + 26, a: -0.6, coat: '#5fd4e6', player: true, ph: 0, v: 0 };
+peds.push(player);
+const marker = { x: 15 * T + 20, y: 9 * T + 30 };
+
+// ------------------------------------------------------------------
+// Render
+// ------------------------------------------------------------------
+// Lightmap in halber Auflösung: Umgebungslicht (Nacht) + additive farbige Lichter.
+// Wird EINMAL per 'multiply' über Boden + Fahrzeuge gelegt. Ersetzt Underworks'
+// Dunkelheit-mit-Löchern + additive Farbpfützen (gemessen: ~12 ms -> ~5 ms im Software-Raster).
+// Folge: Bodentexturen sind Albedo (heller gemalt), das Licht macht die Nacht.
+const lm = mk(VIEW_W / 2, VIEW_H / 2), lg = lm.getContext('2d');
+const lmBase = mk(VIEW_W / 2, VIEW_H / 2);   // Umgebungsfarbe + Vignette, einmal vorgerendert
+{ const g = lmBase.getContext('2d'); g.fillStyle = '#2a3150'; g.fillRect(0, 0, lmBase.width, lmBase.height);
+  const vg = g.createRadialGradient(VIEW_W / 4, VIEW_H / 4, VIEW_H * 0.16, VIEW_W / 4, VIEW_H / 4, VIEW_W * 0.36);
+  vg.addColorStop(0, 'rgba(10,12,24,0)'); vg.addColorStop(1, 'rgba(10,12,24,0.85)'); g.fillStyle = vg; g.fillRect(0, 0, lmBase.width, lmBase.height); }
+let time = 0;
+// Ablation für Messungen: concept.html#dark,rain schaltet diese Passes ab.
+// Innenraum-Demo: #inside (drin, Dach weg) · #cut50 (Übergang eingefroren) · #enter (rein/raus im Wechsel)
+const OFF = new Set(location.hash.slice(1).split(','));
+let zoom = 1, insideT = 0;
+const doorOut = { x: shop.interior.entrance.x, y: shop.y1 + 28 }, doorIn = { x: shop.interior.entrance.x + 6, y: shop.y1 - 40 };
+function lean(x, y, h, C) {
+  let dx = (x - C.x) * h * LEAN_K, dy = (y - C.y) * h * LEAN_K;
+  const m = Math.hypot(dx, dy), lim = LEAN_MAX * h;
+  if (m > lim) { dx *= lim / m; dy *= lim / m; }
+  return { x: dx, y: dy };
+}
+function face(img, p0, p1, D) {
+  // Parallelogramm p0, p1, p1+D, p0+D; Textur affin gemappt (exakt, ein drawImage).
+  // Spiegelung vermeiden: Determinante muss > 0 sein, sonst Kante umdrehen.
+  let a = (p1.x - p0.x), b = (p1.y - p0.y);
+  if (a * D.y - b * D.x < 0) { [p0, p1] = [p1, p0]; a = -a; b = -b; }
+  ctx.save();
+  ctx.transform(a / img.width, b / img.width, D.x / img.height, D.y / img.height, p0.x, p0.y);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+function lerpN(a, b, t) { return a + (b - a) * t; }
+function drawBuilding(b, C, lift = 1) {
+  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, D0 = lean(cx, cy, b.h, C), D = { x: D0.x * lift, y: D0.y * lift };
+  const P = (x, y) => ({ x, y });
+  if (D.y > 0.5) face(b.tex.N, P(b.x0, b.y0), P(b.x1, b.y0), D);
+  if (D.y < -0.5) face(b.tex.S, P(b.x0, b.y1), P(b.x1, b.y1), D);
+  if (D.x > 0.5) face(b.tex.W, P(b.x0, b.y0), P(b.x0, b.y1), D);
+  if (D.x < -0.5) face(b.tex.E, P(b.x1, b.y0), P(b.x1, b.y1), D);
+  ctx.drawImage(b.roof.d, b.x0 + D.x, b.y0 + D.y);
+  if (b.regent) {       // nur animierte Teile bleiben eine eigene additive Ebene
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 0.09) * (Math.random() < 0.04 ? -1 : 1);
+    ctx.drawImage(b.roof.e, b.x0 + D.x, b.y0 + D.y);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+}
+function drawPed(p) {
+  const s = p.player ? 1.6 : 1.4, sw = Math.sin(p.ph) * 2.2 * (p.v > 0.05 || p.player ? 1 : 0);
+  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(1.5, 2, 8, 6, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#16161a'; ctx.fillRect(-2 + sw, -5, 5, 3); ctx.fillRect(-2 - sw, 2, 5, 3);         // Füße
+  ctx.fillStyle = p.coat; ctx.beginPath(); ctx.ellipse(0, 0, 4.5, 7.5, 0, 0, TAU); ctx.fill();         // Schultern
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+  if (p.player) { ctx.fillStyle = '#1a1c20'; ctx.fillRect(4, 3, 9, 2.4); }                            // Pistole
+  ctx.fillStyle = p.player ? '#1e3a44' : '#241e1a'; ctx.beginPath(); ctx.arc(0.5, 0, 3.6, 0, TAU); ctx.fill(); // Kopf/Kapuze
+  ctx.restore();
+}
+function render() {
+  time++;
+  // Innenraum-Zustand: Spieler geht durch die Tür, Dach blendet aus, Kamera zoomt hinein
+  let inside = OFF.has('inside') || OFF.has('cut50');
+  if (OFF.has('enter')) { const ph = (time % 480) / 480; inside = ph > 0.25 && ph < 0.75;
+    const k = ph < 0.25 ? 0 : ph < 0.4 ? (ph - 0.25) / 0.15 : ph < 0.6 ? 1 : ph < 0.75 ? 1 - (ph - 0.6) / 0.15 : 0;
+    player.x = lerpN(doorOut.x, doorIn.x, k); player.y = lerpN(doorOut.y, doorIn.y, k); player.a = k > 0 && ph < 0.5 ? -Math.PI / 2 : Math.PI / 2; }
+  else if (inside) { player.x = doorIn.x; player.y = doorIn.y; player.a = -1.9; }
+  insideT += ((inside ? 1 : 0) - insideT) * 0.08;
+  shop.cut = OFF.has('cut50') ? 0.5 : 1 - insideT;
+  zoom = 1 + (OFF.has('cut50') ? 0.3 : 0.65 * insideT);
+  document.getElementById('place').classList.toggle('on', shop.cut < 0.5);
+  document.getElementById('placeName').textContent = shop.name;
+  // Kamera: draußen langsame Kreisfahrt (zeigt die Neigung), drinnen auf dem Spieler
+  const orbit = { x: WORLD_W / 2 + Math.sin(time * 0.004) * 150, y: WORLD_H / 2 + Math.cos(time * 0.003) * 90 };
+  const C = { x: lerpN(orbit.x, player.x, insideT), y: lerpN(orbit.y, player.y - 60, insideT) };
+  const Z = zoom, cam = { x: C.x - VIEW_W / 2 / Z, y: C.y - VIEW_H / 2 / Z };
+  ctx.setTransform(Z, 0, 0, Z, -cam.x * Z, -cam.y * Z);
+  // 1) Boden (+ Innenboden, solange das Dach offen ist)
+  { const sx = clamp(Math.floor(cam.x), 0, WORLD_W), sy = clamp(Math.floor(cam.y), 0, WORLD_H), sw = Math.min(WORLD_W - sx, VIEW_W / Z + 2), sh = Math.min(WORLD_H - sy, VIEW_H / Z + 2);
+    ctx.drawImage(ground, sx, sy, sw, sh, sx, sy, sw, sh); }
+  const I = shop.interior, open = shop.cut < 0.999;
+  if (open) ctx.drawImage(I.floor, shop.x0, shop.y0, shop.x1 - shop.x0, shop.y1 - shop.y0);
+  // 2) Fahrzeuge und Passanten
+  for (const c of cars) { if (OFF.has('cars')) break;
+    c.x += Math.cos(c.a) * c.v; c.y += Math.sin(c.a) * c.v;
+    if (c.x < -80) c.x += WORLD_W + 160; if (c.x > WORLD_W + 80) c.x -= WORLD_W + 160;
+    if (c.y < -80) c.y += WORLD_H + 160; if (c.y > WORLD_H + 80) c.y -= WORLD_H + 160;
+    const ps = packSheet(c.kind, c.paint);
+    if (ps) { drawPack(ctx, ps, 'shadow', c.x, c.y, c.a, c.size, 0.7); drawPack(ctx, ps, 'sheet', c.x, c.y, c.a, c.size); }
+    else { ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a); ctx.fillStyle = c.paint; ctx.fillRect(-c.size, -c.size * 0.45, c.size * 2, c.size * 0.9); ctx.restore(); }
+  }
+  for (const p of peds) { if (OFF.has('peds')) break;
+    if (!p.player) { p.x += Math.cos(p.a) * p.v; p.y += Math.sin(p.a) * p.v;
+      const t = grid[((p.y / T) | 0) * GW + ((p.x / T) | 0)];
+      if (t !== WALK) { p.x -= Math.cos(p.a) * p.v * 2; p.y -= Math.sin(p.a) * p.v * 2; p.a += Math.PI / 2 * (rnd() < 0.5 ? 1 : -1); } }
+    p.ph += 0.18; drawPed(p);
+  }
+  if (open) {
+    for (const n of insideNpcs) { n.ph += 0.02; drawPed(n); }
+    // Innenwände: niedrig (24 px), kippen wie Gebäude (alle mit dem D des Hauses), erst Seiten, dann helle Oberkanten.
+    // Vor der Lightmap gezeichnet -> Innenlichter beleuchten sie.
+    const D = lean((shop.x0 + shop.x1) / 2, (shop.y0 + shop.y1) / 2, I.wallH, C);
+    ctx.fillStyle = '#3e434e';
+    ctx.beginPath();
+    for (const w of I.walls) for (const [ax, ay, bx, by] of [[w.x0, w.y0, w.x1, w.y0], [w.x1, w.y0, w.x1, w.y1], [w.x1, w.y1, w.x0, w.y1], [w.x0, w.y1, w.x0, w.y0]]) {
+      ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx + D.x, by + D.y); ctx.lineTo(ax + D.x, ay + D.y); ctx.closePath(); }
+    ctx.fill();
+    ctx.fillStyle = '#aab2c0';
+    for (const w of I.walls) ctx.fillRect(w.x0 + D.x, w.y0 + D.y, w.x1 - w.x0, w.y1 - w.y0);
+  }
+  // 3) Lightmap aufbauen (halbe Auflösung) und per multiply anwenden
+  const S = (x, y) => ({ x: (x - cam.x) * Z / 2, y: (y - cam.y) * Z / 2 });
+  lg.globalCompositeOperation = 'copy'; lg.globalAlpha = 1; lg.drawImage(lmBase, 0, 0);
+  lg.globalCompositeOperation = 'lighter';
+  const light = (x, y, rw, color, k) => { const p = S(x, y), r = rw * Z / 2; lg.globalAlpha = k; lg.drawImage(lightSprite(color), p.x - r, p.y - r, r * 2, r * 2); };
+  for (const l of lamps) light(l.x, l.y, 128, l.color, l.flick && Math.random() < 0.08 ? 0.15 : 0.95);
+  for (const b of buildings) if (b.neonSpill) { const cx = (b.x0 + b.x1) / 2; light(cx, b.y1 + 26, 124, b.neonSpill, 1); light(cx, b.y0 - 26, 124, b.neonSpill, 1); }
+  if (open) for (const [x, y, r, c, k] of I.lights) light(x, y, r, c, k * (1 - shop.cut));
+  for (const c of cars) {
+    const p = S(c.x + Math.cos(c.a) * c.size * 0.9, c.y + Math.sin(c.a) * c.size * 0.9);
+    lg.save(); lg.translate(p.x, p.y); lg.rotate(c.a); lg.globalAlpha = 0.9; lg.drawImage(coneSprite('#fff2c8'), 0, -40 * Z, 130 * Z, 80 * Z); lg.restore();
+    if (c.police) light(c.x, c.y, 240, (time >> 4) % 2 ? '#2a6bff' : '#ff2a3a', 1);
+  }
+  light(player.x, player.y, 60, '#bfe8ff', 0.6);       // Spieler bleibt immer lesbar
+  light(marker.x, marker.y, 92, '#3fe8ff', 1);
+  lg.globalAlpha = 1;
+  if (!OFF.has('dark')) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.imageSmoothingEnabled = true; ctx.drawImage(lm, 0, 0, VIEW_W, VIEW_H); ctx.restore(); }
+  // 4) kleine additive Glows (Scheinwerfer, Rücklichter, Chips) - vor den Gebäuden, damit Dächer sie verdecken
+  ctx.globalCompositeOperation = 'lighter';
+  for (const c of cars) { if (OFF.has('carlights')) break;
+    const f = (u, v) => ({ x: c.x + Math.cos(c.a) * u - Math.sin(c.a) * v, y: c.y + Math.sin(c.a) * u + Math.cos(c.a) * v });
+    for (const sd of [-1, 1]) {
+      const hl = f(c.size * 0.95, sd * c.size * 0.32), tl = f(-c.size * 0.95, sd * c.size * 0.32);
+      ctx.globalAlpha = 0.9; ctx.drawImage(glowSprite('#fff2c8'), hl.x - 9, hl.y - 9, 18, 18);
+      ctx.globalAlpha = 0.8; ctx.drawImage(glowSprite('#ff2a3a'), tl.x - 7, tl.y - 7, 14, 14);
+    }
+    ctx.save(); ctx.translate(c.x + Math.cos(c.a) * c.size, c.y + Math.sin(c.a) * c.size); ctx.rotate(c.a);
+    ctx.globalAlpha = 0.16; ctx.drawImage(coneSprite('#fff2c8'), 0, -45, 150, 90); ctx.restore();
+    if (c.police) { const blue = (time >> 4) % 2; ctx.globalAlpha = 1;
+      ctx.drawImage(glowSprite(blue ? '#2a6bff' : '#ff2a3a'), c.x - 22, c.y - 22, 44, 44); }
+  }
+  for (const p of peds) { if (OFF.has('chips')) break;     // Treuechip: roter Punkt im Nacken
+    const nx = p.x - Math.cos(p.a) * 3, ny = p.y - Math.sin(p.a) * 3;
+    ctx.globalAlpha = 0.85 * (0.75 + 0.25 * Math.sin(time * 0.1 + p.x)); ctx.drawImage(glowSprite('#ff2030'), nx - 4, ny - 4, 8, 8);
+  }
+  // Mandats-Marker: pulsierender Bodenring + schwebender Pfeil (eine kippende Lichtsäule
+  // hätte nahe der Bildmitte keine Länge - deshalb Pfeil im Bildschirm-Oben)
+  { ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(63,232,255,0.85)'; ctx.lineWidth = 2.5; const rr = 22 + 6 * Math.sin(time * 0.08);
+    ctx.beginPath(); ctx.arc(marker.x, marker.y, rr, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(marker.x, marker.y, rr * 0.55, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  // 5) Gebäude + Laternen, sortiert: niedrig zuerst, dann weit weg zuerst
+  // Laternen sind niedriger als jedes Gebäude -> im Sortierschritt kämen sie ohnehin zuerst.
+  // Darum gebündelt: erst alle Masten, dann alle Leuchtköpfe in EINEM additiven Durchgang.
+  ctx.strokeStyle = '#3a3f4a'; ctx.lineWidth = 2; ctx.beginPath();
+  const heads = lamps.map(l => { const D = lean(l.x, l.y, l.h, C); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x + D.x, l.y + D.y); return [l, l.x + D.x, l.y + D.y]; });
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const [l, x, y] of heads) { if (OFF.has('lamps')) break; ctx.globalAlpha = l.flick && Math.random() < 0.08 ? 0.2 : 0.9; ctx.drawImage(glowSprite(l.color), x - 13, y - 13, 26, 26); }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  const list = buildings.map(b => ({ b, h: b.h, d: Math.hypot((b.x0 + b.x1) / 2 - C.x, (b.y0 + b.y1) / 2 - C.y) }));
+  list.sort((p, q) => p.h - q.h || q.d - p.d);
+  if (!OFF.has('buildings')) for (const it of list) {
+    const b = it.b;
+    if (b === shop) { if (shop.cut > 0.001) { ctx.globalAlpha = shop.cut; drawBuilding(b, C, 1 + 0.5 * (1 - shop.cut)); ctx.globalAlpha = 1; } continue; }
+    let a = 1;
+    if (open) { const D = lean((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, b.h, C);       // Dach ragt über den offenen Laden -> Röntgen
+      if (b.x0 + D.x < shop.x1 + 20 && b.x1 + D.x > shop.x0 - 20 && b.y0 + D.y < shop.y1 + 20 && b.y1 + D.y > shop.y0 - 20) a = 0.3 + 0.7 * shop.cut; }
+    ctx.globalAlpha = a; drawBuilding(b, C); ctx.globalAlpha = 1;
+  }
+  // schwebender Mandats-Pfeil über allem (Bildschirmraum-Oben, wippt)
+  { const bob = Math.sin(time * 0.1) * 5, mx = marker.x, my = marker.y - 44 + bob;
+    ctx.fillStyle = '#3fe8ff'; ctx.strokeStyle = '#0a2a33'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mx - 12, my - 12); ctx.lineTo(mx + 12, my - 12); ctx.lineTo(mx, my + 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6; ctx.drawImage(glowSprite('#3fe8ff'), mx - 22, my - 26, 44, 44);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+  // 6) Regen (Bildschirmraum)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (!OFF.has('rain')) { ctx.strokeStyle = `rgba(160,190,230,${0.22 * (1 - 0.6 * insideT)})`; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 420; i++) { const x = (i * 197 + time * 3.1 * (1 + (i % 3) * 0.2)) % (VIEW_W + 40) - 20, y = (i * 263 + time * 17 * (1 + (i % 4) * 0.15)) % (VIEW_H + 40) - 20;
+    ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 13); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(170,200,240,0.25)';
+  for (let i = 0; i < 40; i++) { const x = (i * 331 + time * 7) % VIEW_W, y = (i * 173 + time * 3) % VIEW_H, r = ((time + i * 7) % 20) * 0.4;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.5, 0, 0, TAU); ctx.stroke(); } }
+  // 7) Radar. Kein Soft-Light-Grade und keine eigene Vignette: beides steckt in der
+  //    Dunkelheitsschicht (Soft-Light über 1280x720 kostet im Software-Raster ~2 ms)
+  if (!OFF.has('radar')) drawRadar(C);
+  requestAnimationFrame(render);
+}
+function drawRadar(C) {
+  const Rr = 62, cx = VIEW_W - Rr - 16, cy = VIEW_H - Rr - 16, k = Rr / 700;
+  ctx.save(); ctx.fillStyle = 'rgba(6,8,16,0.78)'; ctx.beginPath(); ctx.arc(cx, cy, Rr, 0, TAU); ctx.fill(); ctx.clip();
+  ctx.fillStyle = 'rgba(63,232,255,0.22)';
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (grid[y * GW + x] === ROAD) ctx.fillRect(cx + (x * T - player.x) * k, cy + (y * T - player.y) * k, T * k + 0.5, T * k + 0.5);
+  ctx.fillStyle = '#ff3fa4'; ctx.beginPath(); ctx.arc(cx + (marker.x - player.x) * k, cy + (marker.y - player.y) * k, 3.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ff2a3a'; for (const c of cars) if (c.police) { ctx.beginPath(); ctx.arc(cx + (c.x - player.x) * k, cy + (c.y - player.y) * k, 3, 0, TAU); ctx.fill(); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(63,232,255,0.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, Rr, 0, TAU); ctx.stroke();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(player.a); ctx.fillStyle = '#5fd4e6';
+  ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.closePath(); ctx.fill(); ctx.restore();
+}
+// Fahndungs-Schlüssel (Symbol der Erben - Vorausdeutung)
+document.getElementById('keys').innerHTML = [1, 1, 0, 0, 0].map(on =>
+  `<svg viewBox="0 0 18 18"><circle cx="6" cy="9" r="4" fill="none" stroke="${on ? '#ffd84a' : '#4a4f5c'}" stroke-width="2"/>` +
+  `<path d="M10 9h7M14 9v3M16.5 9v2" stroke="${on ? '#ffd84a' : '#4a4f5c'}" stroke-width="2" fill="none"/></svg>`).join('');
+loadPack(() => requestAnimationFrame(render));
+</script>
+</body>
+</html>
