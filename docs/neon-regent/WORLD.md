@@ -428,7 +428,9 @@ der Timer startet neu. HUD: Schlüssel blinken, solange dich ein OD sieht; „�
 | Regen, Stadt, Neon | gefiltertes Rauschen (Regen-Loop), Tiefpass-Brummen + ferne Hupen, 120-Hz-Summen nahe Neon |
 | **Schreie, Treffer-Laute, Schmerz, Stöhnen, Rufe, Brennen, Keuchen, Spielfigur** | **Aufnahmen** aus `assets/sound/neonregent.sound.js` (Takeliste `AUFNAHMEN.md`, Packen PLAN §6.4); Rückfall bei leerem Bundle: `klangprobe.html` → `scream()`/`groan()` |
 | **Überfahren** (tödlich / verletzt) | `klangprobe.html` → `runOver()`: Motor, Angstschrei (reißt ab), Masse 62→30 Hz, Punch 190→85 Hz, Körper 750 Hz, Knacken, Achsen-Doppelschlag, Splat, Bremse, Umstehende |
-| Panik der Menge | `klangprobe.html` → `panic()`: Rufe/Schreie verschiedener Sprecher (Aufnahmen), Laufschritte (synthetisch), Straßenhall |
+| Panik der Menge | `klangprobe.html` → `panic()`: Schreie und englische Rufe verschiedener Sprecher (Aufnahmen), Atem eines nahen Läufers, Laufschritte (synthetisch), Straßenhall |
+| Beinahe überfahren | `klangprobe.html` → `nearMiss()`: Warnruf („Look out!"), Hupe 370/466 Hz, Ausweichsprung mit Schreckensruf, Vorbeifahrt mit Doppler und Luftstoß |
+| Rufe (englisch, D14) | Aufnahmen `ruf_<sprecher>_<wort>`, Auswahl nach Lage (PLAN §4.10, `AUFNAHMEN.md` §1) |
 | Verdeckung / Innen-Außen | Tiefpass 1.2 kHz −6 dB (Gebäude dazwischen) / Tiefpass 900 Hz −8 dB (Spieler drinnen) |
 | Innenraum-Atmosphären | WORLD.md §14, je Raumtyp |
 | Schiebetür | Bandpass-Rauschen 1.2 → 3 kHz, 0.25 s, + Klick |

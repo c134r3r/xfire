@@ -36,8 +36,8 @@ p.sub { color: var(--muted); margin: 8px 0 24px; line-height: 1.5; font-size: 14
 <body>
 <main>
   <h1>NEON REGENT · KLANGPROBE</h1>
-  <p class="sub">Alle Klänge werden hier live synthetisiert – keine Aufnahmen. Kopfhörer empfohlen.
-    Jede Wiedergabe würfelt eine neue Variante (wie später im Spiel).</p>
+  <p class="sub">Geräusche werden live synthetisiert, Stimmen sind Aufnahmen (CC0, Rufe englisch) – ohne Bundle synthetisch.
+    Kopfhörer empfohlen. Jede Wiedergabe würfelt eine neue Variante (wie später im Spiel).</p>
   <div id="voiceSrc"></div>
   <div id="list"></div>
   <div class="rec">
@@ -45,6 +45,7 @@ p.sub { color: var(--muted); margin: 8px 0 24px; line-height: 1.5; font-size: 14
     WAV/MP3/OGG auswählen oder auf die Seite ziehen. Der Dateiname bestimmt die Kategorie
     (<code>angst_…</code>, <code>schmerz_…</code>, <code>stoehnen_…</code>, sonst Angst) und der zweite Teil den Sprecher
     (<code>…_m1_…</code> Mann, <code>…_f1_…</code> Frau, <code>…_a1_…</code> älter, <code>…_j1_…</code> jung).
+    Bei Rufen ist der dritte Teil das Wort: <code>ruf_m1_help</code>, <code>ruf_f1_lookout</code>, <code>ruf_m1_omg</code> …
     Alle Szenen oben benutzen dann die Aufnahmen – beim tödlichen Überfahren reißt der Schrei im Aufprall ab.
     Ein gepacktes Bundle (<code>assets/sound/neonregent.sound.js</code>) wird automatisch geladen.
     <input type="file" id="files" multiple accept="audio/*">
@@ -135,29 +136,43 @@ function formants(vowel, peak) {
 // ------------------------------------------------------------------
 const REC = { angst: [], treffer: [], schmerz: [], stoehnen: [], brennen: [], ruf: [], keuchen: [], spieler: [] };
 const REC_FALLBACK = { treffer: 'angst', schmerz: 'angst', brennen: 'angst', ruf: 'angst' };
+// Rufe (D14: englisch) nach Lage. Das Wort steht im Dateinamen: ruf_<sprecher>_<wort>[2] (z. B. ruf_m22_wait2).
+// Mit Wortliste gibt es keinen Rückfall auf andere Kategorien: Wer nichts Passendes hat, ruft nicht (der Aufrufer entscheidet).
+const RUF = {
+  vorher: ['no', 'nope', 'wait', 'ohno', 'uhoh'],             // Opfer sieht das Auto kommen (reißt im Aufprall ab)
+  warnung: ['lookout'],                                        // Umstehende warnen
+  ausweichen: ['whoa', 'crap', 'whatthe', 'gasp', 'nope'],     // knapp ausgewichen
+  zeuge: ['omg', 'what', 'ohno', 'no', 'help', 'bad'],         // nach dem Aufprall
+  panik: ['help', 'no', 'nope', 'ohno', 'bad'],                // Menge flieht
+  verletzt: ['helpweak']                                       // liegt am Boden
+};
 let USE_REC = true;
 // Stimmtyp schlägt Kategorie: Eine Frau ohne eigenen Schmerz-Take schreit lieber mit einem Angst-Take einer Frau als mit
 // einem Männer-Take. alt/jung ohne eigene Sprecher: tiefe Stimme -> Männer, hohe -> Frauen. Passt nichts: [] (= Synthese).
 const VOICE_CHAIN = { mann: ['m'], frau: ['f'], alt: ['a', 'm'], jung: ['j', 'f'] };
-function recPool(cat, voice) {
-  const cats = [cat, REC_FALLBACK[cat]].filter(c => c && REC[c] && REC[c].length);
+function recPool(cat, voice, words) {
+  const cats = words ? [cat] : [cat, REC_FALLBACK[cat]].filter(c => c && REC[c] && REC[c].length);
   for (const p of VOICE_CHAIN[voice] || ['m', 'f'])
-    for (const c of cats) { const same = REC[c].filter(it => it.speaker[0] === p); if (same.length) return same; }
+    for (const c of cats) {
+      const same = (REC[c] || []).filter(it => it.speaker[0] === p && (!words || words.includes(it.word)));
+      if (same.length) return same;
+    }
   return [];
 }
 // Nie dieselbe Aufnahme kurz hintereinander: Zufall nur unter der länger nicht gespielten Hälfte des Pools.
-let REC_CLOCK = 0;
+let REC_CLOCK = 0, LAST_PICK = null;
 function pickRec(m, pool) {
   const byAge = pool.slice().sort((a, b) => (a.used || 0) - (b.used || 0));
   const it = m.pick(byAge.slice(0, Math.max(1, Math.ceil(byAge.length / 2))));
-  it.used = ++REC_CLOCK; return it;
+  it.used = ++REC_CLOCK; LAST_PICK = it; return it;
 }
 // Spielt eine Aufnahme ab t. o.cut (o.recCut: nur für Aufnahmen) = nach so vielen Sekunden abreißen, o.fade = Blende dabei
 // (Standard 15 ms = abrupt, Tod). Gibt die Endzeit zurück oder -1.
 function playRec(m, t, cat, voice, o = {}) {
   if (!USE_REC) return -1;
-  const pool = recPool(cat, voice); if (!pool.length) return -1;
-  const it = pickRec(m, pool), rate = m.r(0.95, 1.05) * (o.rate || 1), len = it.buf.duration / rate;
+  const pool = recPool(cat, voice, o.words); if (!pool.length) return -1;
+  const own = o.prefer ? pool.filter(x => x.speaker === o.prefer) : [];          // dieselbe Person: eigener Sprecher zuerst
+  const it = pickRec(m, own.length ? own : pool), rate = m.r(0.95, 1.05) * (o.rate || 1), len = it.buf.duration / rate;
   const cut = o.cut || o.recCut || 0, fade = o.fade || 0.015;
   const end = cut ? t + Math.min(cut, len) : t + len;
   const dest = o.dest || m.bus(o.pan || 0, o.gain === undefined ? 1 : o.gain, o.send === undefined ? 0.12 : o.send, o.lowpass || 0);
@@ -169,9 +184,9 @@ function playRec(m, t, cat, voice, o = {}) {
 const CATS = Object.keys(REC);
 async function addRecording(arrayBuffer, name) {
   const buf = await new OfflineAudioContext(1, 1, SR).decodeAudioData(arrayBuffer);
-  const mm = /^([a-z]+)_([a-z0-9]+)_/.exec(name.toLowerCase());
+  const mm = /^([a-z]+)_([a-z0-9]+)_([a-z0-9]*)/.exec(name.toLowerCase());
   const cat = mm && CATS.includes(mm[1]) ? mm[1] : 'angst', speaker = mm ? mm[2] : 'x' + (REC[cat].length + 1);
-  REC[cat].push({ buf, speaker, name });
+  REC[cat].push({ buf, speaker, name, word: mm ? mm[3].replace(/\d+$/, '') : '' });
 }
 async function loadBundle() {
   const B = window.NEONREGENT_SOUNDS; if (!B || !B.items) return 0;
@@ -230,9 +245,10 @@ function scream(m, t, voice, o = {}) {
   return stop;
 }
 // Stöhnen am Boden: tief, behaucht, zwei Stöße
-function groan(m, t, voice, pan) {
-  { const e = playRec(m, t, 'stoehnen', voice, { pan, gain: 0.95, send: 0.25 });                    // Aufnahme: zwei Takes nacheinander
-    if (e >= 0) { playRec(m, e + m.r(0.35, 0.7), 'stoehnen', voice, { pan, gain: 0.8, send: 0.25 }); return; } }
+function groan(m, t, voice, pan, prefer) {
+  { const e = playRec(m, t, 'stoehnen', voice, { pan, gain: 0.95, send: 0.25, prefer });            // Aufnahme: Stöhnen, dann schwacher
+    if (e >= 0) { const o = { pan, gain: 0.8, send: 0.25, prefer }, t2 = e + m.r(0.35, 0.7);       // Hilferuf – oder noch einmal Stöhnen
+      if (playRec(m, t2, 'ruf', voice, { ...o, words: RUF.verletzt }) < 0) playRec(m, t2, 'stoehnen', voice, o); return; } }
   const V = VOICES[voice], f0 = V.peak[0] * 0.38;
   for (const [dt, d] of [[0, 0.5], [0.75, 0.6]]) {
     const s = t + dt, src = m.osc('sawtooth', s, d);
@@ -256,7 +272,9 @@ function runOver(m, lethal, voice) {
     const e = m.env([[t0, 0], [impact, 0.22], [impact + 0.3, 0.0001]]); n.connect(f); f.connect(e); e.connect(m.bus(-0.2, 1, 0.1)); }
   // Angstschrei – bei tödlichem Treffer reißt er im Aufprall ab
   // (überlebt: die Aufnahme bricht im Aufprall weicher ab – ihr bleibt die Luft weg; die Synthese endet von selbst)
+  LAST_PICK = null;
   scream(m, t0 + 0.05, voice, { dur: lethal ? 0.9 : 0.75, cut: lethal ? impact - t0 - 0.04 : 0, recCut: impact - t0 + 0.02, fade: lethal ? 0.015 : 0.09, pan: 0.1, send: 0.2 });
+  const who = LAST_PICK && LAST_PICK.speaker;                       // Sprecher des Opfers: Schmerz, Stöhnen, Hilferuf möglichst von ihm
   // Aufprall: Masse, Körper, Kunststoff, Knacken
   m.thump(impact, 62, 30, 0.28, 1.0, street);                     // Masse (auf großen Lautsprechern)
   m.thump(impact, 190, 85, 0.07, 1.0, street);                     // Punch (auch auf Handy-Lautsprechern hörbar)
@@ -271,25 +289,50 @@ function runOver(m, lethal, voice) {
   } else {
     for (const [dt, v] of [[0.18, 0.55], [0.34, 0.4], [0.52, 0.25]]) { m.thump(impact + dt, 90, 45, 0.09, v, street); m.hit(impact + dt, 0.07, 'lowpass', 500, 0.8, v * 0.7, street); }  // Abrollen
     { const n = m.noise(impact + 0.55, 0.35), f = m.filt('bandpass', 900, 0.8), e = m.env([[impact + 0.55, 0], [impact + 0.6, 0.18], [impact + 0.9, 0.0001]]); n.connect(f); f.connect(e); e.connect(street); }
-    scream(m, impact + 0.7, voice, { cat: 'schmerz', rate: 0.93, dur: 0.45, peak: VOICES[voice].peak[0] * 0.8, pan: 0.15, gain: 0.8, send: 0.25 });  // Schmerzschrei
-    groan(m, impact + 1.6, voice, 0.15);
+    scream(m, impact + 0.7, voice, { cat: 'schmerz', rate: 0.93, dur: 0.45, peak: VOICES[voice].peak[0] * 0.8, pan: 0.15, gain: 0.8, send: 0.25, prefer: who });  // Schmerzschrei
+    groan(m, impact + 1.6, voice, 0.15, who);
   }
   // Bremsenquietschen
   { const o = m.osc('sawtooth', impact + 0.08, 0.62); o.frequency.setValueAtTime(m.r(1900, 2300), impact + 0.08); o.frequency.linearRampToValueAtTime(m.r(1500, 1800), impact + 0.7);
     const f = m.filt('bandpass', 2200, 6), e = m.env([[impact + 0.08, 0], [impact + 0.15, 0.08], [impact + 0.6, 0.05], [impact + 0.7, 0.0001]]); o.connect(f); f.connect(e); e.connect(m.bus(-0.25, 1, 0.2)); }
-  // Passanten schreien (entfernt, verhallt, links/rechts)
-  for (let i = 0; i < (lethal ? 3 : 2); i++) scream(m, impact + 0.4 + i * m.r(0.35, 0.6), m.pick(['mann', 'frau', 'frau', 'alt', 'jung']),
+  // Ein Zeuge ruft (Aufnahme mit Wort, verständlich: wenig Tiefpass); ohne passende Aufnahme schreit er
+  { const v = m.pick(['mann', 'frau', 'mann']), o = { pan: m.r(-0.6, 0.6), gain: 0.5, send: 0.35, lowpass: 5000 };
+    if (playRec(m, impact + 0.35, 'ruf', v, { ...o, words: RUF.zeuge }) < 0) scream(m, impact + 0.35, v, { ...o, gain: 0.3, lowpass: 2500 }); }
+  // Weitere Passanten schreien (entfernt, verhallt, links/rechts)
+  for (let i = 1; i < (lethal ? 3 : 2); i++) scream(m, impact + 0.4 + i * m.r(0.35, 0.6), m.pick(['mann', 'frau', 'frau', 'alt', 'jung']),
     { pan: m.r(-0.8, 0.8), gain: m.r(0.18, 0.32), send: 0.5, lowpass: m.r(1800, 3000), dur: m.r(0.7, 1.2) });
   return impact + 3;
 }
 function panic(m) {
-  ['mann', 'frau', 'alt', 'jung', 'frau', 'mann', 'frau'].forEach((v, i) => scream(m, 0.1 + i * m.r(0.25, 0.45), v,
-    { pan: m.r(-0.9, 0.9), gain: m.r(0.35, 0.9), send: 0.4, lowpass: m.r(2800, 6000), dur: m.r(0.6, 1.1) }));
+  ['mann', 'frau', 'alt', 'jung', 'frau', 'mann', 'frau'].forEach((v, i) => {
+    const t = 0.1 + i * m.r(0.25, 0.45), o = { pan: m.r(-0.9, 0.9), gain: m.r(0.35, 0.9), send: 0.4, lowpass: m.r(2800, 6000), dur: m.r(0.6, 1.1) };
+    if (i % 4 === 1 && playRec(m, t, 'ruf', v, { ...o, lowpass: 6000, words: RUF.panik }) >= 0) return;    // zwei rufen, der Rest schreit
+    scream(m, t, v, o);
+  });
   for (let p = 0; p < 4; p++) {            // Laufschritte mehrerer Menschen
     const pan = m.r(-0.8, 0.8), rate = m.r(0.17, 0.23), g = m.r(0.2, 0.4), bus = m.bus(pan, 1, 0.2);
     for (let t = m.r(0.2, 0.6); t < 3.3; t += rate * m.r(0.9, 1.1)) { m.hit(t, 0.035, 'lowpass', m.r(700, 1100), 0.8, g, bus); m.hit(t, 0.01, 'highpass', 3000, 0.7, g * 0.4, bus); }
+    if (p === 0) playRec(m, 0.3, 'keuchen', m.pick(['mann', 'frau']), { pan, gain: 0.75, send: 0.15 });  // Atem eines nahen Läufers
   }
   return 4.2;
+}
+// Beinahe überfahren: Warnruf, Hupe, Ausweichsprung mit Schreckensruf, Vorbeifahrt (Doppler, links -> rechts)
+function nearMiss(m) {
+  const pass = 2.0, street = m.bus(0, 0.9, 0.22), voice = m.pick(['mann', 'frau']);
+  playRec(m, 0.12, 'ruf', 'mann', { pan: -0.55, gain: 0.55, send: 0.35, lowpass: 6000, words: RUF.warnung });        // „Look out!"
+  { const o = m.osc('sawtooth', 0.2, pass - 0.1), f = m.filt('lowpass', 420, 1.3), e = m.env([[0.2, 0], [pass - 0.05, 0.5], [pass + 0.08, 0.0001]]);
+    o.frequency.setValueAtTime(64, 0.2); o.frequency.linearRampToValueAtTime(78, pass); o.connect(f); f.connect(e); e.connect(m.bus(-0.55, 1, 0.12)); }
+  { const o = m.osc('sawtooth', pass - 0.05, 1.4), f = m.filt('lowpass', 380, 1.3), e = m.env([[pass - 0.05, 0], [pass + 0.03, 0.5], [pass + 1.3, 0.0001]]);
+    o.frequency.setValueAtTime(60, pass - 0.05); o.frequency.exponentialRampToValueAtTime(44, pass + 1.3); o.connect(f); f.connect(e); e.connect(m.bus(0.6, 1, 0.12)); }
+  m.hit(pass - 0.15, 0.5, 'bandpass', 600, 0.7, 0.55, street, 2400);                                                  // Luftstoß
+  for (const [a, b] of [[1.05, 1.3], [1.38, 1.72]]) for (const f of [370, 466]) {                                     // Hupe
+    const o = m.osc('square', a, b - a), lp = m.filt('lowpass', 1800), e = m.env([[a, 0], [a + 0.01, 0.1], [b - 0.02, 0.1], [b, 0.0001]]);
+    o.frequency.value = f * m.r(0.995, 1.005); o.connect(lp); lp.connect(e); e.connect(m.bus(-0.4, 1, 0.15));
+  }
+  m.hit(1.7, 0.04, 'lowpass', 900, 0.8, 0.5, street); m.hit(1.84, 0.05, 'lowpass', 700, 0.8, 0.6, street);          // Sprung zur Seite
+  if (playRec(m, 1.62, 'ruf', voice, { pan: 0.1, gain: 0.9, send: 0.2, words: RUF.ausweichen }) < 0)                 // „Whoa!" / „Oh crap!"
+    scream(m, 1.62, voice, { dur: 0.5, cut: 0.45, recCut: 0.5, fade: 0.08, pan: 0.1 });
+  return pass + 1.6;
 }
 function execution(m) {
   const dest = m.bus(0, 1, 0.15);
@@ -336,9 +379,10 @@ function mandatCall(m) {
 const SOUNDS = [
   { id: 'schreie_vier_stimmen', title: 'Angstschreie – vier Stimmen', note: 'Mann · Frau · älterer Mann · junge Stimme', len: 5.8,
     fn: m => { let t = 0.1; for (const v of ['mann', 'frau', 'alt', 'jung']) t = scream(m, t, v) + 0.35; return t; } },
-  { id: 'ueberfahren_toedlich', title: 'Überfahren (tödlich)', note: 'Motor · Angstschrei · Aufprall · Achsen-Doppelschlag · Schrei reißt ab · Passanten', len: 4.4, fn: m => runOver(m, true, 'mann') },
-  { id: 'ueberfahren_verletzt', title: 'Angefahren (überlebt)', note: 'Aufprall · Abrollen · Schmerzschrei · Stöhnen am Boden · Passanten', len: 5.4, fn: m => runOver(m, false, 'frau') },
-  { id: 'panik_menge', title: 'Panik in der Menge', note: 'sieben Stimmen aus allen Richtungen · Laufschritte · Straßenhall', len: 4.8, fn: panic },
+  { id: 'ueberfahren_toedlich', title: 'Überfahren (tödlich)', note: 'Motor · Angstschrei · Aufprall · Achsen-Doppelschlag · Schrei reißt ab · Zeuge ruft · Passanten', len: 4.4, fn: m => runOver(m, true, 'frau') },
+  { id: 'ueberfahren_verletzt', title: 'Angefahren (überlebt)', note: 'Aufprall · Abrollen · Schmerzschrei · Zeuge ruft · Stöhnen und Hilferuf am Boden', len: 8.5, fn: m => runOver(m, false, 'mann') },
+  { id: 'beinahe', title: 'Beinahe überfahren', note: 'Warnruf · Hupe · Ausweichsprung mit Schreckensruf · Vorbeifahrt', len: 3.9, fn: nearMiss },
+  { id: 'panik_menge', title: 'Panik in der Menge', note: 'Schreie und Rufe aus allen Richtungen · Atem und Laufschritte · Straßenhall', len: 4.8, fn: panic },
   { id: 'vollstreckung', title: 'Treuechip-Vollstreckung', note: 'Summen · drei Pieptöne · Entladung · erstickter Laut · Sturz · Tinnitus', len: 4.0, fn: execution },
   { id: 'mandat_anruf', title: 'MANDAT ruft an', note: 'Jingle E5–B4–E4 · Maschinenstimme', len: 3.8, fn: mandatCall }
 ];

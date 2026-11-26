@@ -5,28 +5,38 @@ menschlichen Laute Aufnahmen**. Alles andere bleibt synthetisch: Motoren, Aufpra
 Sirenen, Regen – und MANDATs Maschinenstimme, die künstlich klingen *soll*. Die synthetische Stimme bleibt nur als
 Rückfall, solange das Bundle leer ist.
 
+**Sprache (D14, Nutzer 2026-11-26: „Stimmen können englisch sein"):** Gesprochene Rufe sind **englisch** – eine
+internationale Megastadt; Bildschirmtexte, Pager und MANDAT bleiben deutsch. Alle Wörter in einer Sprache: auch eigene
+Aufnahmen später englisch (oder wortlos), sonst rufen Deutsche und Englische durcheinander.
+
 Kette: `assets/sound/raw/` → `tools/sound-packer/pack.py` → `assets/sound/neonregent.sound.js` → Spiel und Klangprobe.
 
-## 0. Stand: 55 CC0-Takes im Bundle (2026-11-26)
+## 0. Stand: 91 CC0-Takes im Bundle (2026-11-26)
 
-Auf Anweisung des Nutzers („im Notfall nimm die Schreie") aus Freesound geladen (Weg B). Jede Lizenz wurde auf der Seite des
-einzelnen Sounds als CC0 geprüft, jede Beschreibung gelesen. Herkunft und Ausschnitt je Datei stehen in `assets/sound/QUELLEN.md`.
+Auf Anweisung des Nutzers („im Notfall nimm die Schreie", dann „Stimmen können englisch sein") aus Freesound geladen (Weg B).
+Jede Lizenz wurde auf der Seite des einzelnen Sounds als CC0 geprüft, jede Beschreibung gelesen. Herkunft und Ausschnitt je
+Datei stehen in `assets/sound/QUELLEN.md`. 48 Sprecher: Männer `m1`–`m30`, Frauen `f1`–`f18`.
 
 | Kategorie | Takes | davon Frauen | Sprecher |
 |---|---|---|---|
-| `angst` | 17 | 6 | m1–m6, m8, f1–f6 |
-| `treffer` | 14 | 4 | m2–m4, m14–m19, f10–f12 |
+| `angst` | 18 | 6 | m1–m6, m8, m24, f1–f6 |
+| `treffer` | 22 | 4 | m2–m4, m14–m19, m22, m23, m29, f10–f12 |
+| `ruf` | 23 | 4 | m22–m28, f15–f17 (Wörter siehe §1) |
 | `stoehnen` | 12 | 7 | m2, m20, m21, f13, f14 |
-| `schmerz` | 7 | 1 | m3, m9–m13, f9 |
+| `schmerz` | 9 | 1 | m3, m9–m13, m22, m24, f9 |
 | `brennen` | 5 | 2 | m1, m7, f7, f8 |
-| `ruf`, `keuchen`, `spieler` | 0 | – | **Lücke** – Rückfall `angst` bzw. Synthese |
+| `keuchen` | 2 | 1 | m30, f18 |
+| `spieler` | 0 | – | **Lücke** – Stimme der Spielfigur ist deine Entscheidung (§1) |
 
-- **Ausgeschlossen:** alles mit Hinweis auf Kinder oder unklarem Alter, Kampf-/Karate-Schreie (Aggression statt Angst), Comic-
-  und Cartoon-Stimmen, bearbeitete Aufnahmen, Übersteuerung über 1 %, Rauschabstand unter ~21 dB, englische Wörter („Ouch").
+- **Ausgeschlossen:** alles mit Hinweis auf Kinder oder unklarem Alter, Kampf-/Karate-Schreie (Aggression statt Angst), Comic-,
+  Cartoon- und Anime-Stimmen, Sexuelles, Mitschnitte aus Film und Fernsehen (z. B. Wrestling-Kommentar), bearbeitete oder
+  verstellte Stimmen, Übersteuerung über 1 %, Rauschabstand unter ~21 dB, ruhig gesprochene statt gerufene Sätze.
+- **Rufe:** Ein Sprecher (`m22`, Profi-Mikrofon, Mitte 20) liefert 11 der 23 Rufe – er wird auffallen. Frauen haben nur „Help!",
+  „Help me!" und zwei wortlose Aufschreie. Frei nicht zu finden: „Run!", „Watch out!", „Call the police!", „Get out of the way!".
 - **Anhören:** `klangprobe.html` (lädt das Bundle automatisch) – oder alle Takes nacheinander als eine Datei (siehe §6).
 - **Einen Take loswerden:** Datei in `raw/` löschen, Zeile in `QUELLEN.md` löschen, neu packen. Nummern dürfen Lücken haben.
-- **Ergänzen:** eigene Sprecher bekommen die nächsten freien Nummern (`m22`, `f15`, `a1` …), die Spielfigur `p1`.
-  Am meisten fehlen: deutsche Rufe (`ruf`), Frauen-`schmerz`, `keuchen` und die Stimme der Spielfigur.
+- **Ergänzen:** eigene Sprecher bekommen die nächsten freien Nummern (`m31`, `f19`, `a1` …), die Spielfigur `p1`.
+  Am meisten fehlen: Rufe von Frauen, die vier Rufe oben, Frauen-`schmerz` und die Stimme der Spielfigur.
 - **Qualität:** Quelle ist die HQ-Vorschau (MP3 128 kbit/s). Wer ein Freesound-Konto hat, lädt das Original und ersetzt die Datei
   unter demselben Namen (den Ausschnitt aus der Spalte „Quelle" übernehmen).
 
@@ -46,21 +56,36 @@ Je Sprecher:
 | `treffer` | `treffer_m1_01` … `_03` | 3 | 0.2–0.4 s | kurzes „Ah!" / „Uff!" wie getroffen | Schuss-, Schlag-, Rempeltreffer |
 | `schmerz` | `schmerz_m1_01`, `_02` | 2 | 0.5–1.0 s | gequältes, fallendes „Aaah…" | angefahren und überlebt |
 | `stoehnen` | `stoehnen_m1_01` … `_03` | 3 | 1–2 s | gepresstes, behauchtes Stöhnen | liegt verletzt am Boden |
-| `ruf` | `ruf_m1_hilfe`, `ruf_m1_weg`, `ruf_m1_passauf`, `ruf_m1_nein` | 4 | 0.4–1 s | „Hilfe!", „Weg hier!", „Pass auf!", „Nein!" – laut, gehetzt | Panik, Ausweichen |
+| `ruf` | `ruf_m1_<wort>`, z. B. `ruf_m1_help`, `ruf_m1_run`, `ruf_m1_lookout`, `ruf_m1_no` | 4–8 | 0.4–1.5 s | englisch, laut, gehetzt (Wörter unten) | je nach Lage, siehe unten |
 | `brennen` | `brennen_m1_01` | 1 | 2–3 s | langer, verzweifelter Schrei | Person brennt |
 | `keuchen` | `keuchen_m1_01` | 1 | 2–3 s | schneller Laufatem | Fliehende in der Nähe |
 
 ≈ 18 Takes je Sprecher, bei 5 Sprechern ≈ 90 Takes. Gepackt ≈ 1.1 MB (gemessen: ~12 KB je Take bei 96 kbit/s).
 
+**Rufe: Das Wort steht im Dateinamen** (`ruf_<sprecher>_<wort>`, zweiter Take desselben Worts `<wort>2`). Das Spiel wählt nach Lage:
+
+| Lage | Wörter (Dateiname) | So klingt es | Im Bundle |
+|---|---|---|---|
+| Opfer sieht das Auto kommen (reißt im Aufprall ab) | `no`, `nope`, `wait`, `ohno`, `uhoh` | „No!", „Wait, wa-wait!", „Oh no oh no", „Uh-oh" | nur Männer |
+| Umstehende warnen | `lookout` (gewünscht: `watchout`, `move`) | „Look out!" | 1 Mann |
+| Knapp ausgewichen | `whoa`, `crap`, `whatthe`, `gasp` | „Whoa!", „Oh crap!", „What the…", Aufschrei | Männer, 2 Frauen (`gasp`) |
+| Zeuge nach dem Aufprall | `omg`, `what`, `ohno`, `no`, `help`, `bad` (gewünscht: `police`) | „Oh my God!", „What just happened?", „Help!" | Männer, 1 Frau (`help`) |
+| Menge flieht | `help`, `no`, `nope`, `ohno`, `bad` (gewünscht: `run`) | „Help!", „This is bad!" | Männer, 1 Frau |
+| Liegt verletzt am Boden | `helpweak` | schwaches, gequältes „Help…" | 1 Mann |
+
+Fehlt für eine Stimme jedes passende Wort, ruft die Person nicht (bzw. schreit statt zu rufen) – nie mit fremdem Geschlecht.
+
 **Spielfigur** (eine Stimme, die du der Figur geben willst – das legt sie ein Stück fest; behauchte Laute verraten am wenigsten):
 `spieler_p1_01` … `_06`: kurze Treffer-Laute, Keuchen, ein Sterbelaut.
 
 **Minimum, wenn wenig Zeit ist:** 3 Sprecher × (Angst 3, Treffer 2, Schmerz 2, Stöhnen 2, Rufe 4) = 39 Takes.
+**Was das jetzige CC0-Set am dringendsten braucht:** 2 Frauen × („Help!", „Run!", „Watch out!", „Oh my God!", „Call the police!",
+„No!") plus je 2 Schmerz-Takes – 16 Takes, eine Viertelstunde.
 
 ## 2. Weg A: selbst aufnehmen (empfohlen)
 
-Warum empfohlen: einzigartige Stimmen, rechtlich sauber, deutsche Rufe („Hilfe!"), die man in freien Bibliotheken kaum
-findet, und Takes, die zueinander passen. Aufwand: 15–20 Minuten pro Person.
+Warum empfohlen: einzigartige Stimmen, rechtlich sauber, genau die Rufe, die frei fehlen („Run!", „Watch out!", „Call the
+police!", Rufe von Frauen), und Takes, die zueinander passen. Aufwand: 15–20 Minuten pro Person. Rufe englisch (D14).
 
 - **Gerät:** Handy-Sprachmemo in bester Qualität (iPhone: Einstellungen → Sprachmemos → Audioqualität „Verlustfrei";
   Android: eine Rekorder-App mit WAV) oder USB-Mikrofon am Rechner (Audacity).
@@ -85,7 +110,10 @@ findet, und Takes, die zueinander passen. Aufwand: 15–20 Minuten pro Person.
   `QUELLEN.md` eintragen.
 - **Qualität:** keine Musik, kein Hall, kein Hintergrundlärm, keine Comic-Schreie; möglichst verschiedene Stimmen;
   das Original laden (bei Freesound mit kostenlosem Konto) statt der Vorschau.
-- **Nachteil:** deutsche Rufe gibt es kaum, und Stimmen aus verschiedenen Quellen passen oft nicht zueinander.
+- **Nachteil:** englische Rufe gibt es nur wenige („Help", „No", „Oh my God", „Whoa"), deutsche praktisch keine, und Stimmen
+  aus verschiedenen Quellen passen oft nicht zueinander.
+- **Suchtipp:** Die Freesound-Suche fasst Treffer eines Pakets zusammen und zeigt nur einen – Gruppierung ausschalten
+  (Parameter `g=0`), sonst entgeht einem ein Großteil.
 - **Cloud-Session:** `freesound.org` und `cdn.freesound.org` sind in der Umgebung „2026" freigegeben. Ein automatischer Download
   braucht aber eine **ausdrückliche Anweisung** des Nutzers – ohne sie stoppt die Sicherheitsprüfung den Abruf. (So ist das
   jetzige Set entstanden, §0.)
@@ -130,6 +158,9 @@ Eigene Aufnahmen für die Hauptstimmen, CC0-Aufnahmen für Umstehende im Hinterg
   eigene Sprecher klingt wie ein Mann, `jung` wie eine Frau. **Nie das andere Geschlecht** – passt nichts, springt die Synthese ein.
 - Pro Ereignis ein zufälliger Take unter den länger nicht gespielten, Tonhöhe ±5 % – keine hörbare Wiederholung.
 - **Todesschrei** = ein `angst`-Take, der im Aufprall mit 15 ms Blende abreißt; darunter liegen die synthetischen Aufprall-Schichten.
-- **Angefahren und überlebt:** Der Angstschrei bricht im Aufprall weich ab, dann ein `schmerz`-Take, dann zweimal `stoehnen`.
+- **Angefahren und überlebt:** Der Angstschrei bricht im Aufprall weich ab, dann ein `schmerz`-Take, dann `stoehnen` und ein
+  schwacher Hilferuf (`helpweak`) – oder ein zweites Stöhnen. Das Opfer behält dabei möglichst seinen Sprecher.
+- **Rufe nach Lage** (Tabelle in §1): Warnung vor dem Aufprall, Schreckensruf beim Ausweichen, Zeugen danach, Rufe in der
+  fliehenden Menge, Verletzte am Boden. Ein Zeuge ruft verständlich (wenig Tiefpass), weitere Umstehende schreien entfernt.
 - Entfernung über Lautstärke, Tiefpass und Hall (PLAN §4.10); drinnen Raumhall, draußen gedämpft.
 - Rückfall: Fehlt eine passende Aufnahme, nimmt das Spiel die synthetische Stimme aus `klangprobe.html` (läuft immer, klingt aber künstlich).

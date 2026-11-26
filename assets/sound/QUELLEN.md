@@ -5,10 +5,11 @@ Skript nichts. Erlaubte Lizenzen: **CC0**, **Public Domain**, **eigene Aufnahme*
 Stimme im öffentlichen Spiel verwendet wird). Bei CC0-Quellen der Link zur Seite des einzelnen Sounds.
 Anleitung und Takeliste: `docs/neon-regent/AUFNAHMEN.md`.
 
-**Stand 2026-11-26:** 55 Takes aus Freesound, jede Lizenz auf der Seite des einzelnen Sounds als CC0 geprüft. Verwendet wurde
-die HQ-Vorschau (MP3) – das Original braucht ein Konto. Die Takes wurden ausgeschnitten (Spalte „Quelle“) und als FLAC abgelegt.
-Ausgeschlossen: alles, was auf Kinder hindeuten könnte oder dessen Alter unklar war, Kampf- und Comic-Schreie, Bearbeitetes,
-Übersteuertes, Verrauschtes. CC0 verlangt keine Nennung – der Abspann nennt die Urheber trotzdem (STORY.md, Abspann).
+**Stand 2026-11-26:** 91 Takes aus Freesound, jede Lizenz auf der Seite des einzelnen Sounds als CC0 geprüft – davon 23 Rufe
+(D14: Rufe dürfen englisch sein; zwei davon wortlose Aufschreie). Verwendet wurde die HQ-Vorschau (MP3) – das Original braucht ein Konto. Die Takes wurden
+ausgeschnitten (Spalte „Quelle“) und als FLAC abgelegt. Ausgeschlossen: alles, was auf Kinder hindeuten könnte oder dessen Alter
+unklar war, Kampf- und Comic-Schreie, Sexuelles, Mitschnitte aus Film/TV, Bearbeitetes (auch verstellte Stimmen), Übersteuertes,
+Verrauschtes. CC0 verlangt keine Nennung – der Abspann nennt die Urheber trotzdem (STORY.md, Abspann).
 
 | Datei | Urheber | Lizenz | Quelle | Datum |
 |---|---|---|---|---|
@@ -67,3 +68,39 @@ Ausgeschlossen: alles, was auf Kinder hindeuten könnte oder dessen Alter unklar
 | stoehnen_f14_01.flac | dmoran87 (Freesound) | CC0 | https://freesound.org/people/dmoran87/sounds/128772/ (Ausschnitt 1.49–3.94 s) | 2026-11-26 |
 | stoehnen_f14_02.flac | dmoran87 (Freesound) | CC0 | https://freesound.org/people/dmoran87/sounds/128772/ (Ausschnitt 5.51–7.19 s) | 2026-11-26 |
 | stoehnen_f14_03.flac | dmoran87 (Freesound) | CC0 | https://freesound.org/people/dmoran87/sounds/128772/ (Ausschnitt 8.50–10.11 s) | 2026-11-26 |
+| ruf_m22_wait.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801382/ | 2026-11-26 |
+| ruf_m22_wait2.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801392/ | 2026-11-26 |
+| ruf_m22_nope.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801380/ (Ausschnitt 0.00–1.62 s) | 2026-11-26 |
+| ruf_m22_ohno.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801386/ | 2026-11-26 |
+| ruf_m22_uhoh.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801391/ (Ausschnitt 0.00–0.77 s) | 2026-11-26 |
+| ruf_m22_bad.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801390/ | 2026-11-26 |
+| ruf_m22_crap.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801180/ | 2026-11-26 |
+| ruf_m22_crap2.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801179/ | 2026-11-26 |
+| ruf_m22_whoa.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801210/ (Ausschnitt 0.00–0.59 s) | 2026-11-26 |
+| ruf_m22_whatthe.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801205/ | 2026-11-26 |
+| ruf_m22_what.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/801183/ | 2026-11-26 |
+| treffer_m22_01.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/800979/ | 2026-11-26 |
+| treffer_m22_02.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/800982/ | 2026-11-26 |
+| treffer_m22_03.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/800981/ | 2026-11-26 |
+| treffer_m22_04.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/800985/ | 2026-11-26 |
+| schmerz_m22_01.flac | Sadiquecat (NPC-Paket, Sprecher Mitte 20) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/800980/ (Ausschnitt 0.00–0.83 s) | 2026-11-26 |
+| ruf_m23_no.flac | Sadiquecat (MKE600-Paket) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/818184/ | 2026-11-26 |
+| treffer_m23_01.flac | Sadiquecat (MKE600-Paket) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/818200/ (Ausschnitt 0.00–0.48 s) | 2026-11-26 |
+| treffer_m23_02.flac | Sadiquecat (MKE600-Paket) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/818196/ (Ausschnitt 0.00–0.52 s) | 2026-11-26 |
+| treffer_m23_03.flac | Sadiquecat (MKE600-Paket) (Freesound) | CC0 | https://freesound.org/people/Sadiquecat/sounds/818194/ | 2026-11-26 |
+| ruf_m24_no.flac | Artmasterrich (Freesound) | CC0 | https://freesound.org/people/Artmasterrich/sounds/345466/ | 2026-11-26 |
+| ruf_m24_no2.flac | Artmasterrich (Freesound) | CC0 | https://freesound.org/people/Artmasterrich/sounds/345463/ (Ausschnitt 0.02–1.58 s) | 2026-11-26 |
+| angst_m24_01.flac | Artmasterrich (Freesound) | CC0 | https://freesound.org/people/Artmasterrich/sounds/345455/ (Ausschnitt 0.03–1.66 s) | 2026-11-26 |
+| schmerz_m24_01.flac | Artmasterrich (Freesound) | CC0 | https://freesound.org/people/Artmasterrich/sounds/345456/ | 2026-11-26 |
+| ruf_m25_lookout.flac | Butter_Dog (Freesound) | CC0 | https://freesound.org/people/Butter_Dog/sounds/490247/ (Ausschnitt 0.60–2.40 s) | 2026-11-26 |
+| ruf_m26_omg.flac | Sami_Kullström (Freesound) | CC0 | https://freesound.org/people/Sami_Kullstr%C3%B6m/sounds/387941/ (Ausschnitt 0.00–1.49 s) | 2026-11-26 |
+| ruf_m27_whoa.flac | HappyYoLucky303 (Freesound) | CC0 | https://freesound.org/people/HappyYoLucky303/sounds/644747/ (Ausschnitt 0.72–3.28 s) | 2026-11-26 |
+| ruf_m28_helpweak.flac | SyazAmirin (Freesound) | CC0 | https://freesound.org/people/SyazAmirin/sounds/436424/ (Ausschnitt 0.00–3.64 s) | 2026-11-26 |
+| ruf_m28_helpweak2.flac | SyazAmirin (Freesound) | CC0 | https://freesound.org/people/SyazAmirin/sounds/436424/ (Ausschnitt 3.90–5.60 s) | 2026-11-26 |
+| treffer_m29_01.flac | DeqstersLab (Freesound) | CC0 | https://freesound.org/people/DeqstersLab/sounds/790832/ (Ausschnitt 0.05–0.68 s) | 2026-11-26 |
+| keuchen_m30_01.flac | vadersfear (Freesound) | CC0 | https://freesound.org/people/vadersfear/sounds/716947/ | 2026-11-26 |
+| ruf_f15_help.flac | Legnalegna55 (Freesound) | CC0 | https://freesound.org/people/Legnalegna55/sounds/539276/ (Ausschnitt 0.05–0.66 s) | 2026-11-26 |
+| ruf_f15_help2.flac | Legnalegna55 (Freesound) | CC0 | https://freesound.org/people/Legnalegna55/sounds/539276/ (Ausschnitt 0.88–1.83 s) | 2026-11-26 |
+| ruf_f16_gasp.flac | Jorgemaca (Freesound) | CC0 | https://freesound.org/people/Jorgemaca/sounds/669295/ (Ausschnitt 2.40–3.26 s) | 2026-11-26 |
+| ruf_f17_gasp.flac | UsuarioLeal (Freesound) | CC0 | https://freesound.org/people/UsuarioLeal/sounds/446515/ (Ausschnitt 0.04–0.73 s) | 2026-11-26 |
+| keuchen_f18_01.flac | OwlStorm (Freesound) | CC0 | https://freesound.org/people/OwlStorm/sounds/151215/ (Ausschnitt 0.09–4.08 s) | 2026-11-26 |
