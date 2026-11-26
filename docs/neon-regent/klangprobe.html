@@ -25,6 +25,12 @@ p.sub { color: var(--muted); margin: 8px 0 24px; line-height: 1.5; font-size: 14
 .item button:hover { background: rgba(63,232,255,0.25); }
 .item b { display: block; font-size: 14px; letter-spacing: 1px; }
 .item span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+.rec { background: var(--panel); border: 1px dashed var(--mag); border-radius: 8px; padding: 14px; margin-top: 22px; font-size: 13px; line-height: 1.5; }
+.rec b { color: var(--mag); letter-spacing: 2px; }
+.rec input[type=file] { display: block; margin: 10px 0; color: var(--text); }
+.rec label { display: block; color: var(--text); }
+#recInfo { color: var(--muted); margin-top: 8px; font-size: 12px; }
+#voiceSrc { color: var(--accent); font-size: 12px; margin: -14px 0 18px; }
 </style>
 </head>
 <body>
@@ -32,8 +38,21 @@ p.sub { color: var(--muted); margin: 8px 0 24px; line-height: 1.5; font-size: 14
   <h1>NEON REGENT · KLANGPROBE</h1>
   <p class="sub">Alle Klänge werden hier live synthetisiert – keine Aufnahmen. Kopfhörer empfohlen.
     Jede Wiedergabe würfelt eine neue Variante (wie später im Spiel).</p>
+  <div id="voiceSrc"></div>
   <div id="list"></div>
+  <div class="rec">
+    <b>EIGENE AUFNAHMEN TESTEN</b><br>
+    WAV/MP3/OGG auswählen oder auf die Seite ziehen. Der Dateiname bestimmt die Kategorie
+    (<code>angst_…</code>, <code>schmerz_…</code>, <code>stoehnen_…</code>, sonst Angst) und der zweite Teil den Sprecher
+    (<code>…_m1_…</code> Mann, <code>…_f1_…</code> Frau, <code>…_a1_…</code> älter, <code>…_j1_…</code> jung).
+    Alle Szenen oben benutzen dann die Aufnahmen – beim tödlichen Überfahren reißt der Schrei im Aufprall ab.
+    Ein gepacktes Bundle (<code>assets/sound/neonregent.sound.js</code>) wird automatisch geladen.
+    <input type="file" id="files" multiple accept="audio/*">
+    <label><input type="checkbox" id="useRec" checked> Aufnahmen verwenden (aus = synthetisch, zum Vergleich)</label>
+    <div id="recInfo"></div>
+  </div>
 </main>
+<script src="../../assets/sound/neonregent.sound.js"></script>
 <script>
 'use strict';
 const SR = 44100;
@@ -110,10 +129,54 @@ function formants(vowel, peak) {
   const f1 = Math.max(T[0][0], Math.min(peak * 1.08, 1250));           // F1 folgt hoher Tonhöhe
   return [[f1, T[0][1], 1.0], [Math.max(T[1][0], f1 * 1.45), T[1][1], 0.75], [T[2][0], T[2][1], 0.42], [T[3][0], T[3][1], 0.28]];
 }
-// Schrei ab Zeit t. o: { dur, peak, cut (s nach Start: abrupt abreißen), pan, gain, send, lowpass, dest }
+// ------------------------------------------------------------------
+// Aufnahmen (PLAN §4.10, D13): menschliche Laute als Aufnahmen, Synthese nur als Rückfall.
+// REC[kategorie] = [{ buf, speaker }]; Quelle: Bundle (window.NEONREGENT_SOUNDS) + eigene Dateien.
+// ------------------------------------------------------------------
+const REC = { angst: [], treffer: [], schmerz: [], stoehnen: [], brennen: [], ruf: [], keuchen: [], spieler: [] };
+const REC_FALLBACK = { treffer: 'angst', schmerz: 'angst', brennen: 'angst', ruf: 'angst' };
+let USE_REC = true;
+function recPool(cat, voice) {
+  let pool = REC[cat] && REC[cat].length ? REC[cat] : REC[REC_FALLBACK[cat]] || [];
+  const want = { mann: 'm', frau: 'f', alt: 'a', jung: 'j' }[voice];
+  const same = pool.filter(it => it.speaker[0] === want);
+  return same.length ? same : pool;
+}
+// spielt eine Aufnahme ab t; o.cut = nach so vielen Sekunden abreißen (15 ms Blende). Gibt Endzeit zurück oder -1.
+function playRec(m, t, cat, voice, o = {}) {
+  if (!USE_REC) return -1;
+  const pool = recPool(cat, voice); if (!pool.length) return -1;
+  const it = m.pick(pool), rate = m.r(0.95, 1.05) * (o.rate || 1), len = it.buf.duration / rate;
+  const end = o.cut ? t + Math.min(o.cut, len) : t + len;
+  const dest = o.dest || m.bus(o.pan || 0, o.gain === undefined ? 1 : o.gain, o.send === undefined ? 0.12 : o.send, o.lowpass || 0);
+  const src = m.oc.createBufferSource(); src.buffer = it.buf; src.playbackRate.value = rate;
+  const env = o.cut ? m.env([[t, 0], [t + 0.004, 1], [end, 1], [end + 0.015, 0.0001]]) : m.env([[t, 0], [t + 0.004, 1], [end - 0.02, 1], [end, 0.0001]]);
+  src.connect(env); env.connect(dest); src.start(Math.max(0, t)); src.stop(end + 0.03);
+  return end;
+}
+const CATS = Object.keys(REC);
+async function addRecording(arrayBuffer, name) {
+  const buf = await new OfflineAudioContext(1, 1, SR).decodeAudioData(arrayBuffer);
+  const mm = /^([a-z]+)_([a-z0-9]+)_/.exec(name.toLowerCase());
+  const cat = mm && CATS.includes(mm[1]) ? mm[1] : 'angst', speaker = mm ? mm[2] : 'x' + (REC[cat].length + 1);
+  REC[cat].push({ buf, speaker, name });
+}
+async function loadBundle() {
+  const B = window.NEONREGENT_SOUNDS; if (!B || !B.items) return 0;
+  for (const it of B.items) {
+    const bin = atob(it.data.split(',')[1]), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    await addRecording(u8.buffer, it.file);
+  }
+  return B.items.length;
+}
+function recSummary() { return CATS.filter(c => REC[c].length).map(c => `${c} ${REC[c].length}`).join(' · '); }
+
+// Schrei ab Zeit t. o: { dur, peak, cut (s nach Start: abrupt abreißen), pan, gain, send, lowpass, dest, cat }
 // Menschlich statt Synth-Sirene: Tonhöhenbogen (Anstieg, Spitze bei 25-40 %, Absinken), starker Jitter + langsame Drift
 // statt gleichmäßigem Vibrato, 0-2 Stimmbrüche, unregelmäßige Rauheit, Formant-Drift, mehr Atem gegen Ende.
 function scream(m, t, voice, o = {}) {
+  { const e = playRec(m, t, o.cat || 'angst', voice, o); if (e >= 0) return e; }        // Aufnahme, falls vorhanden
   const V = VOICES[voice], oc = m.oc;
   const peak = o.peak || m.r(V.peak[0], V.peak[1]), dur = o.dur || m.r(0.75, 1.25), rise = m.r(0.05, 0.1), crest = m.r(0.25, 0.4);
   const end = t + dur, cut = o.cut ? t + o.cut : 0, stop = cut || end, len = stop - t + 0.05;
@@ -156,6 +219,7 @@ function scream(m, t, voice, o = {}) {
 }
 // Stöhnen am Boden: tief, behaucht, zwei Stöße
 function groan(m, t, voice, pan) {
+  if (playRec(m, t, 'stoehnen', voice, { pan, gain: 0.95, send: 0.25 }) >= 0) { if (REC.stoehnen.length) playRec(m, t + 1.1, 'stoehnen', voice, { pan, gain: 0.8, send: 0.25 }); return; }
   const V = VOICES[voice], f0 = V.peak[0] * 0.38;
   for (const [dt, d] of [[0, 0.5], [0.75, 0.6]]) {
     const s = t + dt, src = m.osc('sawtooth', s, d);
@@ -193,7 +257,7 @@ function runOver(m, lethal, voice) {
   } else {
     for (const [dt, v] of [[0.18, 0.55], [0.34, 0.4], [0.52, 0.25]]) { m.thump(impact + dt, 90, 45, 0.09, v, street); m.hit(impact + dt, 0.07, 'lowpass', 500, 0.8, v * 0.7, street); }  // Abrollen
     { const n = m.noise(impact + 0.55, 0.35), f = m.filt('bandpass', 900, 0.8), e = m.env([[impact + 0.55, 0], [impact + 0.6, 0.18], [impact + 0.9, 0.0001]]); n.connect(f); f.connect(e); e.connect(street); }
-    scream(m, impact + 0.7, voice, { dur: 0.45, peak: VOICES[voice].peak[0] * 0.8, pan: 0.15, gain: 0.8, send: 0.25 });                    // Schmerzschrei
+    scream(m, impact + 0.7, voice, { cat: 'schmerz', rate: 0.93, dur: 0.45, peak: VOICES[voice].peak[0] * 0.8, pan: 0.15, gain: 0.8, send: 0.25 });  // Schmerzschrei
     groan(m, impact + 1.6, voice, 0.15);
   }
   // Bremsenquietschen
@@ -288,7 +352,22 @@ function wavBase64(buf) {
   return btoa(bin);
 }
 // Für das Export-Skript (Playwright): fester Seed je Klang
-window.KLANG = { SOUNDS, async wav(id, seed = 7741) { const s = SOUNDS.find(x => x.id === id); const r = await render(s, seed); return { b64: wavBase64(r.buf), rawPeak: r.rawPeak }; } };
+window.KLANG = { SOUNDS, REC, recSummary, async wav(id, seed = 7741) { const s = SOUNDS.find(x => x.id === id); const r = await render(s, seed); return { b64: wavBase64(r.buf), rawPeak: r.rawPeak }; } };
+const infoEl = () => document.getElementById('recInfo');
+function refreshInfo() {
+  const sum = recSummary();
+  infoEl().textContent = sum ? 'Geladen: ' + sum : 'Keine Aufnahmen geladen – die Stimmen sind synthetisch.';
+  document.getElementById('voiceSrc').textContent = 'Stimmen: ' + (sum && USE_REC ? 'Aufnahmen (' + sum + ')' : 'synthetisch');
+}
+async function addFiles(files) {
+  for (const f of files) { try { await addRecording(await f.arrayBuffer(), f.name); } catch (e) { infoEl().textContent = f.name + ': nicht lesbar (' + e.message + ')'; return; } }
+  refreshInfo();
+}
+document.getElementById('files').addEventListener('change', e => addFiles([...e.target.files]));
+document.getElementById('useRec').addEventListener('change', e => { USE_REC = e.target.checked; refreshInfo(); });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); addFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('audio') || /\.(wav|mp3|ogg|flac)$/i.test(f.name))); });
+window.KLANG.ready = loadBundle().then(refreshInfo);
 
 let ac = null, seedNext = Date.now() % 100000;
 const list = document.getElementById('list');

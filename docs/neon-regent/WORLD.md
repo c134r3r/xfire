@@ -426,10 +426,9 @@ der Timer startet neu. HUD: Schlüssel blinken, solange dich ein OD sieht; „�
 | Gunship-Rotor | amplitudenmoduliertes Rauschen 18 Hz |
 | Schritte | kurze Rausch-Ticks, Filter je Untergrund (Asphalt, Pfütze, Metall) |
 | Regen, Stadt, Neon | gefiltertes Rauschen (Regen-Loop), Tiefpass-Brummen + ferne Hupen, 120-Hz-Summen nahe Neon |
-| **Schreie** (Angst, Schmerz, Todesschrei, Panik, Brand) | `klangprobe.html` → `scream()`; Stimmtypen und Regeln: PLAN §4.10 |
+| **Schreie, Treffer-Laute, Schmerz, Stöhnen, Rufe, Brennen, Keuchen, Spielfigur** | **Aufnahmen** aus `assets/sound/neonregent.sound.js` (Takeliste `AUFNAHMEN.md`, Packen PLAN §6.4); Rückfall bei leerem Bundle: `klangprobe.html` → `scream()`/`groan()` |
 | **Überfahren** (tödlich / verletzt) | `klangprobe.html` → `runOver()`: Motor, Angstschrei (reißt ab), Masse 62→30 Hz, Punch 190→85 Hz, Körper 750 Hz, Knacken, Achsen-Doppelschlag, Splat, Bremse, Umstehende |
-| Stöhnen am Boden | `klangprobe.html` → `groan()` |
-| Panik der Menge | `klangprobe.html` → `panic()`: 7 Stimmen, Laufschritte, Straßenhall |
+| Panik der Menge | `klangprobe.html` → `panic()`: Rufe/Schreie verschiedener Sprecher (Aufnahmen), Laufschritte (synthetisch), Straßenhall |
 | Verdeckung / Innen-Außen | Tiefpass 1.2 kHz −6 dB (Gebäude dazwischen) / Tiefpass 900 Hz −8 dB (Spieler drinnen) |
 | Innenraum-Atmosphären | WORLD.md §14, je Raumtyp |
 | Schiebetür | Bandpass-Rauschen 1.2 → 3 kHz, 0.25 s, + Klick |

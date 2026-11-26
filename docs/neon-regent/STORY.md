@@ -707,6 +707,6 @@ Erledigte Karten werden rot durchgestrichen (Ironclad-Stempel-Optik). Systemisch
 6. Texttafeln in der Bildmitte, langsam: „Es gab keinen Regenten." – Pause – „Es gab nur uns."
 7. **Abspann** (DOM-Scroll über die Morgenstadt, Kamera fährt langsam über alle drei Distrikte, Morgengrauen-Musik in Dur):
    „NEON REGENT – ein Spiel aus der Welt von XFIRE und IRONCLAD" · „Idee & Story: (eintragen)" · „Technik: IRONCLAD-Engine" ·
-   „Klang & Musik: synthetisch, live im Browser erzeugt" · „Danke an alle, die gefragt haben, wo der Regent ist."
+   „Klang & Musik: synthetisch, live im Browser erzeugt" · „Stimmen: (Sprecherinnen und Sprecher eintragen, nur mit Zustimmung)" · „Danke an alle, die gefragt haben, wo der Regent ist."
 8. Zurück ins Hauptmenü; Spielstand mit Flag `ende`. Optional (MS12): **„FREIES SPIEL – MORGENGRAUEN"** – freie Stadt bei
    Tagesanbruch, kein MANDAT, statt OD eine **Bürgerwehr** (OD-Einheiten in Blau-Weiß, Fahndung max. Stufe 2).

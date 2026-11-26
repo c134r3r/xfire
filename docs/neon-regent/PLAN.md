@@ -13,8 +13,10 @@
 > - `concept.html` + `concept.jpg` / `concept-innen.jpg` – **validierter Konzept-Render**: Ziel-Look und Referenzcode für
 >   kippende Gebäude, Nacht-Lightmap und begehbare Gebäude (Dach weg, Grundriss). `concept.html#inside` zeigt den Innenraum,
 >   `#enter` das Hinein- und Hinausgehen, `#cut50` den Übergang. Läuft direkt im Browser (auch file://).
-> - `klangprobe.html` – **Referenz-Rezepte für den Sound** (Schrei-Stimmmodell, Überfahren, Panik, Vollstreckung, MANDAT);
->   spielt alles live im Browser ab.
+> - `klangprobe.html` – **Referenz-Rezepte für den Sound** (Überfahren, Panik, Vollstreckung, MANDAT); spielt alles live im
+>   Browser ab, lädt das Aufnahmen-Bundle und nimmt eigene Dateien per Drag & Drop an.
+> - `AUFNAHMEN.md` – **Takeliste und Anleitung für die Aufnahmen** (Schreie, Stöhnen, Rufe), Lizenzregeln, Packen mit
+>   `tools/sound-packer/pack.py`.
 
 | Straße bei Nacht (`concept.jpg`) | Begehbares Gebäude, Dach weg (`concept-innen.jpg`) |
 |---|---|
@@ -48,7 +50,8 @@
 | R10 | Code aus Ironclad/Underworks **kopieren und anpassen**, nicht die Originale für Wiederverwendung umbauen. | R1. |
 | R11 | Jede Spielfigur/jedes Fahrzeug braucht **prozedurale Fallback-Grafik** (wie `VEHICLE_ART` in Ironclad). Das Spiel muss ohne Sprite-Bundle laufen. | Fortschritt vor dem Baken, Robustheit. |
 | R12 | Canvas-Fonts immer mit generischem Ende: `"Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif`. | Im Konzept fiel Text unter Linux auf Serif zurück. |
-| R13 | **Sound ist gleichrangig mit Grafik.** Jeder Meilenstein liefert die Klänge seiner Features mit (steht in jeder DoD); kein Feature gilt ohne Sound als fertig. Rezepte: `klangprobe.html`. | Nutzer-Vorgabe: „Sounds sind besonders wichtig." |
+| R13 | **Sound ist gleichrangig mit Grafik.** Jeder Meilenstein liefert die Klänge seiner Features mit (steht in jeder DoD); kein Feature gilt ohne Sound als fertig. Rezepte: `klangprobe.html`; **menschliche Laute sind Aufnahmen** (`AUFNAHMEN.md`). | Nutzer-Vorgabe: „Sounds sind besonders wichtig." |
+| R16 | **Keine Audiodatei ohne Lizenzzeile.** Aufnahmen kommen nur über `tools/sound-packer/pack.py` ins Spiel (Lizenzsperre: CC0, Public Domain, eigene Aufnahme mit Einverständnis). | Öffentliches Repo verteilt die Dateien. |
 | R14 | Meilensteine heißen **MS0–MS12**, Missionen **M00–M14**. In Commits, Log und Berichten nie verwechseln. | „M10" war sonst doppelt belegt. |
 | R15 | Die Session kann nicht hören. Klänge werden **automatisch geprüft** (Pegel, NaN, Clipping, §9) und als **WAV an den Nutzer** gegeben; sein Urteil zählt. | Sonst bleibt Sound ungeprüft. |
 
@@ -71,7 +74,8 @@ Gebäuden im GTA-2-Stil. Das Morgengrauen im Finale bringt Ironclads warme Wüst
 **Zwei Säulen, die der Nutzer ausdrücklich betont hat:**
 - **Sound:** Die Stadt muss sich so lebendig anhören, wie sie aussieht – Regen, Motoren, Sirenen, Neon-Summen und vor allem
   **Menschen**: Wer überfahren wird, schreit (Angstschrei, der beim Aufprall abreißt; Aufprall; Achsen-Doppelschlag),
-  Umstehende schreien und fliehen, Verletzte stöhnen am Boden (§4.10, `klangprobe.html`).
+  Umstehende schreien und fliehen, Verletzte stöhnen am Boden (§4.10). Menschliche Laute sind **Aufnahmen** – synthetische
+  Schreie klangen im Test künstlich (Nutzer-Urteil); alles andere bleibt synthetisch (`klangprobe.html`, `AUFNAHMEN.md`).
 - **Begehbare Gebäude:** Rund **10 % der Gebäude** kann man betreten. Dann verschwindet das Dach, und man sieht von oben in den
   Grundriss – Räume, Wände, Möbel, Menschen und die eigene Figur (§5.9, `concept-innen.jpg`).
 
@@ -96,7 +100,7 @@ Technische Punkte (fix) sind durch den Konzept-Render belegt.
 | D10 | Gewalt | Stilisiert (dunkle Splats, keine Zerstückelung); Option „Blut aus" | – | fix |
 | D11 | Auto-Steuerung Tastatur | „Klassisch" (W/S Gas/Bremse, A/D lenken, fahrzeugrelativ); Option „Direkt" (bildschirmrelativ wie Ironclads Panzer). Stick/Touch: Default „Direkt". | – | fix |
 | D12 | Begehbare Gebäude | **10 %** der normalen Gebäude + alle Dienste (Kapselhotel, Waffenhändler, Klinik, OD-Wache, Kopfgeld-Büro) + Story-Orte (Untergrundklinik, Klinik Null, Mausoleum). Beim Betreten: Dach weg, Grundriss von oben, Kamera zoomt hinein. Nur Erdgeschoss. | mehrere Stockwerke | **Nutzer-Vorgabe** (im Konzept validiert) |
-| D13 | Klangquelle | Alles **synthetisch** wie in XFire/Ironclad (`klangprobe.html`). Nur wenn der Nutzer die Probe zu künstlich findet: Schreie als **CC0-Aufnahmen** (Lizenz pro Datei geprüft) in einem Base64-Bundle wie die Sprites (läuft von file://) | Aufnahmen von Anfang an | **offen** – Nutzer hört die Klangprobe |
+| D13 | Klangquelle | **Entschieden (Nutzer, 2026-11-26): menschliche Laute = Aufnahmen**, alles andere synthetisch (`klangprobe.html`). Die synthetische Stimme bleibt nur Rückfall bei leerem Bundle. **Offen ist die Quelle:** A selbst aufnehmen (empfohlen) · B CC0 (Freesound, OpenGameArt) · C gemischt (`AUFNAHMEN.md`) | alles synthetisch (abgelehnt: „klingt synthetisch") | **Quelle offen** |
 
 ---
 
@@ -161,7 +165,7 @@ Zeilennummern = Stand `f6bc224` (können sich verschieben; Funktionsnamen sind m
 | Decals (`splat`) | `render.js` 236–270 | Stil für Passanten-Splats. |
 | Klangbank-Baking `bake()` (OfflineAudioContext, alle Varianten parallel) | `sfx.js` 650–672 | Muster für die Klangbank (`02b-sfx.js`). |
 | `_spatial` (Panorama, Abstand, Luftdämpfung), Stimmen-Limits `SOUND_DEFS` | `sfx.js` 514–540, ~686 | Positionierung, Limits. |
-| **Schrei-Stimmmodell, Überfahren, Panik, Vollstreckung, MANDAT** | `docs/neon-regent/klangprobe.html` | **1:1** als Rezepte übernehmen (`scream`, `groan`, `runOver`, `panic`, `execution`, `mandatCall`). |
+| **Überfahren, Panik, Vollstreckung, MANDAT; Aufnahmen-Pfad; Schrei-Stimmmodell (Rückfall)** | `docs/neon-regent/klangprobe.html` | **1:1** übernehmen: `runOver`, `panic`, `execution`, `mandatCall`, `playRec`/`recPool`/`loadBundle` (Aufnahmen), `scream`/`groan` (synthetischer Rückfall). |
 
 ### 3.4 Asset-Baker (`tools/asset-baker/`)
 
@@ -378,20 +382,28 @@ Hall-Sends: Straße (1.6 s, frühe Fassaden-Reflexionen) · Raum (0.4 s) · Maus
 | Spieler getroffen / stirbt | eigene Stimme (Schmerzlaut, Keuchen) | nie dieselbe Stimme wie Passanten |
 | Vollstreckung durch den Treuechip | Summen, 3 Pieptöne, Entladung, erstickter Laut, Sturz, Tinnitus | Ambient-Vollstreckungen leiser |
 
-**Stimmmodell** (`klangprobe.html` → `scream()`): Sägezahn mit Tonhöhenbogen (Anstieg 50–100 ms, Spitze bei 25–40 %, Absinken
-auf 55–70 %), starker Jitter (Tiefpass 40 Hz) und langsame Drift statt gleichmäßigem Vibrato (sonst klingt es nach Synth-Sirene),
-0–2 Stimmbrüche, Subharmonische (Knurren), unregelmäßige Rauheit (AM 35–95 Hz mit verrauschter Frequenz), Sättigung,
-4 Formanten (F1 folgt hoher Tonhöhe, leichte Formant-Drift), Atemrauschen (wird gegen Ende stärker), „h"-Anlaut.
-Stimmtypen: `mann` 430–520 Hz · `frau` 760–960 Hz · `alt` 360–430 Hz (rau) · `jung` 900–1120 Hz.
+**Menschliche Laute = Aufnahmen (entschieden, D13).** Schreie, Treffer-Laute, Schmerz, Stöhnen, Rufe, Brennen, Keuchen und
+die Laute der Spielfigur kommen aus dem Bundle `assets/sound/neonregent.sound.js` (Takeliste und Quellen: `AUFNAHMEN.md`,
+Packen: §6.4). Laufzeit wie in `klangprobe.html` (`loadBundle`, `recPool`, `playRec`): Bundle beim Laden dekodieren
+(`decodeAudioData`), nach Kategorie und Sprecher ordnen; jede Person bekommt beim Spawnen einen Sprecher passend zu ihrem
+Stimmtyp (`m*`, `f*`, `a*`, `j*`) und behält ihn; pro Ereignis zufälliger Take (nie zweimal derselbe hintereinander),
+`playbackRate` 0.95–1.05; **Todesschrei** = `angst`-Take, der im Aufprall mit 15 ms Blende abreißt. Fehlende Kategorien
+fallen auf `angst` zurück (`treffer`, `schmerz`, `brennen`, `ruf`).
+
+**Synthetischer Rückfall** (`scream()`/`groan()`, nur bei leerem Bundle – damit das Spiel immer Ton hat): Sägezahn mit
+Tonhöhenbogen, Jitter und Drift statt Vibrato, Stimmbrüche, Subharmonische, unregelmäßige Rauheit, Sättigung, 4 Formanten,
+Atemrauschen. Stimmtypen: `mann` 430–520 Hz · `frau` 760–960 Hz · `alt` 360–430 Hz · `jung` 900–1120 Hz. Nutzer-Urteil:
+„klingt synthetisch" – deshalb nicht als Hauptweg.
 
 **Weitere Klangwelt** (Liste WORLD.md §13): Motoren je Klasse, Reifen, Crash nach Aufprallstärke, Hupe, Sirenen mit Doppler,
 Waffen je Typ, Einschläge je Material (Fleisch, Metall, Beton, Glas), Regen nach Intensität, Stadt-Brummen je Distrikt,
 Neon-Summen, Dampf, Schritte je Untergrund, Schiebetüren, Innenraum-Atmosphären (WORLD.md §14), MANDAT-Jingle und
 Maschinenstimme, Vela-Funk, Musik in Layern, Radio.
 
-**Plan B (D13), falls synthetisch nicht reicht:** optionales Bundle `assets/sound/neonregent.sound.js` (Base64-OGG →
-`decodeAudioData`, funktioniert von file://), **nur CC0-Quellen**, Herkunft je Datei in `assets/sound/QUELLEN.md`. Dann sind nur
-die Schreie Aufnahmen, alles andere bleibt synthetisch.
+**Mischung Aufnahme + Synthese beim Überfahren:** Aufnahme (Angstschrei, reißt ab) über den synthetischen Schichten
+(Masse, Punch, Körper, Knacken, Achsen-Doppelschlag, Splat, Bremse). Umstehende = Aufnahmen anderer Sprecher, entfernt
+(−10 dB, Tiefpass 1.8–3 kHz, viel Hall). Wirken auch die Aufprall-Schichten zu künstlich, können sie über dieselbe Kette
+durch CC0-Aufnahmen ersetzt werden (eigene Kategorie `aufprall`, Packer-Tabelle `CATS` erweitern).
 
 ### 4.11 Speichern
 
@@ -635,6 +647,23 @@ python3 tools/asset-baker/pack.py                           # WebP + Bundle (PNG
 
 Budget: Bundle ≤ 4 MB. Geprüft in diesem Container: Node 22, Playwright/Chromium, Pillow vorhanden; `node_modules` fehlt (→ `npm install`).
 
+### 6.4 Aufnahmen (Sound-Bundle)
+
+```
+assets/sound/raw/<kategorie>_<sprecher>_<nr>.wav    Rohaufnahmen (WAV/FLAC/MP3/OGG), ein Take pro Datei
+assets/sound/QUELLEN.md                             je Datei: Urheber, Lizenz, Quelle, Datum  (Pflicht)
+pip install numpy soundfile soxr lameenc
+python3 tools/sound-packer/pack.py                  → assets/sound/neonregent.sound.js (window.NEONREGENT_SOUNDS)
+```
+
+- Verarbeitung: Mono, 44.1 kHz (soxr), Stille abschneiden, Lautheit je Kategorie angleichen (RMS-Ziel, Spitze ≤ −1 dBFS),
+  5/20 ms Blenden, **MP3 96 kbit/s** (Safari/iOS dekodieren OGG nicht zuverlässig), Base64 im Script (läuft von file://).
+- **Lizenzsperre:** ohne Zeile in `QUELLEN.md` oder mit anderer Lizenz als CC0/Public Domain/eigene Aufnahme bricht das Skript
+  ab und schreibt nichts; zu kurze oder stumme Takes ebenso.
+- **Geprüft in der Planungs-Session:** Lizenzsperre greift, kaputte Takes werden abgelehnt, gutes Material wird gepackt
+  (~12 KB je Take), Chromium dekodiert das Bundle, die Klangprobe spielt die Takes im Zusammenhang (Schrei reißt im Aufprall ab).
+- Stand: Bundle ist **leer** (noch keine Aufnahmen) – Quelle wählt der Nutzer (D13).
+
 ---
 
 ## 7. Gameplay-Systeme (Spezifikation)
@@ -841,12 +870,15 @@ Größe: S ≈ halbe Session, M ≈ eine Session, L ≈ eine volle Session.
 ### MS4 – Leben: Passanten, Verkehr, Schreie (L) · lies: §4.8, §4.10, §7.4–7.5, WORLD.md §1, §8, §13, klangprobe.html
 - Passanten (Spawn-Ring, Gehweg-Wandern, Zebrastreifen, Panik, Umstoßen, Tod + Splat, Chip-Punkte), Verkehr (Spuren, Kreuzungen,
   Vorausschau, Hupen, Reaktionen, Sackgassen-Meidung), Dichte je Distrikt, Ambient-Vollstreckung.
-- **Schrei-System** (§4.10): Stimm-Seed je Person; Angstschrei + Ausweichsprung; tödliches Überfahren (Schrei reißt ab, Aufprall,
-  Punch, Achsen-Doppelschlag, Splat, Bremse); Angefahren (Schmerzschrei, Stöhnen bis zum Aufstehen); Umstehende; Panik der Menge;
-  Stimmen-Verwaltung und Ducking; Vollstreckungs-Sound.
+- **Schrei-System** (§4.10) mit **Aufnahmen aus dem Bundle** (§6.4; synthetischer Rückfall nur bei leerem Bundle): Sprecher je
+  Person; Angstschrei + Ausweichsprung; tödliches Überfahren (Aufnahme reißt im Aufprall ab, darunter Aufprall, Punch,
+  Achsen-Doppelschlag, Splat, Bremse); Angefahren (Schmerz-Take, Stöhnen bis zum Aufstehen); Umstehende; Panik der Menge
+  (Rufe „Hilfe!", „Weg hier!"); Stimmen-Verwaltung und Ducking; Vollstreckungs-Sound.
+- **Voraussetzung:** Aufnahmen liegen vor (Nutzer, Weg A/B/C in `AUFNAHMEN.md`). Fehlen sie, wird MS4 mit dem Rückfall gebaut
+  und die Aufnahmen werden später nur noch gepackt – Code muss dafür nicht mehr angefasst werden.
 - **DoD:** 5-min-Soak (`soak.mjs`) ohne Fehler; kein Dauerstau (blockierte Autos < 3); Überfahren funktioniert sicht- und hörbar;
-  `?scene=runover` reproduzierbar; **WAV-Export** der Szene (`tools/neonregent-test/audio.mjs`) liegt dem Bericht bei, damit der
-  Nutzer abhört; Budget §10 bei voller Dichte.
+  `?scene=runover` reproduzierbar; **WAV-Export** der Szene (`tools/neonregent-test/audio.mjs`) liegt dem Bericht bei, und
+  der **Nutzer bestätigt nach dem Abhören**, dass die Schreie menschlich klingen; Budget §10 bei voller Dichte.
 
 ### MS5 – Begehbare Gebäude (L) · lies: §5.9, §7.11, §4.10 (Innen/Außen), WORLD.md §14, concept.html (`makeInterior`, `#inside`)
 - Auswahl (10 % + Dienste + Story-Orte), lazy Grundriss (BSP + Template-Format), Möbel-Texturen je Raumtyp, Schiebetüren,
@@ -940,6 +972,8 @@ const SCENES = ['docks_street', 'neon_crossing', 'krone_palace', 'police_l3', 'm
   `tools/neonregent-test/out/` (Überfahren tödlich/verletzt, Panik, Vollstreckung, Sirene, Explosion, Innenraum-Schuss) und
   prüft automatisch: kein NaN, Spitzenpegel vor Normalisierung 0.05–4 (nicht stumm, nicht explodiert), Länge plausibel.
   Optional Spektrogramm-PNG (numpy + PIL, siehe Planungs-Session). **Die WAVs gehören in den Bericht – der Nutzer hört ab** (R15).
+- **Aufnahmen**: `python3 tools/sound-packer/pack.py` läuft fehlerfrei (Lizenzsperre!); `audio.mjs` lädt das Bundle in Chromium
+  und dekodiert jeden Take (`decodeAudioData`); Zählung je Kategorie und Sprecher gegen die Takeliste in `AUFNAHMEN.md`.
 - **Innenräume** `interiors.mjs`: 200 zufällige Gebäude → Grundriss erzeugen → Flood-Fill auf dem 16-px-Raster ab der
   Eingangstür: alle Räume erreichbar, keine Tür blockiert, keine Wand außerhalb des Grundrisses.
 - **Screenshots** für den Bericht: Szenen-PNGs (deviceScaleFactor 2, wenn der Nutzer sie sehen soll).
@@ -998,7 +1032,9 @@ Regendichte → Partikel ausdünnen (Ironclad `THIN`) → Chip-Glows aus → Lig
 | Dateien wachsen zu Monolithen | R4 (≤ 1500 Zeilen), Aufteilung nach §4.1. |
 | Fonts fehlen (Linux) | R12. |
 | Kontextgrenze der Session | Plan ist in 3 Dateien geteilt; nur nötige Abschnitte lesen. |
-| Synthetische Schreie klingen billig | Klangprobe vom Nutzer abhören lassen (D13); Stimmmodell iterieren (Spektrogramm zeigt z. B. zu regelmäßiges Vibrato); Plan B: CC0-Aufnahmen per Bundle. |
+| Synthetische Schreie klingen billig | **Eingetreten** (Nutzer-Urteil) → menschliche Laute sind Aufnahmen (D13, §6.4). |
+| Aufnahmen: Beschaffung und Lizenz | Weg A (selbst aufnehmen) empfohlen; Lizenzsperre im Packer (R16); `QUELLEN.md` je Datei; keine kommerziellen Bibliotheken (Weitergabe verboten). |
+| Zu wenige Sprecher → hörbare Wiederholung | mind. 3, besser 5 Sprecher; Takes zufällig ohne direkte Wiederholung; Tonhöhe ±5 %. |
 | Session kann nicht hören | Automatische Pegel-/NaN-Prüfung, Spektrogramme, WAVs an den Nutzer (R15). |
 | Innenräume wirken alle gleich | Raumtypen je Gebäudetyp, Möbel-Varianten, Namen, handgebaute Story-Innenräume; bewusst nur 10 %. |
 | Dach-Überhang der Nachbarn verdeckt den offenen Innenraum | Röntgen-Alpha 0.3 (im Konzept gelöst). |
@@ -1026,7 +1062,8 @@ Beginne nicht mit dem nächsten Meilenstein.
 ## 13. Offene Fragen an den Nutzer
 
 Siehe §2, Punkte **D1–D7** und **D13**. Ohne Antwort gelten die Defaults. Spätestens vor **MS8** (Missionen) sollten D1–D5
-feststehen, vor **MS2** D6 und D11. D13 entscheidet der Nutzer nach dem Abhören der Klangprobe (spätestens vor MS4).
+feststehen, vor **MS2** D6 und D11. Bei D13 ist nur noch die **Quelle der Aufnahmen** offen (A selbst aufnehmen, B CC0,
+C gemischt) – am besten vor MS4, damit die Schreie dort gleich echt sind.
 
 ---
 
@@ -1035,4 +1072,5 @@ feststehen, vor **MS2** D6 und D11. D13 entscheidet der Nutzer nach dem Abhören
 | Datum | Meilenstein | Ergebnis | Messwerte | Abweichungen vom Plan | Offen |
 |---|---|---|---|---|---|
 | 2026-11-26 | Planung | Plan (PLAN/WORLD/STORY), Konzept-Render validiert | Ironclad 16.7 ms, Konzept 17.4 ms rAF | – | D1–D7 bestätigen |
+| 2026-11-26 | Planung, Aufnahmen | Nutzer-Urteil: synthetische Schreie klingen künstlich → menschliche Laute = Aufnahmen (D13). `tools/sound-packer/pack.py` (Lizenzsperre, MP3-Bundle) gebaut und mit Stellvertreter-Takes geprüft; Klangprobe spielt Aufnahmen (Bundle + Drag & Drop); `AUFNAHMEN.md` mit Takeliste. Freesound-Download aus der Session: Host freigegeben, Abruf aber von der Sicherheitsprüfung gestoppt (nicht ausdrücklich beauftragt) | ~12 KB je Take | – | Quelle der Aufnahmen (A/B/C) |
 | 2026-11-26 | Planung, Ergänzung | Sound als Kernsäule (R13, §4.10, `klangprobe.html` mit Schrei-Stimmmodell, per Spektrogramm geprüft); begehbare Gebäude (D12, §5.9, §7.11, neuer MS5; im Konzept validiert); Meilensteine → MS0–MS12; Mausoleum = Innenraum statt Grube | drinnen 18.2 ms rAF; Klang-Szene 0.2–0.5 s Rendern | – | D13 nach Abhören der Klangprobe |
