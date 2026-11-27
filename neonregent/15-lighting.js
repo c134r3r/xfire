@@ -12,6 +12,11 @@ const Lights = {
     if (!onScreen(x, y, r)) return;
     this.list.push({ x, y, r, color, k, angle });
   },
+  // Scheinwerferkegel (Spitze bei x,y, Länge len, Richtung angle)
+  cone(x, y, len, color, k, angle) {
+    if (this.list.length >= C.LIGHTS_MAX || !onScreen(x + Math.cos(angle) * len * 0.5, y + Math.sin(angle) * len * 0.5, len)) return;
+    this.list.push({ x, y, r: len, color, k, angle, cone: true });
+  },
   // Alle Lichtquellen dieses Frames sammeln: statische Lampen, Partikel, Spieler
   collect() {
     this.begin();
@@ -26,8 +31,9 @@ const Lights = {
       else if (q.kind === 'glow' && q.size > 18) this.add(q.x, q.y, q.size * 2.6, q.color, 0.4 * Math.min(1, q.life / q.max));
       else if (q.kind === 'debris' && q.burning && q.life > 20) this.add(q.x, q.y - q.z, 38, '#ff8a2a', 0.5);
     }
+    vehicleLights();
     const p = G.player;
-    if (p && G.state !== 'menu') { const T = LIGHT_TYPES.player; this.add(p.x, p.y, T.r * 1.6, T.color, T.k); }
+    if (p && G.state !== 'menu' && !p.veh) { const T = LIGHT_TYPES.player; this.add(p.x, p.y, T.r * 1.6, T.color, T.k); }
   }
 };
 
@@ -54,7 +60,8 @@ const Lightmap = {
     for (const L of Lights.list) {
       const r = L.r * z * s, x = ((L.x - V.cx) * z + VIEW_W / 2) * s, y = ((L.y - V.cy) * z + VIEW_H / 2) * s;
       lg.globalAlpha = L.k;
-      lg.drawImage(lightSprite(L.color), x - r, y - r, r * 2, r * 2);
+      if (L.cone) { const sc = r / 250; lg.save(); lg.translate(x, y); lg.rotate(L.angle); lg.drawImage(coneSprite(L.color), -4 * sc, -80 * sc, 256 * sc, 160 * sc); lg.restore(); }
+      else lg.drawImage(lightSprite(L.color), x - r, y - r, r * 2, r * 2);
     }
     lg.globalAlpha = 1;
     ctx2.setTransform(1, 0, 0, 1, 0, 0);

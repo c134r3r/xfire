@@ -21,9 +21,12 @@ function fitCanvas() {
 // ---- Kamera: cam = Weltpunkt in der Bildmitte; Zoom zu Fuß C.ZOOM_FOOT, drinnen C.ZOOM_INSIDE (nach Tempo im Auto: MS2) ----
 function updateCamera(snap) {
   const p = G.player; if (!p) return;
-  const ap = aimPoint();
-  const lx = clamp((ap.x - p.x) * 0.2, -170, 170), ly = clamp((ap.y - p.y) * 0.2, -120, 120);     // Zielabstand-Vorausschau wie Ironclad
-  const tz = G.inside ? C.ZOOM_INSIDE : C.ZOOM_FOOT;
+  const ap = aimPoint(); let lx = clamp((ap.x - p.x) * 0.2, -170, 170), ly = clamp((ap.y - p.y) * 0.2, -120, 120);     // Zielabstand-Vorausschau wie Ironclad
+  let tz = G.inside ? C.ZOOM_INSIDE : C.ZOOM_FOOT;
+  if (p.veh) {                                                                                      // im Fahrzeug: Zoom nach Tempo, Vorausschau = Geschwindigkeit x 22 (max. 260 px)
+    const v = p.veh, spd = Math.hypot(v.vx, v.vy), top = VEHICLES[v.cls].top, k = clamp(spd / top, 0, 1);
+    tz = lerp(C.ZOOM_CAR_SLOW, C.ZOOM_CAR_FAST, k); const m = Math.min(260, spd * C.CAM_LEAD_CAR), q = spd || 1; lx = v.vx / q * m; ly = v.vy / q * m;
+  }
   G.zoomBase = snap ? tz : lerp(G.zoomBase || tz, tz, 0.06);
   const hw = VIEW_W / 2 / G.zoomBase, hh = VIEW_H / 2 / G.zoomBase, MW = World.W * C.TILE, MH = World.H * C.TILE;
   const tx = clamp(p.x + lx, hw - 60, MW - hw + 60), ty = clamp(p.y + ly, hh - 60, MH - hh + 60), k = snap ? 1 : 0.11;
@@ -102,6 +105,12 @@ const Ground = {
         if (l.length >= 40) l.shift(); l.push(d);
         const c = this.cache.get(k); if (c) this.drawDecal(c.getContext('2d'), d, cx * this.CH, cy * this.CH);
       }
+  },
+  // Bremsspur: kurzer dunkler Strich in die Chunks (nicht persistiert: ein neu gemalter Chunk ist wieder sauber)
+  skid(x, y, ang) {
+    const k = this.key(Math.floor(x / this.CH), Math.floor(y / this.CH)), c = this.cache.get(k); if (!c) return;
+    const g = c.getContext('2d'); g.save(); g.translate(x - Math.floor(x / this.CH) * this.CH, y - Math.floor(y / this.CH) * this.CH); g.rotate(ang);
+    g.fillStyle = 'rgba(4,4,10,0.3)'; g.fillRect(-4, -1.1, 8, 2.2); g.restore();
   },
   // Pro Frame höchstens einen fehlenden Chunk im erweiterten Sichtbereich vormalen (kein Ruckeln beim Laufen)
   prefetch(cx, cy, hw, hh) {
@@ -220,9 +229,10 @@ function render() {
     }
   Ground.prefetch(cx, cy, hw, hh);
 
-  // 3. Entitäten: Spieler, Trümmer
+  // 3. Entitäten: Fahrzeuge (Lack), Spieler zu Fuß, Trümmer
   const p = G.player;
-  if (p && G.state !== 'menu') drawPlayer(p);
+  drawVehicles('body');
+  if (p && G.state !== 'menu' && !p.veh) drawPlayer(p);
   for (const q of G.parts) {
     if (q.kind !== 'debris' || !onScreen(q.x, q.y, 30)) continue;
     const a = Math.min(1, q.life / 20);
@@ -247,7 +257,7 @@ function render() {
   }
 
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; drawVehicles('glow'); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {
@@ -262,10 +272,24 @@ function render() {
   Rain.draw(); world();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const t of G.texts) { ctx.globalAlpha = Math.min(1, t.life / 20); ctx.font = `900 ${t.size}px "Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif`; ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y); }
+  const nv = G.nearVeh;
+  if (nv && G.state === 'play') {                                              // Interaktionshinweis über dem Fahrzeug
+    const D = VEHICLES[nv.cls], label = nv.breaking ? 'AUFBRECHEN …' : (isTouch ? 'EINSTEIGEN' : '[F] EINSTEIGEN') + (nv.locked && !nv.unlocked ? ' · VERSCHLOSSEN' : '');
+    ctx.font = '900 11px "Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif'; ctx.fillStyle = 'rgba(0,0,0,0.6)'; const tw = ctx.measureText(label).width + 12; ctx.fillRect(nv.x - tw / 2, nv.y - D.L / 2 - 30, tw, 17);
+    ctx.fillStyle = nv.locked && !nv.unlocked ? '#ffb35c' : '#a8f6ff'; ctx.fillText(label, nv.x, nv.y - D.L / 2 - 21);
+  }
   ctx.globalAlpha = 1;
 
   // 10. Bildschirmraum
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (Input.touch.on) {                                                         // Touch-Sticks: schwebende Basis, Knauf folgt dem Daumen
+    for (const [s, dx, dy] of [[Input.touch.move, 170, 560], [Input.touch.aim, 1110, 560]]) {
+      const act = s.id !== null, bx = act ? s.ox : dx, by = act ? s.oy : dy;
+      ctx.globalAlpha = act ? 0.35 : 0.12; ctx.strokeStyle = '#3fe8ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(bx, by, Input.STICK_R, 0, TAU); ctx.stroke();
+      if (act) { const v = Input.stickVec(s); ctx.globalAlpha = 0.55; ctx.fillStyle = '#a8f6ff'; ctx.beginPath(); ctx.arc(bx + v.x * Input.STICK_R, by + v.y * Input.STICK_R, 26, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+  }
   if (G.hurtFlash > 0.02) { ctx.fillStyle = `rgba(255,30,40,${G.hurtFlash * 0.4})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   if (G.sceneLabel) { ctx.font = '12px "DejaVu Sans", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(230,236,245,0.6)'; ctx.fillText(G.sceneLabel, VIEW_W / 2, 66); }
 }

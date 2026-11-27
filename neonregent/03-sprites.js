@@ -41,6 +41,16 @@ function lightSprite(color) {
     g.fillStyle = gr; g.fillRect(-64, -64, 128, 128);
   });
 }
+// Scheinwerferkegel: Spitze links-mittig (4, 80), öffnet nach +x
+function coneSprite(color) {
+  return sprite('cone|' + color, 256, 160, g => {
+    g.translate(-128, 0);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 256);
+    gr.addColorStop(0, rgba(color, 0.95)); gr.addColorStop(0.6, rgba(color, 0.35)); gr.addColorStop(1, rgba(color, 0));
+    g.fillStyle = gr; g.filter = 'blur(6px)';
+    g.beginPath(); g.moveTo(4, -6); g.lineTo(250, -70); g.lineTo(250, 70); g.lineTo(4, 6); g.closePath(); g.fill(); g.filter = 'none';
+  });
+}
 function smokeSprite(v) {
   return sprite('smoke|' + v, 96, 96, g => withSeed(v === 'dark' ? 11 : 12, () => {
     for (let i = 0; i < 7; i++) {

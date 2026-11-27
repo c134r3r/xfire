@@ -27,6 +27,14 @@ for (const f of fs.readdirSync(path.join(ROOT, 'assets/sound/raw'))) { const m =
     console.log(id.padEnd(22), r.seconds.toFixed(1) + ' s', 'Spitze ' + r.rawPeak.toFixed(2), 'RMS ' + r.rms.toFixed(3), ok ? 'ok' : 'FEHLER');
     if (!ok) bad++;
   }
+  // Musik: je Track 6 Takte aus dem Volllast-Abschnitt (Takte 16-21) offline als WAV; Pegel, NaN, Länge
+  const tracks = await p.evaluate(() => NR_TEST.musicTracks());
+  for (let i = 0; i < tracks.length; i++) {
+    const r = await p.evaluate(i => NR_TEST.musicWav(i, 16, 6), i);
+    fs.writeFileSync(path.join(OUT, 'musik_' + (i + 1) + '_' + tracks[i] + '.wav'), Buffer.from(r.b64, 'base64'));
+    const ok = !r.nan && r.rawPeak >= 0.1 && r.rawPeak <= 6 && r.seconds > 8;
+    console.log(('musik_' + tracks[i]).padEnd(22), r.seconds.toFixed(1) + ' s', 'Spitze ' + r.rawPeak.toFixed(2), 'RMS ' + r.rms.toFixed(3), ok ? 'ok' : 'FEHLER'); if (!ok) bad++;
+  }
   if (errs.length) { console.log('Konsolenfehler:', errs.join(' | ')); bad++; }
   await b.close(); process.exit(bad ? 1 : 0);
 })();

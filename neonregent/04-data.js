@@ -73,3 +73,25 @@ const FACADE_STYLES = {
   ruin:        { base: '#1c1d22', win: 0.04, band: false }
 };
 const NEON_COLORS = ['#ff3fa4', '#3fe8ff', '#9dff4a', '#a66bff', '#ffb35c'];
+
+// ---- Fahrzeuge (WORLD.md §5). L x B in px, mass, top (px/Tick), accel, grip, steer (rad/Tick), hp, expl (Ironclad-Explosionsgröße) ----
+// hover: schwebt (keine Bremsspuren, Unterboden-Glow). board: Hoverboard, Fahrer steht frei und nimmt Treffer (exposed).
+const VEHICLES = {
+  kapsel:   { name: 'KAPSEL',   sub: 'KLEINSTWAGEN',  L: 52,  B: 26, mass: 0.7, top: 7.0,  accel: 0.16, grip: 0.30, steer: 0.060, hp: 60,  expl: 1.3, glow: '#3fe8ff', snd: 'whine' },
+  limo:     { name: 'LIMO',     sub: 'LIMOUSINE',     L: 70,  B: 30, mass: 1.0, top: 8.2,  accel: 0.15, grip: 0.26, steer: 0.052, hp: 90,  expl: 1.6, glow: '#ff3fa4', snd: 'hybrid' },
+  taxi:     { name: 'TAXI',     sub: 'LEUCHTSCHILD',  L: 70,  B: 30, mass: 1.0, top: 8.2,  accel: 0.15, grip: 0.26, steer: 0.052, hp: 100, expl: 1.6, glow: '#ffd84a', snd: 'hybrid' },
+  pfeil:    { name: 'PFEIL',    sub: 'SPORTWAGEN',    L: 68,  B: 30, mass: 0.9, top: 10.5, accel: 0.22, grip: 0.30, steer: 0.058, hp: 75,  expl: 1.6, glow: '#ff3fa4', snd: 'turbine' },
+  gleiter:  { name: 'GLEITER',  sub: 'SCHWEBEWAGEN',  L: 66,  B: 32, mass: 0.9, top: 9.5,  accel: 0.18, grip: 0.12, steer: 0.050, hp: 70,  expl: 1.7, glow: '#9dff4a', snd: 'hover', hover: true },
+  pritsche: { name: 'PRITSCHE', sub: 'PICKUP',        L: 74,  B: 32, mass: 1.3, top: 7.6,  accel: 0.13, grip: 0.24, steer: 0.048, hp: 120, expl: 1.7, glow: '#ff9a3a', snd: 'diesel' },
+  kasten:   { name: 'KASTEN',   sub: 'KASTENWAGEN',   L: 78,  B: 34, mass: 1.6, top: 6.6,  accel: 0.11, grip: 0.22, steer: 0.042, hp: 140, expl: 1.8, glow: '#a66bff', snd: 'diesel' },
+  laster:   { name: 'LASTER',   sub: 'CONTAINERZUG',  L: 124, B: 38, mass: 3.2, top: 5.6,  accel: 0.07, grip: 0.20, steer: 0.032, hp: 260, expl: 2.2, glow: '#ff3b4a', snd: 'heavy' },
+  bike:     { name: 'KURIER-BIKE', sub: 'LICHTRAD',   L: 40,  B: 14, mass: 0.4, top: 11.0, accel: 0.25, grip: 0.34, steer: 0.075, hp: 40,  expl: 1.0, glow: '#3fe8ff', snd: 'bike', exposed: true },
+  board:    { name: 'HOVERBOARD', sub: 'SCHWEBEBRETT', L: 34, B: 16, mass: 0.25, top: 9.5, accel: 0.26, grip: 0.10, steer: 0.075, hp: 35, expl: 0.7, glow: '#ff3fa4', snd: 'board', hover: true, board: true, exposed: true }
+};
+// Verkehrsmix je Distrikt (WORLD.md §5; erbe_limo folgt mit den Erben als limo)
+const TRAFFIC_MIX = {
+  docks: { kapsel: 25, pritsche: 25, kasten: 20, laster: 15, limo: 10, bike: 5 },
+  neon:  { limo: 30, taxi: 20, pfeil: 15, gleiter: 15, bike: 10, kapsel: 10 },
+  krone: { limo: 40, gleiter: 25, pfeil: 20, taxi: 10, bike: 5 }
+};
+const CAR_PAINTS = ['#3a6ea5', '#b0305e', '#d8d2c4', '#2a2a30', '#3f9a8a', '#7a3fb0', '#8a8f99', '#a04a2a'];

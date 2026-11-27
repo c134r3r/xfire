@@ -52,6 +52,7 @@ function explosion(x, y, size, opts = {}) {
   if (opts.scorch !== false) stampScorch(x, y, 0.22 + 0.16 * s);
   addTrauma(Math.min(0.85, 0.1 + 0.12 * s) * (opts.shake === undefined ? 1 : opts.shake) * screenFalloff(x, y));
   if (s >= 1.6) G.zoomPunch = Math.max(G.zoomPunch, 0.012 * s);
+  blast(x, y, 110 * Math.sqrt(s), 70 * s);
   Aud.explosion(s, x, y);
 }
 // Brandflecken werden in die Boden-Chunks gestempelt (PLAN §4.5).

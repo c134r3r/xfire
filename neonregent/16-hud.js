@@ -38,6 +38,7 @@ const HUD = {
     else if (++P.hold > (2.5 + 0.05 * full) * 60) P.cur = null;
   },
   // Radar (unten rechts, Norden oben): Ausschnitt der vorgerenderten Minikarte, 2 px je Kachel (PLAN §5.8)
+  track(name) { const el = $('nowPlaying'); el.textContent = '♪ ' + name; el.classList.add('on'); clearTimeout(this._tt); this._tt = setTimeout(() => el.classList.remove('on'), 5000); },
   radar() {
     const p = G.player, cv = $('radar'); if (!p || !World.mini) return;
     const g = cv.getContext('2d'), S = cv.width, N = S / 2, tx = p.x / C.TILE, ty = p.y / C.TILE;
@@ -66,6 +67,9 @@ const HUD = {
     $('credVal').textContent = (G.credits || 0).toLocaleString('de-DE');
     const hs = $('heat').children; for (let i = 0; i < hs.length; i++) hs[i].classList.toggle('on', i < (G.heat || 0));
     $('chipTag').textContent = STR.chip.on; $('district').textContent = 'HALOGEN · ' + (G.district ? G.district.name : '');
+    const v = p.veh, vc = $('vehCard'); vc.style.display = v ? 'flex' : 'none';
+    if (v) { $('vehName').textContent = VEHICLES[v.cls].name; $('vehFill').style.width = clamp(v.hp / v.maxHp, 0, 1) * 100 + '%'; $('boostFill').style.width = v.boost + '%'; }
+    $('tbEnter').textContent = v ? 'AUSSTEIGEN' : (G.nearVeh ? 'EINSTEIGEN' : 'EIN / AUS'); $('tbAct').textContent = v ? 'BREMSE' : 'ROLLE'; $('tbSprint').textContent = v ? 'BOOST' : 'SPRINT'; $('tbHorn').style.display = v ? '' : 'none';
     this.radar();
     if (DEBUG) {
       const tx = Math.floor(p.x / C.TILE), ty = Math.floor(p.y / C.TILE);

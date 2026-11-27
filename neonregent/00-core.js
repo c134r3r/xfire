@@ -45,7 +45,7 @@ const Bus = {
 // ----- Einstellungen (localStorage, immer in try/catch - PLAN §4.11) -----
 const Settings = {
   key: 'neonregent_settings',
-  d: { vol: { sfx: 0.85, stimmen: 1, ambience: 0.7, musik: 0.5, ui: 0.8 }, shake: 1, quality: 1, muted: false, blood: true },
+  d: { vol: { sfx: 0.85, stimmen: 1, ambience: 0.7, musik: 0.5, ui: 0.8 }, shake: 1, quality: 1, muted: false, blood: true, drive: 'classic' },
   load() { try { const s = JSON.parse(localStorage.getItem(this.key) || 'null'); if (s) { Object.assign(this.d, s); this.d.vol = Object.assign({ sfx: 0.85, stimmen: 1, ambience: 0.7, musik: 0.5, ui: 0.8 }, s.vol); } } catch (e) {} return this.d; },
   save() { try { localStorage.setItem(this.key, JSON.stringify(this.d)); } catch (e) {} }
 };
@@ -57,7 +57,7 @@ const G = {
   state: 'boot', time: 0, scene: null,
   cam: { x: 0, y: 0 }, zoom: C.ZOOM_FOOT, zoomPunch: 0,
   trauma: 0, kickX: 0, kickY: 0, hurtFlash: 0, freeze: 0, quality: 1,
-  parts: [], texts: [], lamps: [], buildings: [], flags: null,
+  parts: [], texts: [], lamps: [], buildings: [], vehicles: [], nearVeh: null, flags: null,
   ambient: C.AMBIENT, player: null, inside: null, city: null, rain: 1, district: null,
   in: {}                                  // Intent (01-input.js)
 };

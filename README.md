@@ -465,14 +465,19 @@ Solo play is unchanged.
 
 Top-down open-world game (working title) in the rainy neon city of HALOGEN, built on the look and tech of IRONCLAD.
 Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry point; progress log in §14).
-**Status: milestone MS1 (city and rendering).** The whole city (306 x 96 tiles, three districts, canals with gated bridges) is generated
-from the zone plan; buildings lean in GTA-2 perspective with lazily baked facades, a night lightmap with street lamps and neon, rain,
-a radar and a full map (`Tab`). Sound: rain, per-district city hum, neon buzz, distant horns, footsteps per surface, plus the audio
-engine from MS0 (recorded human voices, baked sound bank). Gates are closed unless `?debug=1` or `?gates=open`.
-Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `B` explosion, `V` scream, `N` run-over,
-`Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` loads a deterministic test scene, `?seed=` changes the city.
+**Status: milestone MS2 (vehicles), plus music and touch pulled forward.** The whole city is generated from the zone plan (three districts,
+gated bridges, leaning GTA-2 buildings, night lightmap, rain, radar and full map on `Tab`). Ten retro-futuristic cyberpunk vehicle classes
+(compact, limo, taxi, sports car, hover glider, pickup, van, container truck, light-cycle courier bike and **hoverboards**) with arcade
+physics, drift, crashes, fire, explosions and chain reactions, parked cars (30 % locked: `F` breaks in), boost and horn.
+Sound: per-class engines, tyre squeal, crashes, doors, boost, fire, rain, per-district hum, footsteps, and **five dystopian 80s synth
+tracks** (shuffled playlist, `U` = next track). Touch: floating twin sticks plus context buttons; driving uses the "direct" mode
+(stick = target heading). Keyboard: `W/S` throttle/brake, `A/D` steer, `Space` handbrake, `Shift` boost, `H` horn, `F` enter/exit
+(menu option switches to the direct mode). Gates are closed unless `?debug=1` or `?gates=open`.
+Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `F8` spawn next vehicle, `B` explosion, `V` scream,
+`N` run-over, `Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` (e.g. `cars`, `drive`, `hover`) loads a deterministic test scene.
 Tests: `node tools/neonregent-test/smoke.mjs` (scenes, console errors, rAF timing), `walk.mjs` (zone plan vs. tiles, reachability,
-random walk without clipping), `audio.mjs` (renders every sound to WAV, level checks, decodes the recording bundle).
+random walk), `vehicles.mjs` (physics per class, crash to wreck, break-in, hoverboard, real touch events), `audio.mjs` (renders every
+sound and every track to WAV, level checks, decodes the recording bundle).
 
 ## Releasing
 

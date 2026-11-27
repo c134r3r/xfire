@@ -7,7 +7,7 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false;
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; for (const v of G.vehicles) { v.driver = null; }
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
   if (scene) R.set(7741); else R.fn = Math.random;
@@ -49,11 +49,20 @@ const SCENES = {
   dawn:          { setup: at(74, 27) },
   runover:       { setup: at(160, 44) },
   interior:      { setup: at(60, 44) },
+  cars:          { setup() { carLineup(); } },                 // alle Fahrzeugklassen nebeneinander (Look-Prüfung)
+  drive:         { setup() { tp(tileXY(161, 18)); const v = spawnVehicle('pfeil', G.player.x, G.player.y, 0, { paint: '#b0305e' }); enterVehicle(G.player, v); } },
+  hover:         { setup() { tp(tileXY(161, 18)); const v = spawnVehicle('board', G.player.x, G.player.y, 0, {}); enterVehicle(G.player, v); } },
   gate_tor1:     { setup: at(99, 17) },                  // Brücke Docks <-> Neonmeile (Tor 1)
   explosion:     { setup() { tp(tileXY(74, 27)); const p = G.player; G.sceneEvents = [[40, () => explosion(p.x + 150, p.y + 60, 1.8)], [58, () => explosion(p.x - 120, p.y + 90, 1.0)]]; } }
 };
 function tp(pt) { const f = World.freeSpot(pt.x, pt.y); G.player.x = f.x; G.player.y = f.y; G.cam.x = f.x; G.cam.y = f.y; }
 
+// Alle Fahrzeugklassen in zwei Reihen auf dem Terminalplatz (Landmarke t) für Screenshots
+function carLineup() {
+  const c = G.city.landmarks.t.center; tp({ x: c.x, y: c.y + 140 });
+  const ids = Object.keys(VEHICLES); let i = 0;
+  for (const id of ids) { const col = i % 5, row = Math.floor(i / 5); const v = spawnVehicle(id, c.x - 270 + col * 135, c.y - 60 + row * 95, -Math.PI / 2 + (row ? 0.0 : 0), { paint: ['#3a6ea5', '#b0305e', '#d8d2c4', '#2a2a30', '#3f9a8a'][i % 5] }); v.engine = i % 2 === 0; i++; }
+}
 let gateMsgT = 0;
 function step() {
   G.time++;
@@ -63,10 +72,12 @@ function step() {
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
+  updateVehicles();
   updateParticles();
   updateCamera();
   updateDistrict(false);
   if (G.time % 6 === 0) Amb.update(G.player.x, G.player.y);
+  if (G.time % 2 === 0) Eng.update();
   if (G.time % 15 === 0) for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) {      // geschlossenes Tor: Hinweis in der Nähe
     const p = G.player; if (Math.hypot((r.x0 + r.x1) / 2 - p.x, (r.y0 + r.y1) / 2 - p.y) < 130 && G.time - gateMsgT > 240) { gateMsgT = G.time; floatText((r.x0 + r.x1) / 2, r.y0 - 20, STR.gate, '#ff3b4a', 12); }
   }
@@ -74,13 +85,15 @@ function step() {
 }
 
 // Globale Tasten einmal pro Frame (Pause, Ton, Vollbild, Debug)
-let dbgSize = 0, dbgVoice = 0, dbgOver = 0;
+let dbgSize = 0, dbgVoice = 0, dbgOver = 0, dbgVeh = 0;
 function globalKeys() {
   if (Input.took('Fullscreen')) toggleFullscreen();
+  if (Input.took('KeyU')) { Aud.init(); Music.skip(); }
   if (Input.took('KeyM')) { Aud.init(); Aud.toggleMute(); HUD.banner(Aud.muted ? 'TON AUS' : 'TON AN', '', 900); }
   if (G.mapOpen && (Input.took('Tab') || Input.took('Escape') || Input.took('KeyP'))) setMap(false);
   else if (Input.took('KeyP') || Input.took('Escape')) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') setPaused(false); }
   if (G.state !== 'play' || !(DEBUG || G.scene)) return;
+  if (Input.took('F8')) { const ids = Object.keys(VEHICLES), p = G.player; const v = spawnVehicle(ids[dbgVeh++ % ids.length], p.x + Math.cos(p.a) * 70, p.y + Math.sin(p.a) * 70, p.a, {}); if (vehBlock(v, v.x, v.y, v.a).n) { G.vehicles.pop(); } else HUD.banner(VEHICLES[v.cls].name, VEHICLES[v.cls].sub, 900); }
   if (Input.took('KeyB')) { const a = aimPoint(), s = [0.8, 1.5, 3.0][dbgSize++ % 3]; Aud.init(); explosion(a.x, a.y, s); }
   if (Input.took('KeyV')) { Aud.init(); const v = STR.voices[dbgVoice++ % 4]; Aud.scream(v, G.player.x, G.player.y); floatText(G.player.x, G.player.y - 26, 'Schrei · ' + v, '#ff9ad0'); }
   if (Input.took('KeyN')) { Aud.init(); Aud.play(dbgOver++ % 2 ? 'ueberfahren_verletzt' : 'ueberfahren_toedlich', { cat: 'schrei' }); }
@@ -106,7 +119,7 @@ function frame(now) {
   let dt = (now - lastT) / 1000; adaptQuality(now - lastT); lastT = now;
   if (dt > 0.25) dt = 0.25;
   document.body.classList.toggle('ingame', G.state === 'play' || G.state === 'paused');
-  globalKeys();
+  globalKeys(); if (!Music.on) Music.start();
   if (G.state === 'play') {
     acc += dt; let n = 0;
     while (acc >= TICK && n < 4) { step(); acc -= TICK; n++; }
@@ -154,6 +167,10 @@ window.NR_TEST = {
     World.override = null; return n;
   },
   zone: (c, r) => ZONE_ROWS[r][c],
+  spawn: (cls, x, y, a = 0, o = {}) => spawnVehicle(cls, x, y, a, o),
+  enter: v => enterVehicle(G.player, v),
+  vehicles: () => G.vehicles.length,
+  veh: () => G.player && G.player.veh && { cls: G.player.veh.cls, x: G.player.veh.x, y: G.player.veh.y, hp: G.player.veh.hp, vx: G.player.veh.vx, vy: G.player.veh.vy, a: G.player.veh.a },
   blockedAt: (x, y) => World.blocked(x, y, C.PED_R),
   tileAt: (x, y) => World.tile(x, y),
   explosion(x, y, s) { explosion(x, y, s); },
@@ -166,7 +183,10 @@ window.NR_TEST = {
     const x = buf.getChannelData(0); let sum = 0; for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
     return { id, seconds: buf.duration, rawPeak: buf.rawPeak, nan: buf.hadNaN, rms: Math.sqrt(sum / x.length), b64: wavBase64(buf) };
   },
-  ids: () => Object.keys(SOUND_DEFS)
+  ids: () => Object.keys(SOUND_DEFS),
+  musicTracks: () => MUS_TRACKS.map(t => t.id),
+  async musicWav(i, bar0, bars) { const b = await Music.renderOffline(i, bar0, bars); const x = b.getChannelData(0); let s = 0; for (let k = 0; k < x.length; k++) s += x[k] * x[k]; return { id: MUS_TRACKS[i].id, seconds: b.duration, rawPeak: b.rawPeak, nan: b.hadNaN, rms: Math.sqrt(s / x.length), b64: wavBase64(b) }; },
+  musicState: () => ({ on: Music.on, track: Music.lastName, bars: Music.cur && Music.cur.bars, events: Music.cur && Music.cur.ev.length }),
 };
 
 // ------------------------------------------------------------------
@@ -175,10 +195,13 @@ window.NR_TEST = {
 (function boot() {
   fitCanvas(); addEventListener('resize', fitCanvas); addEventListener('orientationchange', () => setTimeout(fitCanvas, 150));
   Input.init(canvas);
-  const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); G.cityMs = performance.now() - t0; HUD.init();
+  const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); populateVehicles(+Q.get('seed') || C.CITY_SEED); G.cityMs = performance.now() - t0; HUD.init();
   Lightmap.build(G.ambient, C.LIGHTMAP_SCALE); G.rafMs = 16.7;
   G.state = 'menu';
   $('startBtn').addEventListener('click', () => startGame());
+  if (isTouch && !Settings.d.driveSet) { Settings.d.drive = 'direct'; }
+  const driveLabel = () => { $('driveBtn').textContent = 'STEUERUNG: ' + (Settings.d.drive === 'direct' ? 'DIREKT' : 'KLASSISCH'); };
+  $('driveBtn').addEventListener('click', () => { Settings.d.drive = Settings.d.drive === 'direct' ? 'classic' : 'direct'; Settings.d.driveSet = true; Settings.save(); driveLabel(); }); driveLabel();
   $('resumeBtn').addEventListener('click', () => setPaused(false));
   $('quitBtn').addEventListener('click', toMenu);
   $('touchPause').addEventListener('click', () => setPaused(G.state === 'play'));

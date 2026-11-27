@@ -99,7 +99,7 @@ const Aud = {
     for (const id of Object.keys(defs)) {
       const d = defs[id], list = [];
       for (let v = 0; v < d.variants; v++) {
-        try { list.push(await this.render(d, 1000 + v * 77 + id.length * 13, v)); log.n++; }
+        try { list.push(await this.render(d, 1000 + v * 77 + id.length * 13, v)); log.n++; await new Promise(r => setTimeout(r, 0)); }   // zwischen den Renderings Frames durchlassen
         catch (e) { log.fail.push(id + ':' + e.message); }
       }
       this.bank[id] = list;
@@ -125,6 +125,11 @@ const Aud = {
     const xf = Math.floor(xfSec * SR), n = buf.length - xf, out = new OfflineAudioContext(2, 1, SR).createBuffer(2, n, SR);
     for (let c = 0; c < 2; c++) { const s = buf.getChannelData(c), o = out.getChannelData(c); for (let i = 0; i < n; i++) o[i] = i < xf ? s[i] * (i / xf) + s[n + i] * (1 - i / xf) : s[i]; }
     return out;
+  },
+  // Gemeinsamer Rausch-Puffer für Live-Synthese (2 s)
+  noiseBuf() {
+    if (!this._nb) { const n = SR * 2, b = this.ac.createBuffer(1, n, this.ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; this._nb = b; }
+    return this._nb;
   },
   // Schleife auf einem Bus starten (Regen, Brummen). Gibt { setLevel(v, pan) } zurück.
   loop(id, bus = 'ambience') {
@@ -218,5 +223,84 @@ const Amb = {
     const n = G.city ? World.nearestNeon(x, y, 220) : null;                       // Neon-Summen: lauter und seitlich nahe am Schild
     if (n) L.buzz.setLevel(0.5 * (1 - n.d / 220) * (1 - n.d / 220), clamp((n.x - x) / 160, -0.8, 0.8)); else L.buzz.setLevel(0);
     if (--this.nextHorn <= 0) { this.nextHorn = 480 + Math.floor(Math.random() * 900); const a = Math.random() * TAU, d = 700 + Math.random() * 500; Aud.play('horn_far', { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, gain: 0.8 }); }
+  }
+};
+
+// ------------------------------------------------------------------
+// Fahrzeug-Klang (PLAN §4.10, WORLD.md §13): Motor je Klasse (Drehzahl), Reifenquietschen, Feuer, Hupe, Crash/Türen/Boost über den Bus
+// ------------------------------------------------------------------
+const ENG = {          // f Grundton, wave/w2 Oszillatoren, k2 Verhältnis des 2., lp Filterbereich, gears Schaltstufen (0 = stufenlos/elektrisch), am Pulsfrequenz (Diesel)
+  whine:   { f: 90,  wave: 'triangle', w2: 'sine',     k2: 2,    lp: [900, 3500], vol: 0.32, gears: 0, spread: 2.2 },
+  hybrid:  { f: 62,  wave: 'sawtooth', w2: 'triangle', k2: 0.5,  lp: [380, 1800], vol: 0.32, gears: 0, spread: 1.8 },
+  turbine: { f: 120, wave: 'sawtooth', w2: 'square',   k2: 1.5,  lp: [800, 5000], vol: 0.28, gears: 0, spread: 3.2, noise: 0.25 },
+  hover:   { f: 70,  wave: 'sine',     w2: 'triangle', k2: 2.01, lp: [500, 2200], vol: 0.34, gears: 0, spread: 1.8, noise: 0.4 },
+  diesel:  { f: 38,  wave: 'sawtooth', w2: 'square',   k2: 0.5,  lp: [250, 900],  vol: 0.38, gears: 4, spread: 2.0, am: 14 },
+  heavy:   { f: 30,  wave: 'sawtooth', w2: 'square',   k2: 0.5,  lp: [200, 700],  vol: 0.42, gears: 5, spread: 2.2, am: 10 },
+  bike:    { f: 140, wave: 'sawtooth', w2: 'sine',     k2: 2,    lp: [1000, 4500], vol: 0.28, gears: 0, spread: 2.4 },
+  board:   { f: 90,  wave: 'sine',     w2: 'triangle', k2: 3,    lp: [600, 3000], vol: 0.22, gears: 0, spread: 2.0, noise: 0.55 }
+};
+const Eng = {
+  voices: new Map(), horn: null, L: null, inited: false,
+  init() {
+    if (this.inited) return; this.inited = true;
+    const P = (id, v, k = 1) => Aud.play(id, { x: v.x, y: v.y, gain: k });
+    Bus.on('crash', (v, k) => { P(k < 4 ? 'crash_s' : k < 8 ? 'crash_m' : 'crash_l', v, clamp(0.5 + k / 10, 0.5, 1.3)); if (k > 7.5) P('glas', v, 0.8); if (k > 10) Aud.duck(); });
+    Bus.on('door', (v, open) => P(open ? 'tuer_auf' : 'tuer_zu', v, 0.8));
+    Bus.on('boost', v => P('boost', v, 0.8));
+    Bus.on('alarm', v => P('alarm', v, 0.7));
+    let splT = 0; Bus.on('splash', v => { if (G.time - splT > 14) { splT = G.time; P('spritzer', v, 0.8); } });
+  },
+  make(v) {
+    const ac = Aud.ac, D = ENG[VEHICLES[v.cls].snd], o = { D, nodes: [] };
+    o.o1 = ac.createOscillator(); o.o1.type = D.wave; o.o2 = ac.createOscillator(); o.o2.type = D.w2;
+    o.g2 = ac.createGain(); o.g2.gain.value = 0.5; o.lp = ac.createBiquadFilter(); o.lp.type = 'lowpass'; o.lp.Q.value = 1.2;
+    o.g = ac.createGain(); o.g.gain.value = 0; o.pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    o.o1.connect(o.lp); o.o2.connect(o.g2); o.g2.connect(o.lp); o.lp.connect(o.g);
+    if (D.am) { o.am = ac.createOscillator(); o.am.frequency.value = D.am; o.amg = ac.createGain(); o.amg.gain.value = 0; o.am.connect(o.amg); o.amg.connect(o.g.gain); o.am.start(); }
+    if (D.noise) { o.n = ac.createBufferSource(); o.n.buffer = Aud.noiseBuf(); o.n.loop = true; o.nf = ac.createBiquadFilter(); o.nf.type = 'bandpass'; o.nf.Q.value = 0.8; o.ng = ac.createGain(); o.ng.gain.value = 0; o.n.connect(o.nf); o.nf.connect(o.ng); o.ng.connect(o.lp); o.n.start(); }
+    if (o.pan) { o.g.connect(o.pan); o.pan.connect(Aud.bus.sfx); } else o.g.connect(Aud.bus.sfx);
+    o.o1.start(); o.o2.start(); return o;
+  },
+  kill(o) { const t = Aud.ac.currentTime; o.g.gain.setTargetAtTime(0, t, 0.05); for (const n of [o.o1, o.o2, o.am, o.n]) if (n) try { n.stop(t + 0.4); } catch (e) {} },
+  // alle 2 Ticks: bis zu 3 hörbare Motoren (Spieler zuerst, dann die nächsten bewegten/laufenden)
+  update() {
+    if (!Aud.ac || Aud.ac.state !== 'running' || Aud.muted) return;
+    this.init(); const ac = Aud.ac, t = ac.currentTime, p = G.player;
+    const cand = [];
+    for (const v of G.vehicles) {
+      if (v.dead || v.burn > 0 && !v.driver) continue;
+      const sp = Math.hypot(v.vx, v.vy); if (!(v.driver || sp > 0.6) || !onScreen(v.x, v.y, 500)) continue;
+      cand.push({ v, sp, d: v.driver ? -1 : Math.hypot(v.x - G.cam.x, v.y - G.cam.y) });
+    }
+    cand.sort((a, b) => a.d - b.d); const keep = new Set(cand.slice(0, C.VOICES_MAX.motor).map(c => c.v.id));
+    for (const [id, o] of this.voices) if (!keep.has(id)) { this.kill(o); this.voices.delete(id); }
+    for (const { v, sp } of cand.slice(0, C.VOICES_MAX.motor)) {
+      let o = this.voices.get(v.id); if (!o) { o = this.make(v); this.voices.set(v.id, o); }
+      const D = o.D, top = VEHICLES[v.cls].top, sf = clamp(sp / top, 0, 1.2), thr = v.driver === p ? Math.abs(G.in.throttle - G.in.brake || Math.hypot(G.in.mx, G.in.my)) : 0;
+      let rpm; if (D.gears) { const gi = Math.min(D.gears - 1, Math.floor(sf * D.gears)), fr = sf * D.gears - gi; rpm = 0.22 + 0.7 * clamp(fr, 0, 1); } else rpm = 0.2 + 0.8 * sf;
+      rpm = clamp(rpm + 0.12 * thr, 0.15, 1.1);
+      const f1 = D.f * (1 + rpm * D.spread), pl = Aud.place(v.x, v.y);
+      o.o1.frequency.setTargetAtTime(f1, t, 0.06); o.o2.frequency.setTargetAtTime(f1 * D.k2, t, 0.06);
+      const cut = D.lp[0] + (D.lp[1] - D.lp[0]) * rpm; o.lp.frequency.setTargetAtTime(pl.lp ? Math.min(cut, pl.lp) : cut, t, 0.08);
+      const vol = D.vol * (0.35 + 0.65 * Math.max(sf, thr)) * pl.v; o.g.gain.setTargetAtTime(D.am ? vol * 0.75 : vol, t, 0.08);
+      if (o.amg) { o.am.frequency.setTargetAtTime(D.am * (0.5 + rpm), t, 0.1); o.amg.gain.setTargetAtTime(vol * 0.3, t, 0.1); }
+      if (o.ng) { o.nf.frequency.setTargetAtTime(500 + rpm * 2600, t, 0.08); o.ng.gain.setTargetAtTime(D.noise * vol * rpm * 1.2, t, 0.08); }
+      if (o.pan) o.pan.pan.setTargetAtTime(pl.pan, t, 0.08);
+    }
+    // Reifenquietschen (Spielerfahrzeug), Feuer (nächstes brennendes Fahrzeug)
+    if (!this.L && Aud.bank.skid_loop && Aud.bank.feuer_loop) this.L = { skid: Aud.loop('skid_loop', 'sfx'), fire: Aud.loop('feuer_loop', 'ambience') };
+    if (this.L) {
+      const pv = p && p.veh, slip = pv && !VEHICLES[pv.cls].hover && Math.hypot(pv.vx, pv.vy) > 1 ? pv.slip : 0;
+      this.L.skid.setLevel(clamp((slip - 1.2) / 4, 0, 1) * 0.7);
+      let bd = 1e9, bv = null; for (const v of G.vehicles) if (v.burn > 0) { const d = Math.hypot(v.x - G.cam.x, v.y - G.cam.y); if (d < bd) { bd = d; bv = v; } }
+      if (bv && bd < 600) { const pl = Aud.place(bv.x, bv.y); this.L.fire.setLevel(0.7 * Math.pow(1 - bd / 600, 1.5), pl.pan); } else this.L.fire.setLevel(0);
+    }
+    // Hupe (H): zwei Rechtecktöne 350/440 Hz, solange gedrückt
+    const hornOn = !!(p && p.veh && G.in.horn);
+    if (hornOn && !this.horn) {
+      const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+      o1.type = o2.type = 'square'; o1.frequency.value = 350; o2.frequency.value = 440; lp.type = 'lowpass'; lp.frequency.value = 1500; g.gain.value = 0.0001; g.gain.setTargetAtTime(0.22, t, 0.01);
+      o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(Aud.bus.sfx); o1.start(); o2.start(); this.horn = { o1, o2, g };
+    } else if (!hornOn && this.horn) { const h = this.horn; h.g.gain.setTargetAtTime(0, t, 0.02); h.o1.stop(t + 0.15); h.o2.stop(t + 0.15); this.horn = null; }
   }
 };

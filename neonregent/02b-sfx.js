@@ -283,6 +283,40 @@ function stepSnd(m, surf) {
   if (surf === 'pfuetze') { m.hit(0.01, 0.14, 'bandpass', 2500, 0.9, 0.45, dest, 1100); m.hit(0.03, 0.08, 'highpass', 4500, 0.7, 0.12, dest); }
 }
 
+// ---- Fahrzeuge (MS2): Crash nach Aufprallstärke, Glas, Türen, Boost, Spritzwasser, Feuer-Loop, Alarm, Reifenquietschen ----
+function crashSnd(m, size) {
+  const dest = m.bus(0, 1, 0.12 + 0.06 * size), s = size;
+  m.thump(0, 120 / Math.sqrt(s + 0.3), 45, 0.12 + 0.1 * s, 0.9, dest);                                   // Wumms der Karosserie
+  m.hit(0, 0.1 + 0.08 * s, 'bandpass', 800 + 200 * s, 1.1, 0.8, dest, 300);                              // Blech knautscht
+  m.hit(0, 0.03, 'highpass', 3000, 0.7, 0.4, dest);
+  m.clicks(0.01, 0.12 + 0.12 * s, Math.round(5 + 6 * s), 1200, 6500, 0.28, dest);                         // Splitter
+  for (let i = 0; i < 2 + Math.round(s); i++) { const t = m.r(0.02, 0.08), f = m.r(500, 1400), o = m.osc('square', t, 0.25), lp = m.filt('bandpass', f * 2, 6), e = m.env([[t, 0], [t + 0.003, 0.12], [t + 0.22, 0.0001]]); o.frequency.value = f; o.connect(lp); lp.connect(e); e.connect(dest); }   // Metall klingt nach
+  if (s > 1.2) { m.thump(0.04, 70, 30, 0.35, 0.7, dest); m.hit(0.05, 0.4, 'lowpass', 600, 0.8, 0.5, dest, 150); }
+}
+function glassSnd(m) { const dest = m.bus(0, 1, 0.25); m.hit(0, 0.05, 'highpass', 3500, 0.7, 0.5, dest); m.clicks(0, 0.45, 38, 2800, 9500, 0.3, dest); m.clicks(0.1, 0.6, 14, 1800, 4500, 0.15, dest); }
+function doorSnd(m, open) { const dest = m.bus(0, 1, 0.08); m.thump(0, open ? 170 : 130, 80, 0.07, 0.6, dest); m.hit(0, 0.03, 'highpass', 2500, 0.7, 0.3, dest); m.hit(open ? 0.0 : 0.005, 0.07, 'bandpass', 900, 1, 0.5, dest); if (open) m.hit(0.09, 0.12, 'bandpass', 1800, 2, 0.12, dest, 3000); }
+function boostSnd(m) {
+  const dest = m.bus(0, 1, 0.15); m.hit(0, 0.9, 'bandpass', 500, 1.3, 0.9, dest, 3200);
+  const o = m.osc('sawtooth', 0, 0.9), lp = m.filt('lowpass', 1500), e = m.env([[0, 0], [0.12, 0.28], [0.9, 0.0001]]); o.frequency.setValueAtTime(110, 0); o.frequency.exponentialRampToValueAtTime(520, 0.8); o.connect(lp); lp.connect(e); e.connect(dest);
+  m.thump(0, 90, 40, 0.18, 0.5, dest);
+}
+function splashSnd(m) { const dest = m.bus(0, 1, 0.1); m.hit(0, 0.22, 'bandpass', 2300, 0.9, 0.6, dest, 900); m.hit(0.02, 0.12, 'highpass', 4500, 0.7, 0.2, dest); m.clicks(0, 0.2, 10, 3000, 8000, 0.1, dest); }
+function fireLoop(m) {
+  const L = 5.6, dest = m.bus(0, 1, 0, 0);
+  { const n = m.noise(0, L), lp = m.filt('lowpass', 420), g = m.gain(0.55); n.connect(lp); lp.connect(g); g.connect(dest); }                        // Fauchen
+  { const n = m.noise(0, L), bp = m.filt('bandpass', 1400, 0.7), g = m.gain(0.12); n.connect(bp); bp.connect(g); g.connect(dest); }
+  m.clicks(0, L, 150, 800, 4200, 0.2, dest);                                                                                                     // Knistern
+}
+function alarmSnd(m) {
+  const dest = m.bus(0, 1, 0.3);
+  for (let i = 0; i < 8; i++) { const t = i * 0.28, f = i % 2 ? 1250 : 850, o = m.osc('square', t, 0.24), lp = m.filt('lowpass', 2200), e = m.env([[t, 0], [t + 0.01, 0.22], [t + 0.2, 0.2], [t + 0.24, 0.0001]]); o.frequency.value = f; o.connect(lp); lp.connect(e); e.connect(dest); }
+}
+function skidLoop(m) {
+  const L = 3.8, dest = m.bus(0, 1, 0, 0);
+  for (const [f, q, v] of [[1900, 4, 0.5], [2700, 6, 0.3], [1250, 3, 0.25]]) { const n = m.noise(0, L), bp = m.filt('bandpass', f, q), g = m.gain(v); n.connect(bp); bp.connect(g); g.connect(dest); }
+  const o = m.osc('sawtooth', 0, L), bp = m.filt('bandpass', 1500, 8), g = m.gain(0.08); o.frequency.value = 520; o.connect(bp); bp.connect(g); g.connect(dest);
+}
+
 // ------------------------------------------------------------------
 // Klangbank-Definitionen: id -> { len (s), variants, cat (Stimmen-Limit), bus, gain, first (zuerst backen), fn(m, variantIndex) }
 // "first" = was das Spiel sofort braucht (Explosion + Schreie); der Rest wird im Hintergrund nachgebacken.
@@ -301,11 +335,22 @@ const SOUND_DEFS = {
   hum_krone:  { len: 7.6, variants: 1, loop: true, peak: 0.16, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'krone') },
   neon_buzz:  { len: 4.4, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 6, fn: neonBuzz },
   horn_far:   { len: 1.8, variants: 3, bus: 'ambience', cat: 'sfx', noiseLen: 3, fn: hornFar },
-  schritt_asphalt: { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'asphalt') },
-  schritt_platte:  { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'platte') },
-  schritt_beton:   { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'beton') },
-  schritt_metall:  { len: 0.45, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'metall') },
-  schritt_pfuetze: { len: 0.4, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.55, fn: m => stepSnd(m, 'pfuetze') },
+  crash_s: { len: 1.0, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: m => crashSnd(m, 0.5) },
+  crash_m: { len: 1.6, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: m => crashSnd(m, 1.0) },
+  crash_l: { len: 2.4, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 4, fn: m => crashSnd(m, 1.9) },
+  glas:    { len: 1.1, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: glassSnd },
+  tuer_auf: { len: 0.5, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: m => doorSnd(m, true) },
+  tuer_zu:  { len: 0.4, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: m => doorSnd(m, false) },
+  boost:   { len: 1.4, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 3, fn: boostSnd },
+  spritzer: { len: 0.6, variants: 3, cat: 'sfx', bus: 'sfx', noiseLen: 2, gain: 0.7, fn: splashSnd },
+  alarm:   { len: 2.4, variants: 1, cat: 'sfx', bus: 'ambience', noiseLen: 2, fn: alarmSnd },
+  feuer_loop: { len: 6.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 8, fn: fireLoop },
+  skid_loop:  { len: 4.8, variants: 1, loop: true, peak: 0.45, bus: 'sfx', cat: 'ambience', noiseLen: 6, fn: skidLoop },
+  schritt_asphalt: { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'asphalt') },
+  schritt_platte:  { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'platte') },
+  schritt_beton:   { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'beton') },
+  schritt_metall:  { len: 0.45, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'metall') },
+  schritt_pfuetze: { len: 0.4, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.55, fn: m => stepSnd(m, 'pfuetze') },
   ueberfahren_toedlich: { len: 4.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, true, v % 2 ? 'frau' : 'mann') },
   ueberfahren_verletzt: { len: 5.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, false, v % 2 ? 'mann' : 'frau') },
   panik_menge:   { len: 4.8, variants: 1, cat: 'schrei', bus: 'stimmen', fn: panic },
