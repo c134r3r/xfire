@@ -4,6 +4,7 @@
 // Alle Tuning-Zahlen stehen hier oder in 04-data.js (PLAN R5, Werte aus WORLD.md §1).
 
 const VIEW_W = 1280, VIEW_H = 720, TICK = 1 / 60;
+let RES = 1;                                                   // Render-Auflösung relativ zur logischen Ansicht 1280x720 (fitCanvas: bis 2x, DPR-abhängig)
 const TAU = Math.PI * 2;
 
 const C = {
@@ -11,7 +12,7 @@ const C = {
   ZOOM_FOOT: 1.35, ZOOM_CAR_SLOW: 1.15, ZOOM_CAR_FAST: 0.80, ZOOM_INSIDE: 1.65, CAM_LEAD_CAR: 22,
   PED_R: 7, PLAYER_WALK: 2.0, PLAYER_SPRINT: 2.9, STAMINA: 100, STAMINA_DRAIN: 0.8, STAMINA_REGEN: 0.4,
   DODGE_S: 0.35, DODGE_CD_S: 1,
-  LIGHTMAP_SCALE: 0.5, LIGHTS_MAX: 140, PARTICLES_MAX: 1600, TEX_BUDGET: 24e6, CHUNK: 512, CHUNKS_MAX: 48, RAIN_DROPS: 420,
+  LIGHTMAP_SCALE: 0.5, LIGHTS_MAX: 140, PARTICLES_MAX: 1600, TEX_BUDGET: 56e6, CHUNK: 512, CHUNKS_MAX: 48, RAIN_DROPS: 420,
   AMBIENT: '#2a3150',                       // Konzept-Umgebung; Distrikte: WORLD.md §12
   VOICES_MAX: { schrei: 4, schuss: 8, explosion: 4, motor: 3, sirene: 2, gesamt: 32 },
   DUCK_DB: -6, DUCK_S: 1,

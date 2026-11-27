@@ -3,7 +3,7 @@
 // (Mantel, Hose, Haar, Hauttyp, Kapuze/Mütze/Visier, Rucksack, leuchtende Sohlen, Regenschirm). Wird in MS3 durch das gebackene Rig ersetzt.
 // Blick nach +x. Exportiert: PED_DESIGNS, PLAYER_DESIGN, personFrame, corpseSprite, umbrellaSprite, drawPerson, pickDesign
 
-const PD = 2;                                                    // Sprite-Auflösung
+const PD = 3;                                                    // Sprite-Auflösung
 const PED_COATS = ['#7a5a9c', '#3f7a8f', '#9a4a4a', '#6a6a78', '#a08a50', '#4c4c5c', '#b05a80', '#2f6a4a', '#a05a2a', '#3a4a7a', '#c9c9d2', '#5a3a6a'];
 const PED_PANTS = ['#1c2030', '#2a2a34', '#3a3226', '#202a3a', '#2e2230'];
 const PED_SKIN = ['#e6c3a0', '#c9966c', '#8d5a3b', '#5e3b2a', '#f1d5b8'];

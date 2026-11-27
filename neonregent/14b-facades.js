@@ -5,12 +5,14 @@
 // Portiert aus docs/neon-regent/concept.html (makeFacade/makeRoof). Exportiert: Tex
 
 const Tex = {
-  cache: new Map(), px: 0,
+  cache: new Map(), px: 0, F: 1,
+  setRes(r) { const F = r > 1.25 ? 2 : 1; if (F !== this.F) { this.F = F; this.cache.clear(); this.px = 0; } },
+  mk(W, H) { const c = mkCanvas(W * this.F, H * this.F); c.getContext('2d').scale(this.F, this.F); return c; },
   SIDE_SHADE: { N: 0.30, S: 0.12, W: 0.22, E: 0.16 },
   _get(key, w, h, make) {
     let e = this.cache.get(key);
     if (e) { this.cache.delete(key); this.cache.set(key, e); return e.c; }       // LRU: zuletzt benutzt nach hinten
-    const c = make(); this.px += w * h; this.cache.set(key, { c, n: w * h });
+    const c = make(), n = w * h * this.F * this.F; this.px += n; this.cache.set(key, { c, n });
     while (this.px > C.TEX_BUDGET && this.cache.size > 1) { const k = this.cache.keys().next().value, o = this.cache.get(k); this.cache.delete(k); this.px -= o.n; }
     return c;
   },
@@ -24,7 +26,7 @@ const Tex = {
     return this._get(b.id + 'R', w, h, () => withSeed(hash3(b.seed, 82, 2), () => this.makeRoof(b, w, h)));
   },
   makeFacade(b, W, H, shadeK) {
-    const S = FACADE_STYLES[b.style] || FACADE_STYLES.concrete, d = mkCanvas(W, H), e = mkCanvas(W, H), dg = d.getContext('2d'), eg = e.getContext('2d');
+    const S = FACADE_STYLES[b.style] || FACADE_STYLES.concrete, d = this.mk(W, H), e = this.mk(W, H), dg = d.getContext('2d'), eg = e.getContext('2d');
     if (b.style === 'container') {                                                 // Container: Lackfarbe, Rippen, Türgriffe
       dg.fillStyle = shade(b.paint || '#888', -55); dg.fillRect(0, 0, W, H);
       dg.fillStyle = 'rgba(0,0,0,0.35)'; for (let x = 3; x < W; x += 6) dg.fillRect(x, 0, 2, H);
@@ -60,11 +62,11 @@ const Tex = {
     }
     const sg = dg.createLinearGradient(0, 0, 0, H); sg.addColorStop(0, `rgba(4,6,12,${shadeK * 0.6})`); sg.addColorStop(1, `rgba(4,6,12,${Math.min(0.8, shadeK + 0.25)})`);
     dg.fillStyle = sg; dg.fillRect(0, 0, W, H);
-    dg.globalCompositeOperation = 'lighter'; dg.globalAlpha = 0.9; dg.drawImage(e, 0, 0); dg.globalAlpha = 1; dg.globalCompositeOperation = 'source-over';
+    dg.globalCompositeOperation = 'lighter'; dg.globalAlpha = 0.9; dg.drawImage(e, 0, 0, W, H); dg.globalAlpha = 1; dg.globalCompositeOperation = 'source-over';
     return d;
   },
   makeRoof(b, w, h) {
-    const d = mkCanvas(w, h), e = mkCanvas(w, h), dg = d.getContext('2d'), eg = e.getContext('2d'), S = FACADE_STYLES[b.style] || FACADE_STYLES.concrete;
+    const d = this.mk(w, h), e = this.mk(w, h), dg = d.getContext('2d'), eg = e.getContext('2d'), S = FACADE_STYLES[b.style] || FACADE_STYLES.concrete;
     dg.fillStyle = b.style === 'container' ? shade(b.paint || '#888', -45) : b.style === 'glass' ? '#161c28' : b.style === 'white' ? '#2b3240' : '#1b1e26'; dg.fillRect(0, 0, w, h);
     for (let i = 0; i < w * h / 40; i++) { dg.fillStyle = `rgba(${rand(0, 1) < 0.5 ? '0,0,0' : '255,255,255'},${rand(0.03, 0.07)})`; dg.fillRect(rand(0, w), rand(0, h), 2, 2); }
     if (b.style === 'container') { dg.fillStyle = 'rgba(0,0,0,0.3)'; for (let x = 3; x < w; x += 7) dg.fillRect(x, 0, 2, h); return d; }
@@ -91,7 +93,7 @@ const Tex = {
       const tw = Math.min(w - 16, eg.measureText(txt).width + 18); dg.fillStyle = '#0c0a10'; dg.fillRect(w / 2 - tw / 2, h - 34, tw, 22);
       eg.fillStyle = rgba(c, 0.95); eg.fillText(txt, w / 2, h - 18); eg.strokeStyle = rgba(c, 0.7); eg.lineWidth = 1.5; eg.strokeRect(w / 2 - tw / 2, h - 34, tw, 22);
     }
-    void S; dg.globalCompositeOperation = 'lighter'; dg.drawImage(e, 0, 0); dg.globalCompositeOperation = 'source-over';
+    void S; dg.globalCompositeOperation = 'lighter'; dg.drawImage(e, 0, 0, w, h); dg.globalCompositeOperation = 'source-over';
     return d;
   }
 };

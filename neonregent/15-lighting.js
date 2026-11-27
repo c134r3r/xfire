@@ -64,7 +64,7 @@ const Lightmap = {
       else lg.drawImage(lightSprite(L.color), x - r, y - r, r * 2, r * 2);
     }
     lg.globalAlpha = 1;
-    ctx2.setTransform(1, 0, 0, 1, 0, 0);
+    ctx2.setTransform(RES, 0, 0, RES, 0, 0);
     ctx2.globalCompositeOperation = 'multiply';
     ctx2.drawImage(this.lm, 0, 0, VIEW_W, VIEW_H);
     ctx2.globalCompositeOperation = 'source-over';

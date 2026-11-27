@@ -13,6 +13,9 @@ function updatePlayer() {
   const p = G.player, i = G.in;
   if (p.veh) { p.a = p.veh.a; return; }                // im Fahrzeug: Position/Blick setzt updateVehicles()
   const ap = aimPoint(); p.a = Math.atan2(ap.y - p.y, ap.x - p.x);
+  if (!i.touchDrive && (i.kfw || i.kst) && Settings.d.walk !== 'screen') {         // Blickrelativ: W = dorthin, wohin der Held schaut (Maus)
+    const fx = Math.cos(p.a), fy = Math.sin(p.a); let mx = fx * i.kfw - fy * i.kst, my = fy * i.kfw + fx * i.kst; const n = Math.hypot(mx, my) || 1; i.mx = mx / n; i.my = my / n;
+  }
   const moving = !!(i.mx || i.my), sprint = i.sprint && p.stamina > 1 && moving;
   const sp = sprint ? C.PLAYER_SPRINT : C.PLAYER_WALK;
   p.stamina = clamp(p.stamina + (sprint ? -C.STAMINA_DRAIN : C.STAMINA_REGEN), 0, C.STAMINA);

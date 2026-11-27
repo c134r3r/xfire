@@ -62,7 +62,8 @@ const Input = {
     const dx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0);
     const dy = (k.KeyS || k.ArrowDown ? 1 : 0) - (k.KeyW || k.ArrowUp ? 1 : 0);
     const n = Math.hypot(dx, dy) || 1;
-    o.mx = dx / n; o.my = dy / n;                                   // Laufen, bildschirmrelativ
+    o.mx = dx / n; o.my = dy / n;                                   // bildschirmrelativ (Fahrzeug Direktmodus, Touch)
+    o.kfw = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0); o.kst = dx;   // zu Fuß: W/S vor/zurück entlang des Blicks, A/D seitwärts (Diagonalen aus beidem)
     o.throttle = k.KeyW || k.ArrowUp ? 1 : 0; o.brake = k.KeyS || k.ArrowDown ? 1 : 0; o.steer = dx;   // Auto "Klassisch" (MS2)
     o.aimMode = 'mouse'; o.ax = m.x; o.ay = m.y;                   // Bildschirmpunkt; aimPoint() macht Welt daraus
     o.fire = m.down || !!k.KeyJ; o.alt = m.right; o.swapP = this.took('KeyQ');

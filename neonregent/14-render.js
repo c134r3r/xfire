@@ -11,8 +11,9 @@ const hudEl = document.getElementById('hud');
 
 function fitCanvas() {
   const pad = isTouch ? 0 : 24, scale = Math.min((innerWidth - pad) / VIEW_W, (innerHeight - pad) / VIEW_H);
-  canvas.width = VIEW_W; canvas.height = VIEW_H;
-  const w = Math.floor(VIEW_W * scale), h = Math.floor(VIEW_H * scale);
+  const w = Math.floor(VIEW_W * scale), h = Math.floor(VIEW_H * scale), want = +Q.get('res') || Math.ceil(clamp(w * (window.devicePixelRatio || 1) / VIEW_W, 1, 2) * 4) / 4;
+  if (want !== RES || canvas.width !== Math.round(VIEW_W * want)) { RES = want; if (typeof Ground !== 'undefined') Ground.setRes(RES); if (typeof Tex !== 'undefined') Tex.setRes(RES); }
+  canvas.width = Math.round(VIEW_W * RES); canvas.height = Math.round(VIEW_H * RES);
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   const r = canvas.getBoundingClientRect();
   hudEl.style.left = r.left + 'px'; hudEl.style.top = r.top + 'px'; hudEl.style.width = w + 'px'; hudEl.style.height = h + 'px';
@@ -42,7 +43,8 @@ function onScreen(x, y, m = 0) {
 // Chunk gemerkt (max. 40), damit ein neu gemalter Chunk sie wieder bekommt (PLAN §4.5).
 // ------------------------------------------------------------------
 const Ground = {
-  CH: C.CHUNK, cache: new Map(), decals: new Map(),
+  CH: C.CHUNK, cache: new Map(), decals: new Map(), S: 1,
+  setRes(r) { const S = r > 1.25 ? 2 : 1; if (S !== this.S) { this.S = S; this.cache.clear(); } },
   key(cx, cy) { return cx + cy * 1024; },
   chunk(cx, cy) {
     const key = this.key(cx, cy); let c = this.cache.get(key);
@@ -52,9 +54,10 @@ const Ground = {
     return c;
   },
   paint(cx, cy) {
-    const c = mkCanvas(this.CH, this.CH), g = c.getContext('2d'), T = C.TILE, per = this.CH / T, W = World.W, H = World.H, tl = World.tiles;
+    const S = this.S, c = mkCanvas(this.CH * S, this.CH * S), g = c.getContext('2d'), T = C.TILE, per = this.CH / T, W = World.W, H = World.H, tl = World.tiles;
     const kind = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? TK.WATER : tl[y * W + x];
     const isRoad = k => k === TK.ROAD || k === TK.JUNCTION || k === TK.CROSSWALK;
+    g.scale(S, S);
     withSeed(cx * 7919 + cy * 104729 + 3, () => {
       for (let ty = 0; ty < per; ty++) for (let tx = 0; tx < per; tx++) {
         const gx = cx * per + tx, gy = cy * per + ty, k = kind(gx, gy), x = tx * T, y = ty * T, j = rand(-4, 4);
@@ -193,7 +196,7 @@ const Rain = {
     const a = (G.inside ? 0.4 : 1) * G.rain; if (a <= 0.01 || ABL.has('norain')) return;
     if (!this.d.length) this.init();
     const n = Math.floor(C.RAIN_DROPS * G.quality), W = VIEW_W, H = VIEW_H;
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.lineCap = 'round';
+    ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.lineCap = 'round';
     for (let layer = 0; layer < 3; layer++) {
       ctx.strokeStyle = `rgba(${170 + layer * 25},${200 + layer * 15},255,${(0.16 + layer * 0.1) * a})`; ctx.lineWidth = 0.8 + layer * 0.5; ctx.beginPath();
       for (let i = layer; i < n; i += 3) {
@@ -213,16 +216,25 @@ const Rain = {
 };
 
 let viewState = { cx: 0, cy: 0, z: 1 };
+let bloomA = null, bloomB = null;
+function bloomPass() {
+  if (!bloomA) { bloomA = mkCanvas(Math.round(VIEW_W / 8), Math.round(VIEW_H / 8)); bloomB = mkCanvas(Math.round(VIEW_W / 3), Math.round(VIEW_H / 3)); }
+  const a = bloomA.getContext('2d'), b = bloomB.getContext('2d');
+  a.globalCompositeOperation = 'copy'; a.imageSmoothingEnabled = true; a.filter = 'brightness(0.75) contrast(2.2) saturate(1.3)'; a.drawImage(canvas, 0, 0, bloomA.width, bloomA.height); a.filter = 'none';
+  b.globalCompositeOperation = 'copy'; b.imageSmoothingEnabled = true; b.imageSmoothingQuality = 'high'; b.drawImage(bloomA, 0, 0, bloomB.width, bloomB.height);
+  ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(bloomB, 0, 0, VIEW_W, VIEW_H);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+}
 function render() {
   const sh = G.trauma * G.trauma;
   const shx = (R.fn() * 2 - 1) * 22 * sh + G.kickX, shy = (R.fn() * 2 - 1) * 22 * sh + G.kickY;
   G.zoom = (G.zoomBase || C.ZOOM_FOOT) + G.zoomPunch;
   const z = G.zoom, cx = G.cam.x - shx, cy = G.cam.y - shy;
   viewState = { cx, cy, z };
-  const base = [z, 0, 0, z, VIEW_W / 2 - cx * z, VIEW_H / 2 - cy * z];               // Welt -> Bildschirm
+  const base = [z * RES, 0, 0, z * RES, (VIEW_W / 2 - cx * z) * RES, (VIEW_H / 2 - cy * z) * RES];               // Welt -> Bildschirm
   const world = () => ctx.setTransform(base[0], base[1], base[2], base[3], base[4], base[5]);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05070c'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.fillStyle = '#05070c'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   world();
 
   // 1. Boden
@@ -230,7 +242,7 @@ function render() {
   for (let gy = Math.floor((cy - hh) / CH); gy <= Math.floor((cy + hh) / CH); gy++)
     for (let gx = Math.floor((cx - hw) / CH); gx <= Math.floor((cx + hw) / CH); gx++) {
       if (gx < 0 || gy < 0 || gx * CH >= MW || gy * CH >= MH) continue;
-      ctx.drawImage(Ground.chunk(gx, gy), gx * CH, gy * CH);
+      ctx.drawImage(Ground.chunk(gx, gy), gx * CH, gy * CH, CH, CH);
     }
   Ground.prefetch(cx, cy, hw, hh);
 
@@ -292,8 +304,10 @@ function render() {
   }
   ctx.globalAlpha = 1;
 
+  // 9b. Bloom: helle Bereiche (Neon, Feuer, Scheinwerfer) weich überstrahlen lassen (1/6-Auflösung, zweistufig hochskaliert)
+  if (Settings.d.bloom !== false && G.quality > 0.45 && !ABL.has('nobloom')) bloomPass();
   // 10. Bildschirmraum
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(RES, 0, 0, RES, 0, 0);
   if (Input.touch.on) {                                                         // Touch-Sticks: schwebende Basis, Knauf folgt dem Daumen
     for (const [s, dx, dy] of [[Input.touch.move, 170, 560], [Input.touch.aim, 1110, 560]]) {
       const act = s.id !== null, bx = act ? s.ox : dx, by = act ? s.oy : dy;

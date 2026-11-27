@@ -8,7 +8,7 @@ const STR = {
   district: { test: 'HALOGEN' },
   status: { baking: 'Klangbank wird gebacken …', ready: n => `Klangbank bereit (${n} Klänge)`, recs: s => `Aufnahmen: ${s}`, norecs: 'Keine Aufnahmen im Bundle – synthetischer Rückfall' },
   hint: {
-    play: 'WASD laufen · Maus zielen · LMB/J schlagen & schießen · Shift sprinten · Leertaste Rolle · Q Waffe · E Nehmen · Tab Karte',
+    play: 'W/S vor/zurück (Blickrichtung) · A/D seitwärts · Maus zielen · LMB/J schlagen & schießen · Shift sprinten · Leertaste Rolle · Q Waffe · E Nehmen · Tab Karte',
     debug: 'B Explosion · V Schrei · N Überfahren · Z Panik · X Vollstreckung · K MANDAT'
   },
   banner: { start: 'HALOGEN', startSub: 'Nacht · Regen', paused: 'PAUSE', scene: n => `SZENE ${n}` },
@@ -62,7 +62,7 @@ const MISSIONS = {
     steps: [
       { t: 'cutscene', secs: 6, hud: 'Chip wird aktualisiert …',
         say: [['MANDAT', 'Guten Abend, Nummer 7741. Ihr Treuechip wurde aktualisiert.'], ['MANDAT', 'Der Regent hat Sie als Mandatsläufer ausgewählt. Das ist eine Ehre.']] },
-      { t: 'goto', at: { lm: 'k', dx: 4, dy: 6 }, r: 60, hud: 'Geh zum markierten Wagen', hint: 'WASD laufen · Maus zielen',
+      { t: 'goto', at: { lm: 'k', dx: 4, dy: 6 }, r: 60, hud: 'Geh zum markierten Wagen', hint: 'W/S vor/zurück in Blickrichtung · A/D seitwärts · Maus zielen',
         spawn: [{ kind: 'vehicle', type: 'kapsel', tag: 'zuteilung', at: { lm: 'k', dx: 5, dy: 6 }, paint: '#3fe8ff' }] },
       { t: 'enter', tag: 'zuteilung', hud: 'Steig ein', hint: 'F einsteigen' },
       { t: 'goto', at: { lm: 't' }, r: 110, vehicleTag: 'zuteilung', hud: 'Fahr zum MANDAT-Terminal', hint: 'W/S Gas/Bremse · A/D lenken · Leertaste Handbremse',
