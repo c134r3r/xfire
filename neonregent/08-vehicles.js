@@ -22,7 +22,7 @@ function vlayout(cls) {
 // Anzahl blockierter Kreise (Gebäude/Wasser/Tore) bei Pose (x, y, a) und Drehmoment-Summe
 function vehBlock(v, x, y, a) {
   const c = Math.cos(a), s = Math.sin(a); let n = 0, t = 0;
-  for (const [lx, ly, r] of vlayout(v.cls)) if (World.blocked(x + c * lx - s * ly, y + s * lx + c * ly, r)) { n++; t += ly; }
+  for (const [lx, ly, r] of vlayout(v.cls)) if (World.blocked(x + c * lx - s * ly, y + s * lx + c * ly, r, true)) { n++; t += ly; }
   return { n, t };
 }
 
@@ -89,6 +89,7 @@ function vehPairs(v) {
   const D1 = VEHICLES[v.cls], A = vlayout(v.cls), c1 = Math.cos(v.a), s1 = Math.sin(v.a);
   for (const o of G.vehicles) {
     if (o === v || (o.driver && o.driver === v.driver)) continue;
+    if (v.ai && o.ai && (v.ai.ghost > 0 || o.ai.ghost > 0)) continue;
     const D2 = VEHICLES[o.cls], reach = (D1.L + D2.L) / 2 + 6;
     if (Math.abs(o.x - v.x) > reach || Math.abs(o.y - v.y) > reach) continue;
     const c2 = Math.cos(o.a), s2 = Math.sin(o.a); let hit = false, pen = 0;
@@ -104,6 +105,7 @@ function vehPairs(v) {
     if (vn > 0.2) {
       const j = (1 + 0.35) * vn / (1 / m1 + 1 / m2);
       v.vx -= j / m1 * nx; v.vy -= j / m1 * ny; o.vx += j / m2 * nx; o.vy += j / m2 * ny;
+      if (v.ai && o.driver === G.player) v.ai.shaken = 150; if (o.ai && v.driver === G.player) o.ai.shaken = 150;
       if (vn > 2) { damageVeh(v, Math.pow(vn - 2, 2) * 2 * k1 * 1.5, 'veh'); damageVeh(o, Math.pow(vn - 2, 2) * 2 * k2 * 1.5, 'veh'); Bus.emit('crash', v, vn); sparks((v.x + o.x) / 2, (v.y + o.y) / 2, Math.round(vn * 1.5), '#ffd27a', 5); }
     }
   }
@@ -158,6 +160,11 @@ function nearestVehicle(x, y, maxD = 30) {
 }
 function enterVehicle(p, v) {
   const D = VEHICLES[v.cls];
+  if (v.ai) {                                   // Carjacking: Fahrer fliegt raus, schreit, flucht
+    const c = Math.cos(v.a), s = Math.sin(v.a), px = v.x + s * (D.B / 2 + 10), py = v.y - c * (D.B / 2 + 10), d = makePed(px, py, {});
+    d.state = 'flee'; d.panic = 420; d.fx = v.x; d.fy = v.y; d.umb = null; bark(d, barkPick(STR.barks.carjack), 150); v.ai = null; v.locked = false;
+    if (R.fn() < 0.6) d.screamT = 6;
+  }
   if (v.locked && !v.unlocked) {                // Aufbrechen: 1 s, Alarm
     if (!v.breaking) { v.breaking = 60; v.alarm = 240; Bus.emit('alarm', v); } return;
   }
@@ -184,23 +191,93 @@ function updateVehicles() {
   const p = G.player; let near = null, nd = 1e9;
   if (p && !p.veh && G.state === 'play') { near = nearestVehicle(p.x, p.y); if (near) nd = vehDist(near, p.x, p.y); }
   G.nearVeh = near;
-  if (p && G.in.enterP) { if (p.veh) { if (Math.hypot(p.veh.vx, p.veh.vy) < 14) exitVehicle(p); } else if (near && Math.hypot(near.vx, near.vy) < 2.5) enterVehicle(p, near); }
+  if (p && G.in.enterP) { if (p.veh) { if (Math.hypot(p.veh.vx, p.veh.vy) < 14) exitVehicle(p); } else if (near && Math.hypot(near.vx, near.vy) < (near.ai ? 4.5 : 2.5)) enterVehicle(p, near); }
   for (const v of G.vehicles) {
     if (v.alarm > 0) v.alarm--;
     if (v.breaking > 0) { if (!near || near !== v || nd > 40) v.breaking = 0; else if (--v.breaking === 0) { v.unlocked = true; if (p && !p.veh) enterVehicle(p, v); } }
-    const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving;
+    const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai;
     if (!active) { updateBurning(v); continue; }
     if (v.dead) { v.vx *= 0.9; v.vy *= 0.9; moveVehicle(v); vehPairs(v); continue; }
-    const ctl = v.driver === p ? driveCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
+    const ctl = v.driver === p ? driveCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
     if (v.driver === p) v.engine = true;
     stepVehicle(v, ctl);
-    if (v.driver !== p) { v.vx *= 0.97; v.vy *= 0.97; }
+    if (v.driver !== p && !v.ai) { v.vx *= 0.97; v.vy *= 0.97; }
     moveVehicle(v); vehPairs(v); updateBurning(v);
     if (v.driver) { p.x = v.x; p.y = v.y; p.a = v.a; p.vx = v.vx; p.vy = v.vy; }
     const D = VEHICLES[v.cls];
     // Bremsspuren bei Querschlupf/Handbremse (nicht bei Schwebern), Spritzwasser in Pfützen
     if (!D.hover && v.slip > 1.4 && G.time % 2 === 0) { const c = Math.cos(v.a), s = Math.sin(v.a); for (const sd of [-1, 1]) Ground.skid(v.x - c * D.L * 0.3 - s * sd * D.B * 0.4, v.y - s * D.L * 0.3 + c * sd * D.B * 0.4, Math.atan2(v.vy, v.vx)); }
     if (!D.hover && Math.hypot(v.vx, v.vy) > 3 && G.time % 3 === 0 && World.surface(v.x, v.y) === 'pfuetze') { for (let k = 0; k < 3; k++) glow(v.x + rand(-8, 8), v.y + rand(-8, 8), rand(3, 6), '#9fd0ff', 10, rand(-1.2, 1.2), rand(-1.2, 1.2), 0.2); Bus.emit('splash', v); }
+  }
+}
+
+
+// ---------------- Verkehr (PLAN §4.8, §7.5): Spur-Folger mit Kreuzungswahl, Vorausschau-Bremsen, Hupen, Spawn-Ring ----------------
+const TRAFFIC_MAX = { docks: 14, neon: 22, krone: 16 };
+// Spurversatz: Verkehr fährt 16 px von der Bordsteinseite weg (zur Straßenmitte), geparkte Autos stehen am Bordstein
+function laneOff(dx, dy) { return dx ? [0, dx < 0 ? 16 : -16] : [dy > 0 ? 16 : -16, 0]; }
+function tileLane(x, y) {
+  const T = C.TILE, tx = Math.floor(x / T), ty = Math.floor(y / T); if (tx < 0 || ty < 0 || tx >= World.W || ty >= World.H) return null;
+  const k = World.tiles[ty * World.W + tx];
+  if (k === TK.JUNCTION) return { junction: true, tx, ty };
+  if (k === TK.ROAD || k === TK.BRIDGE || k === TK.CROSSWALK) { const i = (ty * World.W + tx) * 2, dx = World.lane[i], dy = World.lane[i + 1]; if (dx || dy) return { dx, dy, tx, ty }; }
+  return null;
+}
+// Ausfahrt an einer Kreuzung wählen: geradeaus 60 / rechts 25 / links 15 %; nur Ausfahrten mit passender Spur (keine Sackgassen)
+function chooseExit(v, L) {
+  const T = C.TILE, H = [[1, 0], [0, 1], [-1, 0], [0, -1]], a = Math.atan2(Math.sin(v.a), Math.cos(v.a)), hi = ((Math.round(a / (Math.PI / 2)) % 4) + 4) % 4, h = H[hi], cand = [];
+  for (let jy = -1; jy <= 1; jy++) for (let jx = -1; jx <= 1; jx++) {
+    const jt = tileLane((L.tx + jx + 0.5) * T, (L.ty + jy + 0.5) * T); if (!jt || !jt.junction) continue;
+    for (let di = 0; di < 4; di++) {
+      const d = H[di]; if (d[0] === -h[0] && d[1] === -h[1]) continue;
+      let x = L.tx + jx, y = L.ty + jy, n = 0; while (n++ < 4) { x += d[0]; y += d[1]; const t = tileLane((x + 0.5) * T, (y + 0.5) * T); if (!t) break; if (t.junction) continue; if (t.dx === d[0] && t.dy === d[1]) { const cr = h[0] * d[1] - h[1] * d[0], o = laneOff(t.dx, t.dy); cand.push({ x: (x + 0.5) * T + o[0], y: (y + 0.5) * T + o[1], w: di === hi ? 60 : cr > 0 ? 25 : 15 }); } break; }
+    }
+  }
+  if (!cand.length) return null;
+  let s = 0; for (const c of cand) s += c.w; let r = R.fn() * s; for (const c of cand) { r -= c.w; if (r <= 0) return c; } return cand[0];
+}
+function trafficCtl(v) {
+  const ai = v.ai, D = VEHICLES[v.cls], c = Math.cos(v.a), s = Math.sin(v.a), spd = Math.hypot(v.vx, v.vy), T = C.TILE;
+  if (ai.shaken > 0) { ai.shaken--; if (ai.shaken % 50 === 20) honk(v); return { thr: -1, steer: 0, hb: true, boost: false }; }     // nach einem Rempler: stehen bleiben und hupen
+  const look = 38 + spd * 5, L = tileLane(v.x + c * look, v.y + s * look); let tgt = null, scale = 1;
+  if (L && L.junction) { if (ai.exit === undefined) ai.exit = chooseExit(v, L); tgt = ai.exit; scale = 0.55; }
+  else if (L) { ai.exit = undefined; ai.lane = L; const o = laneOff(L.dx, L.dy); tgt = { x: (L.tx + 0.5) * T + L.dx * 46 + o[0], y: (L.ty + 0.5) * T + L.dy * 46 + o[1] }; }
+  if (!tgt) tgt = ai.lane ? { x: (ai.lane.tx + 0.5) * T + ai.lane.dx * 90, y: (ai.lane.ty + 0.5) * T + ai.lane.dy * 90 } : { x: v.x + c * 100, y: v.y + s * 100 };
+  const err = angDiff(v.a, Math.atan2(tgt.y - v.y, tgt.x - v.x));
+  let want = D.top * 0.55 * scale * (1 - Math.min(0.5, Math.abs(err) * 0.5));
+  // Vorausschau: Fahrzeuge und Menschen vor mir (Kasten 50 + 9 x Tempo lang)
+  let gap = 1e9; const reach = 55 + spd * 9;
+  const chk = (ox, oy, hw) => { const rx = ox - v.x, ry = oy - v.y, along = rx * c + ry * s, lat = -rx * s + ry * c; if (along > 0 && along < reach + hw && Math.abs(lat) < D.B / 2 + hw + 4) gap = Math.min(gap, along - D.L / 2 - hw); };
+  for (const o of G.vehicles) if (o !== v && !(o.driver && o.driver === v.driver) && !(ai.ghost > 0 && o.ai)) chk(o.x, o.y, VEHICLES[o.cls].B * 0.5 + (o.ai || o.driver || o.dead ? 6 : 0));
+  for (const q of G.peds) if (q.state !== 'dead' && Math.abs(q.x - v.x) < reach + 30 && Math.abs(q.y - v.y) < reach + 30) chk(q.x, q.y, 9);
+  if (G.player && !G.player.veh) chk(G.player.x, G.player.y, 9);
+  if (gap < 1e8) want = Math.min(want, Math.max(0, (gap - 16) * 0.09));
+  // Kreuzung nur befahren, wenn sie nicht schon belegt ist (verhindert das Verkeilen); steckt der Verkehr trotzdem > 200 Ticks, fährt ein Wagen kurz "geisterhaft" durch die anderen
+  if (L && L.junction && !(tileLane(v.x, v.y) || {}).junction) { let busy = 0; const jx = (L.tx + 0.5) * T, jy = (L.ty + 0.5) * T; for (const o of G.vehicles) if (o !== v && Math.abs(o.x - jx) < 110 && Math.abs(o.y - jy) < 110 && (tileLane(o.x, o.y) || {}).junction) busy++; if (busy >= 2 && !(ai.ghost > 0)) { gap = Math.min(gap, 30); want = 0; } }
+  if (ai.ghost > 0) ai.ghost--;
+  ai.stop = (spd < 0.3 && (gap < 60 || want === 0)) ? ai.stop + 1 : 0;
+  if (ai.stop === 200 && !ai.ghost) ai.ghost = 100;
+  if (ai.stop % 150 === 130) honk(v);
+  if (ai.stop > 900 && !onScreen(v.x, v.y, 60)) v.despawn = true;
+  return { thr: spd < want ? (gap < 40 ? -1 : 0.8) : spd > want + 0.6 ? -0.6 : 0, steer: clamp(err * 2.2, -1, 1), hb: false, boost: false };
+}
+function honk(v) { Aud.play('hupe', { x: v.x, y: v.y, gain: 0.8, cat: 'sfx' }); if (onScreen(v.x, v.y, 0) && R.fn() < 0.5) for (const p of G.peds) if (p.state === 'walk' && Math.hypot(p.x - v.x, p.y - v.y) < 220) { bark(p, 'Ja, ja! Ich geh ja schon!', 120); break; } }
+function updateTraffic() {
+  const cam = G.cam, z = G.zoom || 1, half = Math.hypot(VIEW_W, VIEW_H) / 2 / z, d = G.district ? G.district.id : 'neon';
+  let n = 0;
+  for (let i = G.vehicles.length - 1; i >= 0; i--) { const v = G.vehicles[i]; if (!v.ai) continue; n++;
+    if (v.despawn || (!v.driver && Math.hypot(v.x - cam.x, v.y - cam.y) > half * 2.4)) { G.vehicles.splice(i, 1); n--; } }
+  if (G.time % 20 !== 0 || n >= TRAFFIC_MAX[d]) return;
+  const T = C.TILE;
+  for (let t = 0; t < 8; t++) {
+    const ang = R.fn() * TAU, r = half * rand(1.15, 1.8), x = cam.x + Math.cos(ang) * r, y = cam.y + Math.sin(ang) * r, L = tileLane(x, y);
+    if (!L || L.junction || onScreen(x, y, 80)) continue;
+    const px = (L.tx + 0.5) * T, py = (L.ty + 0.5) * T; let free = true;
+    for (const o of G.vehicles) if (Math.abs(o.x - px) < 110 && Math.abs(o.y - py) < 110) { free = false; break; }
+    if (!free) continue;
+    const dist = districtAt(L.tx).id, tbl = TRAFFIC_MIX[dist]; let s = 0; for (const k in tbl) s += tbl[k]; let q = R.fn() * s, cls = 'limo'; for (const k in tbl) { q -= tbl[k]; if (q <= 0) { cls = k; break; } }
+    const v = spawnVehicle(cls, px, py, Math.atan2(L.dy, L.dx), {}); if (vehBlock(v, v.x, v.y, v.a).n) { G.vehicles.pop(); continue; }
+    v.ai = {}; v.engine = true; v.vx = Math.cos(v.a) * VEHICLES[cls].top * 0.4; v.vy = Math.sin(v.a) * VEHICLES[cls].top * 0.4; break;
   }
 }
 
@@ -218,7 +295,7 @@ function populateVehicles(seed) {
     const ldx = lane[(y * W + x) * 2], ldy = lane[(y * W + x) * 2 + 1]; if (!ldx && !ldy) continue;
     const curb = ldx ? tl[(y + (ldx < 0 ? -1 : 1)) * W + x] : tl[y * W + x + (ldy > 0 ? -1 : 1)];
     if (curb !== TK.SIDEWALK || nearCross(x, y)) continue;
-    const cx = (x + 0.5) * T + (ldy ? (ldy > 0 ? -9 : 9) : 0), cy = (y + 0.5) * T + (ldx ? (ldx < 0 ? -9 : 9) : 0);
+    const cx = (x + 0.5) * T + (ldy ? (ldy > 0 ? -17 : 17) : 0), cy = (y + 0.5) * T + (ldx ? (ldx < 0 ? -17 : 17) : 0);      // dicht am Bordstein: die Fahrspur bleibt für den Verkehr frei
     if (!free(cx, cy, 110)) continue;
     const dist = districtAt(x).id, cls = mixPick(TRAFFIC_MIX[dist]), D = VEHICLES[cls];
     const v = spawnVehicle(cls, cx, cy, Math.atan2(ldy, ldx), { locked: rnd() < 0.7, paint: cls === 'taxi' ? '#c9a227' : CAR_PAINTS[Math.floor(rnd() * CAR_PAINTS.length)] });
@@ -249,8 +326,9 @@ function drawVehicles(layer) {
       ctx.save(); ctx.translate(v.x, v.y + bob); ctx.rotate(v.a);
       if (v.dead) ctx.drawImage(tinted(art.body, 'wreck|' + v.cls + '|' + v.paint, '#0c0c10'), -art.w / 2, -art.h / 2, art.w, art.h);
       else ctx.drawImage(art.body, -art.w / 2, -art.h / 2, art.w, art.h);
-      if (D.board || v.cls === 'bike') { if (v.driver) { ctx.scale(D.board ? 1.0 : 0.95, 1); ctx.drawImage(riderSprite(!!D.board), -18, -18); } }
+      if (v.cls === 'bike' && v.driver) ctx.drawImage(riderSprite(false), -18, -18);
       ctx.restore();
+      if (D.board && v.driver) drawPerson(v.x, v.y + bob - 2, v.a, PLAYER_DESIGN, 2, { scale: 0.95 });
     } else if (!v.dead) {
       let a = v.engine || v.driver ? 1 : 0.5;
       if (v.hp < v.maxHp * 0.3) a *= 0.4 + 0.6 * ((G.time + v.id * 7) % 9 < 5);          // kaputte Elektrik flackert

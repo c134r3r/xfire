@@ -14,7 +14,7 @@ const LIMIT = +process.env.NR_MS_LIMIT || 20;
   for (const s of SCENES) {
     const p = await b.newPage({ viewport: { width: 1304, height: 744 }, deviceScaleFactor: 1 });
     const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
-    const q = s === 'menu' ? 'debug=1' : 'debug=1&scene=' + s;
+    const q = s === 'menu' ? 'gates=open' : 'gates=open&scene=' + s;
     await p.goto('file://' + ROOT + '/neonregent.html?' + q);
     await p.waitForFunction(() => NR_TEST.state().bake.done, null, { timeout: 60000 }); await p.waitForTimeout(1200);
     if (s === 'explosion') await p.evaluate(() => { const q = G.player; NR_TEST.explosion(q.x + 150, q.y + 60, 1.8); NR_TEST.explosion(q.x - 120, q.y + 90, 1.0); });   // Last-Szene: zwei Explosionen live in die Messung   // Messung erst nach dem Klangbank-Baking (sonst stört der Hintergrund-Render)

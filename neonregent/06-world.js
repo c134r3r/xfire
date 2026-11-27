@@ -25,13 +25,18 @@ const World = {
   override: null,
   gateOpen(g) { if (this.override !== null) return this.override; return !!(G.flags[g] || Q.get('gates') === 'open' || DEBUG); },
   // Kreis gegen Kachel-Wasser und Gebäude/Tore. Liefert true, wenn (x,y,r) blockiert ist.
-  blocked(x, y, r) {
+  // Rechtecke (Innenwände, Möbel) nachträglich ins Collider-Raster aufnehmen
+  addRects(rects) {
+    for (const b of rects) for (let cy = Math.floor(b.y0 / this.CELLPX); cy <= Math.floor(b.y1 / this.CELLPX); cy++) for (let cx = Math.floor(b.x0 / this.CELLPX); cx <= Math.floor(b.x1 / this.CELLPX); cx++) { const k = cx + cy * 4096; let l = this.grid.get(k); if (!l) this.grid.set(k, l = []); l.push(b); }
+  },
+  blocked(x, y, r, veh) {
     if (this.tile(x - r, y - r) === TK.WATER || this.tile(x + r, y - r) === TK.WATER || this.tile(x - r, y + r) === TK.WATER || this.tile(x + r, y + r) === TK.WATER) return true;
     const cx0 = Math.floor((x - r) / this.CELLPX), cx1 = Math.floor((x + r) / this.CELLPX), cy0 = Math.floor((y - r) / this.CELLPX), cy1 = Math.floor((y + r) / this.CELLPX);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const l = this.grid.get(cx + cy * 4096); if (!l) continue;
       for (const b of l) {
         if (b.gate && this.gateOpen(b.gate)) continue;
+        if (b.hollow) { if (veh && x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1) return true; continue; }          // begehbares Gebäude: Wände übernehmen, Fahrzeuge passen nicht hinein
         const qx = x < b.x0 ? b.x0 : x > b.x1 ? b.x1 : x, qy = y < b.y0 ? b.y0 : y > b.y1 ? b.y1 : y;
         if ((x - qx) * (x - qx) + (y - qy) * (y - qy) < r * r) return true;
       }

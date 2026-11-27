@@ -38,6 +38,11 @@ const HUD = {
     else if (++P.hold > (2.5 + 0.05 * full) * 60) P.cur = null;
   },
   // Radar (unten rechts, Norden oben): Ausschnitt der vorgerenderten Minikarte, 2 px je Kachel (PLAN §5.8)
+  // Pause: Sammlung der Fundstücke
+  finds() {
+    const el = $('findsList'), n = Object.keys(G.finds).length;
+    el.innerHTML = `<b>FUNDSTÜCKE ${n}/${FUNDE.length}</b> · Credits gesamt aus Beute: ${G.stats.cr}<br>` + (n ? FUNDE.filter(f => G.finds[f.id]).map(f => `<i>${f.n}</i> ×${G.finds[f.id]} – ${f.t}`).join('<br>') : 'Noch nichts gefunden. Durchsuche Spinde, Schubladen und Kühlschränke in begehbaren Gebäuden (Türen leuchten warm).');
+  },
   track(name) { const el = $('nowPlaying'); el.textContent = '♪ ' + name; el.classList.add('on'); clearTimeout(this._tt); this._tt = setTimeout(() => el.classList.remove('on'), 5000); },
   radar() {
     const p = G.player, cv = $('radar'); if (!p || !World.mini) return;
@@ -46,6 +51,7 @@ const HUD = {
     g.drawImage(World.mini, tx - N / 2, ty - N / 2, N, N, 0, 0, S, S);
     g.fillStyle = 'rgba(255,255,255,0.0)';
     for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) { g.fillStyle = '#ff3b4a'; g.fillRect(((r.x0 + r.x1) / 2 / C.TILE - tx + N / 2) * 2 - 2, ((r.y0 + r.y1) / 2 / C.TILE - ty + N / 2) * 2 - 2, 5, 5); }
+    g.fillStyle = '#ffd84a'; for (const b of Interiors.list) { const d = b._door, dx = (d.x / C.TILE - tx + N / 2) * 2, dy = (d.y / C.TILE - ty + N / 2) * 2; if (dx > 2 && dx < S - 2 && dy > 2 && dy < S - 2) g.fillRect(dx - 1.5, dy - 1.5, 3, 3); }   // Türen begehbarer Gebäude
     g.save(); g.translate(S / 2, S / 2); g.rotate(p.a); g.fillStyle = '#5fd4e6'; g.strokeStyle = '#04121a'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(7, 0); g.lineTo(-5, 5); g.lineTo(-3, 0); g.lineTo(-5, -5); g.closePath(); g.fill(); g.stroke(); g.restore();
   },
@@ -70,6 +76,8 @@ const HUD = {
     const v = p.veh, vc = $('vehCard'); vc.style.display = v ? 'flex' : 'none';
     if (v) { $('vehName').textContent = VEHICLES[v.cls].name; $('vehFill').style.width = clamp(v.hp / v.maxHp, 0, 1) * 100 + '%'; $('boostFill').style.width = v.boost + '%'; }
     $('tbEnter').textContent = v ? 'AUSSTEIGEN' : (G.nearVeh ? 'EINSTEIGEN' : 'EIN / AUS'); $('tbAct').textContent = v ? 'BREMSE' : 'ROLLE'; $('tbSprint').textContent = v ? 'BOOST' : 'SPRINT'; $('tbHorn').style.display = v ? '' : 'none';
+    const I = Interiors.cur; $('place').classList.toggle('on', !!I); if (I) $('placeName').textContent = I.name;
+    const nf = Object.keys(G.finds).length; $('findVal').textContent = nf + '/' + FUNDE.length; $('tbUse').style.display = G.near && isTouch ? 'flex' : 'none';
     this.radar();
     if (DEBUG) {
       const tx = Math.floor(p.x / C.TILE), ty = Math.floor(p.y / C.TILE);

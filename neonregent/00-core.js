@@ -15,6 +15,7 @@ const C = {
   AMBIENT: '#2a3150',                       // Konzept-Umgebung; Distrikte: WORLD.md §12
   VOICES_MAX: { schrei: 4, schuss: 8, explosion: 4, motor: 3, sirene: 2, gesamt: 32 },
   DUCK_DB: -6, DUCK_S: 1,
+  ROOM_MIN: 96, WALL_H: 24, WALL_T: 6, DOOR_W: 28, XRAY_ALPHA: 0.3, INDOOR_NAV: 16, INTERIOR_SHARE: 0.10,
   CITY_SEED: 7741
 };
 
@@ -57,7 +58,7 @@ const G = {
   state: 'boot', time: 0, scene: null,
   cam: { x: 0, y: 0 }, zoom: C.ZOOM_FOOT, zoomPunch: 0,
   trauma: 0, kickX: 0, kickY: 0, hurtFlash: 0, freeze: 0, quality: 1,
-  parts: [], texts: [], lamps: [], buildings: [], vehicles: [], nearVeh: null, flags: null,
+  parts: [], texts: [], lamps: [], buildings: [], vehicles: [], peds: [], pickups: [], barks: [], npcs: [], finds: {}, stats: { peds: 0, finds: 0, cr: 0 }, nearVeh: null, flags: null,
   ambient: C.AMBIENT, player: null, inside: null, city: null, rain: 1, district: null,
   in: {}                                  // Intent (01-input.js)
 };

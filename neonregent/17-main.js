@@ -7,7 +7,8 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; for (const v of G.vehicles) { v.driver = null; }
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
+  G.vehicles = G.vehicles.filter(v => !v.ai);
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
   if (scene) R.set(7741); else R.fn = Math.random;
@@ -18,7 +19,7 @@ function startGame(scene) {
   Aud.init(); Aud.setInside(false);
 }
 function setPaused(on) {
-  if (on && G.state === 'play') { G.state = 'paused'; $('pauseScreen').classList.remove('hidden'); }
+  if (on && G.state === 'play') { G.state = 'paused'; HUD.finds(); $('pauseScreen').classList.remove('hidden'); }
   else if (!on && G.state === 'paused' && !G.mapOpen) { G.state = 'play'; $('pauseScreen').classList.add('hidden'); }
 }
 function setMap(on) {
@@ -48,15 +49,18 @@ const SCENES = {
   execution:     { setup: at(168, 52) },
   dawn:          { setup: at(74, 27) },
   runover:       { setup: at(160, 44) },
-  interior:      { setup: at(60, 44) },
   cars:          { setup() { carLineup(); } },                 // alle Fahrzeugklassen nebeneinander (Look-Prüfung)
   drive:         { setup() { tp(tileXY(161, 18)); const v = spawnVehicle('pfeil', G.player.x, G.player.y, 0, { paint: '#b0305e' }); enterVehicle(G.player, v); } },
   hover:         { setup() { tp(tileXY(161, 18)); const v = spawnVehicle('board', G.player.x, G.player.y, 0, {}); enterVehicle(G.player, v); } },
+  interior:      { setup() { const b = interiorNear('nudelbar'); doorTp(b, 70); } },
   gate_tor1:     { setup: at(99, 17) },                  // Brücke Docks <-> Neonmeile (Tor 1)
   explosion:     { setup() { tp(tileXY(74, 27)); const p = G.player; G.sceneEvents = [[40, () => explosion(p.x + 150, p.y + 60, 1.8)], [58, () => explosion(p.x - 120, p.y + 90, 1.0)]]; } }
 };
 function tp(pt) { const f = World.freeSpot(pt.x, pt.y); G.player.x = f.x; G.player.y = f.y; G.cam.x = f.x; G.cam.y = f.y; }
 
+// Begehbares Gebäude einer Art (nächstes ab Spielstart) und Position vor/in der Tür (dist > 0: draußen, < 0: drinnen)
+function interiorNear(kind) { const p = G.player; let best = null, bd = 1e12; for (const b of Interiors.list) if (!kind || b._kind === kind) { const d = Math.hypot((b.x0 + b.x1) / 2 - p.x, (b.y0 + b.y1) / 2 - p.y); if (d < bd) { bd = d; best = b; } } return best; }
+function doorTp(b, dist) { const d = b._door; G.player.x = d.x + d.nx * dist; G.player.y = d.y + d.ny * dist; G.cam.x = G.player.x; G.cam.y = G.player.y; }
 // Alle Fahrzeugklassen in zwei Reihen auf dem Terminalplatz (Landmarke t) für Screenshots
 function carLineup() {
   const c = G.city.landmarks.t.center; tp({ x: c.x, y: c.y + 140 });
@@ -72,7 +76,10 @@ function step() {
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
+  Interiors.update();
   updateVehicles();
+  if (!ABL.has('nosim')) { updateTraffic(); updatePeds(); }
+  updatePickups();
   updateParticles();
   updateCamera();
   updateDistrict(false);
@@ -171,6 +178,9 @@ window.NR_TEST = {
   enter: v => enterVehicle(G.player, v),
   vehicles: () => G.vehicles.length,
   veh: () => G.player && G.player.veh && { cls: G.player.veh.cls, x: G.player.veh.x, y: G.player.veh.y, hp: G.player.veh.hp, vx: G.player.veh.vx, vy: G.player.veh.vy, a: G.player.veh.a },
+  interiors: () => Interiors.list.length,
+  genInterior: i => { const b = Interiors.list[i]; return Interiors.ensure(b); },
+  interiorInfo: () => Interiors.list.map(b => ({ id: b.id, kind: b._kind, d: districtAt(b.x0 / C.TILE).id })),
   blockedAt: (x, y) => World.blocked(x, y, C.PED_R),
   tileAt: (x, y) => World.tile(x, y),
   explosion(x, y, s) { explosion(x, y, s); },
@@ -195,7 +205,7 @@ window.NR_TEST = {
 (function boot() {
   fitCanvas(); addEventListener('resize', fitCanvas); addEventListener('orientationchange', () => setTimeout(fitCanvas, 150));
   Input.init(canvas);
-  const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); populateVehicles(+Q.get('seed') || C.CITY_SEED); G.cityMs = performance.now() - t0; HUD.init();
+  const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); populateVehicles(+Q.get('seed') || C.CITY_SEED); Interiors.init(); G.cityMs = performance.now() - t0; HUD.init();
   Lightmap.build(G.ambient, C.LIGHTMAP_SCALE); G.rafMs = 16.7;
   G.state = 'menu';
   $('startBtn').addEventListener('click', () => startGame());

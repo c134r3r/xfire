@@ -88,17 +88,17 @@ const Ground = {
       // Kontaktschatten am Gebäudefuß (weich durch gestaffelte Rechtecke)
       const x0 = cx * this.CH, y0 = cy * this.CH;
       for (const b of World.near(x0 - 16, y0 - 16, x0 + this.CH + 16, y0 + this.CH + 16)) {
-        if (b.gate) continue;
+        if (b.gate || b.wall || b.furn) continue;
         for (let i = 3; i >= 1; i--) { g.fillStyle = `rgba(0,0,8,${0.16})`; g.fillRect(b.x0 - x0 - i * 3, b.y0 - y0 - i * 3, b.x1 - b.x0 + i * 6, b.y1 - b.y0 + i * 6); }
       }
     });
     for (const d of this.decals.get(this.key(cx, cy)) || []) this.drawDecal(g, d, cx * this.CH, cy * this.CH);
     return c;
   },
-  drawDecal(g, d, ox, oy) { g.save(); g.translate(d.x - ox, d.y - oy); g.rotate(d.rot); g.scale(d.s, d.s * 0.9); g.globalAlpha = 0.9; g.drawImage(scorchSprite(d.v), -128, -128); g.restore(); },
+  drawDecal(g, d, ox, oy) { g.save(); g.translate(d.x - ox, d.y - oy); g.rotate(d.rot); if (d.t === 'splat') { g.scale(d.s, d.s); g.drawImage(splatSprite(d.v), -48, -48); } else { g.scale(d.s, d.s * 0.9); g.globalAlpha = 0.9; g.drawImage(scorchSprite(d.v), -128, -128); } g.restore(); },
   // Brandfleck/Splat dauerhaft in alle berührten Chunks stempeln
   decal(d) {
-    const r = 128 * d.s * 1.1;
+    const r = (d.t === 'splat' ? 48 : 128) * d.s * 1.1;
     for (let cy = Math.floor((d.y - r) / this.CH); cy <= Math.floor((d.y + r) / this.CH); cy++)
       for (let cx = Math.floor((d.x - r) / this.CH); cx <= Math.floor((d.x + r) / this.CH); cx++) {
         const k = this.key(cx, cy); let l = this.decals.get(k); if (!l) this.decals.set(k, l = []);
@@ -139,8 +139,13 @@ function drawBuildings(V, base) {
     vis.push(b); b._D = D; b._d = (bx - cx) * (bx - cx) + (by - cy) * (by - cy);
   }
   vis.sort((a, b) => a.h - b.h || b._d - a._d);                   // niedrig zuerst, bei gleicher Höhe weiter entfernt zuerst
+  const opened = vis.filter(b => b.cut !== undefined && b.cut < 0.99);
   for (const b of vis) {
-    const D = b._D, m = base;
+    const cut = b.cut === undefined ? 1 : b.cut; if (cut < 0.02) continue;
+    let D = b._D; const m = base;
+    if (cut < 1) { const k = 1 + 0.5 * (1 - cut); D = { x: D.x * k, y: D.y * k }; ctx.globalAlpha = cut; }                         // Dach hebt ab und blendet aus (PLAN §5.9)
+    else if (opened.length) { let hit = false; for (const o of opened) if (o !== b && b.x1 + Math.max(0, D.x) > o.x0 && b.x0 + Math.min(0, D.x) < o.x1 && b.y1 + Math.max(0, D.y) > o.y0 && b.y0 + Math.min(0, D.y) < o.y1) { hit = true; break; } ctx.globalAlpha = hit ? C.XRAY_ALPHA : 1; }   // Nachbarn über dem offenen Haus: Röntgen
+    else ctx.globalAlpha = 1;
     const draw = (side, x0, y0, x1, y1) => {
       const img = Tex.face(b, side); let a = x1 - x0, bb = y1 - y0, px = x0, py = y0;
       if (a * D.y - bb * D.x < 0) { px = x1; py = y1; a = -a; bb = -bb; }
@@ -154,7 +159,7 @@ function drawBuildings(V, base) {
     ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
     ctx.drawImage(Tex.roof(b), b.x0 + D.x, b.y0 + D.y);
   }
-  ctx.setTransform(base[0], base[1], base[2], base[3], base[4], base[5]);
+  ctx.globalAlpha = 1; ctx.setTransform(base[0], base[1], base[2], base[3], base[4], base[5]);
 }
 
 // Laternen: Mast von Boden zu Boden + D, Kopf additiv (alle Masten, dann alle Köpfe in einem Batch)
@@ -180,7 +185,7 @@ function drawLamps(V) {
 // ------------------------------------------------------------------
 // Regen (Bildschirmraum, 3 Schichten) + Bodenspritzer. Alpha x 0.4 drinnen, x G.rain (Morgengrauen: 0)
 // ------------------------------------------------------------------
-const ABL = new Set(location.hash.slice(1).split(','));      // Ablation für Messungen: #norain,nobuild,nolamps,nolightmap (PLAN §10)
+const ABL = new Set(location.hash.slice(1).split(','));      // Ablation für Messungen: #norain,nobuild,nolamps,nolightmap,nopeds,novehicles,nosim (PLAN §10)
 const Rain = {
   d: [], rip: [],
   init() { const r = rng(99); for (let i = 0; i < C.RAIN_DROPS * 1.4; i++) this.d.push({ x: r() * VIEW_W, y: r() * VIEW_H, l: 0.5 + r() * 0.5, v: 0.6 + r() * 0.5 }); },
@@ -229,9 +234,10 @@ function render() {
     }
   Ground.prefetch(cx, cy, hw, hh);
 
-  // 3. Entitäten: Fahrzeuge (Lack), Spieler zu Fuß, Trümmer
-  const p = G.player;
-  drawVehicles('body');
+  // 2. Innenböden offener Gebäude, 3. Entitäten: Behälter, Bewohner, Fahrzeuge (Lack), Spieler, Trümmer; danach die Innenwände
+  const p = G.player, openI = Interiors.open();
+  Interiors.drawFloors(openI);
+  drawPickups('body'); if (!ABL.has('nopeds')) drawPeds(); Interiors.drawEntities(openI); if (!ABL.has('novehicles')) drawVehicles('body');
   if (p && G.state !== 'menu' && !p.veh) drawPlayer(p);
   for (const q of G.parts) {
     if (q.kind !== 'debris' || !onScreen(q.x, q.y, 30)) continue;
@@ -240,6 +246,8 @@ function render() {
     ctx.globalAlpha = a; ctx.save(); ctx.translate(q.x, q.y - q.z); ctx.rotate(q.rot); ctx.fillStyle = q.color; ctx.fillRect(-q.size / 2, -q.size / 3, q.size, q.size * 0.66); ctx.restore();
   }
   ctx.globalAlpha = 1;
+
+  Interiors.drawWalls(openI, viewState);
 
   // 4. Lightmap (Nacht + Farbe), EIN Pass
   if (!ABL.has('nolightmap')) { Lights.collect(); Lightmap.draw(ctx, viewState); world(); }
@@ -252,12 +260,12 @@ function render() {
   if (p && G.state !== 'menu') for (const b of vis) {
     const D = b._D;
     if (p.x > Math.min(b.x0, b.x0 + D.x) && p.x < Math.max(b.x1, b.x1 + D.x) && p.y > Math.min(b.y0, b.y0 + D.y) && p.y < Math.max(b.y1, b.y1 + D.y)) {
-      ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(1.15, 1.15); ctx.drawImage(tinted(pedSprite('#3f93a8', Math.floor(p.walk / 7) & 3), 'xray|' + (Math.floor(p.walk / 7) & 3), '#3fe8ff'), -18, -18); ctx.restore(); ctx.globalAlpha = 1; break;
+      ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.drawImage(tinted(personFrame(PLAYER_DESIGN, Math.floor(p.walk / 7.5) & 7), 'xray|' + (Math.floor(p.walk / 7.5) & 7), '#3fe8ff'), -23, -23, 46, 46); ctx.restore(); ctx.globalAlpha = 1; break;
     }
   }
 
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; drawVehicles('glow'); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {
@@ -271,7 +279,10 @@ function render() {
   // 9. Regen, Texte
   Rain.draw(); world();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  drawBarks(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const t of G.texts) { ctx.globalAlpha = Math.min(1, t.life / 20); ctx.font = `900 ${t.size}px "Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif`; ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y); }
+  const nt = G.near;
+  if (nt && G.state === 'play') { const label = (isTouch ? '' : '[E] ') + (nt.k === 'loot' ? 'DURCHSUCHEN · ' : '') + nt.label.toUpperCase(); ctx.font = '900 10px "Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif'; const tw = ctx.measureText(label).width + 12; ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(nt.x - tw / 2, nt.y - 24, tw, 15); ctx.fillStyle = '#ffd84a'; ctx.fillText(label, nt.x, nt.y - 16); }
   const nv = G.nearVeh;
   if (nv && G.state === 'play') {                                              // Interaktionshinweis über dem Fahrzeug
     const D = VEHICLES[nv.cls], label = nv.breaking ? 'AUFBRECHEN …' : (isTouch ? 'EINSTEIGEN' : '[F] EINSTEIGEN') + (nv.locked && !nv.unlocked ? ' · VERSCHLOSSEN' : '');
@@ -309,11 +320,10 @@ function drawFx() {
   ctx.globalAlpha = 1;
 }
 
-// Spieler zu Fuß (Fallback-Art, PLAN R11). Blickrichtung = Zielrichtung, Laufphase aus zurückgelegter Strecke.
+// Spieler zu Fuß: Rig mit Beinen/Armen, Blickrichtung = Zielrichtung, Laufphase aus zurückgelegter Strecke; Ausweichrolle = Salto
 function drawPlayer(p) {
   ctx.globalAlpha = 0.7; ctx.drawImage(shadowSprite(9, 6), p.x - 12 + 3, p.y - 9 + 5); ctx.globalAlpha = 1;
-  const ph = Math.floor(p.walk / 7) & 3;
-  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(1.15, 1.15);
-  if (p.dodge > 0) ctx.globalAlpha = 0.65;
-  ctx.drawImage(pedSprite('#3f93a8', ph), -18, -18); ctx.restore(); ctx.globalAlpha = 1;
+  const f = Math.floor(p.walk / 7.5) & 7;
+  if (p.dodge > 0) { const k = 1 - p.dodge / Math.round(C.DODGE_S * 60); drawPerson(p.x, p.y, p.a + k * TAU * (Math.cos(p.a) * p.dvx + Math.sin(p.a) * p.dvy >= 0 ? 1 : -1), PLAYER_DESIGN, f, { scale: 1.0, alpha: 0.9 }); }
+  else drawPerson(p.x, p.y, p.a, PLAYER_DESIGN, f, { scale: 1.3 });
 }

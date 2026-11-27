@@ -132,12 +132,14 @@ const Aud = {
     return this._nb;
   },
   // Schleife auf einem Bus starten (Regen, Brummen). Gibt { setLevel(v, pan) } zurück.
-  loop(id, bus = 'ambience') {
+  loop(id, bus = 'ambience', opt = {}) {
     const buf = this.bank[id] && this.bank[id][0]; if (!buf || !this.ac) return null;
     const ac = this.ac, src = ac.createBufferSource(), g = ac.createGain(), p = ac.createStereoPanner ? ac.createStereoPanner() : null;
-    src.buffer = buf; src.loop = true; g.gain.value = 0; src.connect(g); if (p) { g.connect(p); p.connect(this.bus[bus]); } else g.connect(this.bus[bus]);
+    const lp = opt.lp ? ac.createBiquadFilter() : null; if (lp) { lp.type = 'lowpass'; lp.frequency.value = opt.lp; }
+    src.buffer = buf; src.loop = true; g.gain.value = 0; src.connect(g); let head = g; if (lp) { g.connect(lp); head = lp; }
+    if (p) { head.connect(p); p.connect(this.bus[bus]); } else head.connect(this.bus[bus]);
     src.start(0, Math.random() * buf.duration);
-    return { setLevel: (v, pan = 0) => { g.gain.setTargetAtTime(v, ac.currentTime, 0.25); if (p) p.pan.setTargetAtTime(pan, ac.currentTime, 0.25); } };
+    return { setLevel: (v, pan = 0, cut) => { g.gain.setTargetAtTime(v, ac.currentTime, 0.25); if (p) p.pan.setTargetAtTime(pan, ac.currentTime, 0.25); if (lp && cut) lp.frequency.setTargetAtTime(cut, ac.currentTime, 0.2); } };
   },
   // Schritt je Untergrund (Bank: schritt_<untergrund>)
   step(surface, sprint) { this.play('schritt_' + surface, { gain: sprint ? 1.25 : 1, rate: sprint ? 1.08 : 1, cat: 'schritt' }); },
@@ -183,19 +185,23 @@ const Aud = {
   // Aufnahme live abspielen (Schrei einer bestimmten Person, PLAN §4.10). o: { x, y, gain, cut, fade, rate, send, speaker }
   // cut = nach so vielen Sekunden abreißen (Todesschrei), fade = Blende dabei (15 ms = abrupt; 90 ms = Luft weg)
   playRec(cat, voice, o = {}) {
-    if (!this.ac || this.muted || this.ac.state !== 'running' || !USE_REC) return -1;
+    if (!this.ac || this.muted || this.ac.state !== 'running' || !USE_REC) return null;
     let pool = recPool(cat, voice); if (o.speaker) { const s = pool.filter(it => it.speaker === o.speaker); if (s.length) pool = s; }
-    if (!pool.length) return -1;
+    if (!pool.length) return null;
     const pl = this.place(o.x, o.y), vol = pl.v * (o.gain === undefined ? 1 : o.gain);
-    if (!this._admit('schrei', vol)) return -1;
+    if (!this._admit('schrei', vol)) return null;
     const it = pickRec(Math.random, pool), rate = (0.95 + Math.random() * 0.1) * (o.rate || 1), len = it.buf.duration / rate;
     const cut = o.cut || 0, fade = o.fade || 0.015, ac = this.ac, t = ac.currentTime, end = cut ? Math.min(cut, len) : len;
     const rec = this._start(it.buf, vol, pl.pan, pl.lp, 'stimmen', rate, 'schrei', end + fade);
     const gp = rec.g.gain; gp.cancelScheduledValues(t); gp.setValueAtTime(0, t); gp.linearRampToValueAtTime(vol, t + 0.004);
     if (cut) { gp.setValueAtTime(vol, t + end); gp.linearRampToValueAtTime(0.0001, t + end + fade); rec.src.stop(t + end + fade + 0.03); }
     else { gp.setValueAtTime(vol, t + Math.max(0.01, end - 0.02)); gp.linearRampToValueAtTime(0.0001, t + end); }
-    return t + end;
+    // stop(fade): Schrei abreißen (tödlicher Aufprall: 15 ms, Angefahren: 90 ms - ihr bleibt die Luft weg)
+    rec.stop = (f = 0.015) => { const n = ac.currentTime; if (rec.end < n) return; try { gp.cancelScheduledValues(n); gp.setValueAtTime(gp.value, n); gp.linearRampToValueAtTime(0.0001, n + f); rec.src.stop(n + f + 0.03); rec.end = n; } catch (e) {} };
+    return rec;
   },
+  // Stimme einer Person: ein fester Sprecher aus dem Bundle passend zum Stimmtyp (PLAN §4.10), bleibt für die Person gleich
+  speakerFor(voice, cat = 'angst') { const pool = recPool(cat, voice); return pool.length ? pool[Math.floor(Math.random() * pool.length)].speaker : null; },
   // Komfort: Explosion nach Größe (Ironclad: 0.5 Granate .. 4 Boss), mit Ducking ab 1.6
   explosion(size, x, y) {
     const id = size < 1 ? 'explosion_s' : size < 2.2 ? 'explosion_m' : 'explosion_l';
@@ -214,14 +220,23 @@ const Amb = {
     if (this.L || !Aud.ac || Aud.ac.state !== 'running' || !Aud.bank.rain_loop || !Aud.bank.neon_buzz || !Aud.bank.hum_krone) return;
     this.L = { rain: Aud.loop('rain_loop'), docks: Aud.loop('hum_docks'), neon: Aud.loop('hum_neon'), krone: Aud.loop('hum_krone'), buzz: Aud.loop('neon_buzz') };
   },
+  // Raumatmosphäre: drinnen je Raumtyp (Bar-Bass, Klinik-Piepen, Maschinen, Brummen); draußen nur der dumpfe Bar-Bass an der Tür (PLAN §4.10)
+  rooms(x, y) {
+    if (!this.R) { if (!(Aud.bank.raum_bar && Aud.bank.raum_hum && Aud.bank.raum_klinik && Aud.bank.raum_halle)) return; this.R = { hum: Aud.loop('raum_hum', 'ambience'), bar: Aud.loop('raum_bar', 'ambience', { lp: 500 }), klinik: Aud.loop('raum_klinik', 'ambience'), halle: Aud.loop('raum_halle', 'ambience') }; }
+    const L = { hum: 0, bar: 0, klinik: 0, halle: 0 }, cut = { bar: 500 }, I = Interiors.cur; let pan = 0;
+    if (I) { const r = I.leaves.find(q => x > q.x0 && x < q.x1 && y > q.y0 && y < q.y1), k = (r && ROOM_SOUND[r.type]) || 'hum'; L[k] = 0.55; L.hum = Math.max(L.hum, 0.12); cut.bar = 6500; }
+    else { let bd = 300; for (const b of Interiors.list) { const k = ROOM_SOUND[b._kind === 'nudelbar' || b._kind === 'bar' ? 'bar' : b._kind === 'spielhalle' ? 'spiel' : ''] ; if (k !== 'bar') continue; const d = Math.hypot(b._door.x - x, b._door.y - y); if (d < bd) { bd = d; pan = clamp((b._door.x - x) / 200, -0.8, 0.8); } } if (bd < 300) L.bar = 0.4 * Math.pow(1 - bd / 300, 1.5); }
+    for (const k in L) this.R[k].setLevel(L[k], pan, cut[k]);
+  },
   // Aufruf alle 6 Ticks mit Hörerposition (Weltpixel)
   update(x, y) {
     this.start(); const L = this.L; if (!L || Aud.muted) return;
     const tx = x / C.TILE, sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
     const krone = sm(194, 214, tx), docks = (1 - sm(90, 110, tx)) * (1 - krone), neon = Math.max(0, 1 - docks - krone);
-    L.rain.setLevel(0.55 * G.rain); L.docks.setLevel(0.5 * docks); L.neon.setLevel(0.5 * neon); L.krone.setLevel(0.5 * krone);
+    L.rain.setLevel(0.55 * G.rain * (G.inside ? 0.35 : 1)); L.docks.setLevel(0.5 * docks); L.neon.setLevel(0.5 * neon); L.krone.setLevel(0.5 * krone);
     const n = G.city ? World.nearestNeon(x, y, 220) : null;                       // Neon-Summen: lauter und seitlich nahe am Schild
     if (n) L.buzz.setLevel(0.5 * (1 - n.d / 220) * (1 - n.d / 220), clamp((n.x - x) / 160, -0.8, 0.8)); else L.buzz.setLevel(0);
+    this.rooms(x, y);
     if (--this.nextHorn <= 0) { this.nextHorn = 480 + Math.floor(Math.random() * 900); const a = Math.random() * TAU, d = 700 + Math.random() * 500; Aud.play('horn_far', { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, gain: 0.8 }); }
   }
 };

@@ -317,6 +317,32 @@ function skidLoop(m) {
   const o = m.osc('sawtooth', 0, L), bp = m.filt('bandpass', 1500, 8), g = m.gain(0.08); o.frequency.value = 520; o.connect(bp); bp.connect(g); g.connect(dest);
 }
 
+// ---- Menschen (MS4/MS5): Körperaufprall ohne Schrei (der kommt live aus den Aufnahmen), Raumatmosphäre, Kisten, Fund, Kasse, Schiebetür ----
+function bodyImpact(m, lethal) {
+  const dest = m.bus(0, 1, 0.2);
+  m.thump(0, 62, 30, 0.28, 1.0, dest); m.thump(0, 190, 85, 0.07, 1.0, dest); m.hit(0, 0.14, 'lowpass', 260, 0.8, 0.8, dest); m.hit(0, 0.09, 'bandpass', 750, 1.3, 1.4, dest);
+  m.hit(0, 0.03, 'highpass', 2600, 0.7, 0.6, dest); m.clicks(0, 0.07, 18, 1800, 6500, 0.7, dest);
+  if (lethal) { for (const [dt, v] of [[0.17, 0.95], [0.31, 0.85]]) { m.thump(dt, 50, 30, 0.13, v, dest); m.hit(dt, 0.08, 'lowpass', 200, 0.8, v * 0.7, dest); }
+    m.hit(0.04, 0.16, 'bandpass', 1500, 2.2, 0.55, dest, 380); m.thump(0.04, 130, 70, 0.06, 0.4, dest); m.clicks(0.05, 0.25, 8, 900, 2500, 0.15, dest); }
+  else { for (const [dt, v] of [[0.18, 0.55], [0.34, 0.4], [0.52, 0.25]]) { m.thump(dt, 90, 45, 0.09, v, dest); m.hit(dt, 0.07, 'lowpass', 500, 0.8, v * 0.7, dest); } }
+}
+function roomLoop(m, kind) {
+  const L = 6.6, dest = m.bus(0, 1, 0, 0);
+  const drone = (f, type, lp, v) => { const o = m.osc(type, 0, L), fl = m.filt('lowpass', lp, 1), g = m.gain(v); o.frequency.value = f; o.connect(fl); fl.connect(g); g.connect(dest); };
+  const wash = (f, q, v) => { const n = m.noise(0, L), bp = m.filt('bandpass', f, q), g = m.gain(v); n.connect(bp); bp.connect(g); g.connect(dest); };
+  if (kind === 'hum') { drone(50, 'sine', 200, 0.3); drone(100.4, 'sawtooth', 300, 0.08); wash(2400, 3, 0.012); }                                       // Kühlschrank-/Neonbrummen
+  else if (kind === 'bar') {                                                                                                                         // Bar: Bass-Puls 4/4 (118 BPM), Pad, Gemurmel
+    const beat = 60 / 118; for (let t = 0; t < L; t += beat) m.thump(t, 120, 48, 0.2, 0.55, dest);
+    for (const f of [110, 164.8, 220]) drone(f, 'sawtooth', 700, 0.045); wash(700, 0.6, 0.06); wash(1500, 0.8, 0.025);
+    for (let t = beat / 2; t < L; t += beat) m.hit(t, 0.04, 'highpass', 7000, 0.7, 0.04, dest); }
+  else if (kind === 'klinik') { drone(60, 'sine', 160, 0.2); wash(500, 0.5, 0.04); for (let t = 0.4; t < L; t += 1.1) { const o = m.osc('sine', t, 0.12), e = m.env([[t, 0], [t + 0.005, 0.1], [t + 0.1, 0.0001]]); o.frequency.value = 1180; o.connect(e); e.connect(dest); } }   // EKG-Piepen
+  else { drone(38, 'sawtooth', 130, 0.3); wash(180, 0.5, 0.25); m.clicks(0, L, 6, 600, 1800, 0.05, dest); }                                         // Maschinenhalle
+}
+function schiebetuer(m) { const dest = m.bus(0, 1, 0.1); m.hit(0, 0.28, 'bandpass', 1200, 1.2, 0.5, dest, 3200); m.thump(0.0, 140, 70, 0.05, 0.35, dest); m.clicks(0.24, 0.28, 2, 2000, 5000, 0.2, dest); }
+function kistaAuf(m) { const dest = m.bus(0, 1, 0.12); m.thump(0, 150, 70, 0.06, 0.5, dest); m.hit(0.02, 0.18, 'bandpass', 900, 3, 0.4, dest, 450); const o = m.osc('sawtooth', 0.05, 0.25), lp = m.filt('bandpass', 700, 6), e = m.env([[0.05, 0], [0.08, 0.06], [0.28, 0.0001]]); o.frequency.setValueAtTime(260, 0.05); o.frequency.linearRampToValueAtTime(340, 0.28); o.connect(lp); lp.connect(e); e.connect(dest); m.clicks(0, 0.06, 4, 1500, 4000, 0.2, dest); }
+function fundSnd(m) { const dest = m.bus(0, 1, 0.3); [[0, 784], [0.07, 988], [0.14, 1319]].forEach(([t, f]) => { const o = m.osc('triangle', t, 0.3), e = m.env([[t, 0], [t + 0.005, 0.2], [t + 0.28, 0.0001]]); o.frequency.value = f; o.connect(e); e.connect(dest); }); }
+function kasseSnd(m) { const dest = m.bus(0, 1, 0.2); m.hit(0, 0.02, 'highpass', 3000, 0.7, 0.3, dest); [[0.04, 2200], [0.1, 3300]].forEach(([t, f]) => { const o = m.osc('sine', t, 0.7), e = m.env([[t, 0], [t + 0.003, 0.25], [t + 0.65, 0.0001]]); o.frequency.value = f; o.connect(e); e.connect(dest); }); m.clicks(0.0, 0.1, 6, 2000, 6000, 0.15, dest); }
+
 // ------------------------------------------------------------------
 // Klangbank-Definitionen: id -> { len (s), variants, cat (Stimmen-Limit), bus, gain, first (zuerst backen), fn(m, variantIndex) }
 // "first" = was das Spiel sofort braucht (Explosion + Schreie); der Rest wird im Hintergrund nachgebacken.
@@ -325,10 +351,10 @@ const SOUND_DEFS = {
   explosion_s: { len: 1.8, variants: 2, cat: 'explosion', bus: 'sfx', first: true, fn: (m, v) => explosionSnd(m, 0.6 + v * 0.2) },
   explosion_m: { len: 2.6, variants: 2, cat: 'explosion', bus: 'sfx', first: true, fn: (m, v) => explosionSnd(m, 1.4 + v * 0.3) },
   explosion_l: { len: 3.6, variants: 2, cat: 'explosion', bus: 'sfx', first: true, fn: (m, v) => explosionSnd(m, 2.8 + v * 0.6) },
-  scream_mann: { len: 1.7, variants: 3, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'mann') },
-  scream_frau: { len: 1.7, variants: 3, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'frau') },
-  scream_alt:  { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'alt') },
-  scream_jung: { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'jung') },
+  scream_mann: { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'mann') },
+  scream_frau: { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'frau') },
+  scream_alt:  { len: 1.7, variants: 1, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'alt') },
+  scream_jung: { len: 1.7, variants: 1, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'jung') },
   rain_loop:  { len: 7.6, variants: 1, loop: true, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: rainLoop },
   hum_docks:  { len: 7.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'docks') },
   hum_neon:   { len: 7.6, variants: 1, loop: true, peak: 0.38, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'neon') },
@@ -338,6 +364,7 @@ const SOUND_DEFS = {
   crash_s: { len: 1.0, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: m => crashSnd(m, 0.5) },
   crash_m: { len: 1.6, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: m => crashSnd(m, 1.0) },
   crash_l: { len: 2.4, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 4, fn: m => crashSnd(m, 1.9) },
+  hupe:    { len: 0.7, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: m => { const dest = m.bus(0, 1, 0.3, 2500), f = m.pick([[350, 440], [392, 494]]); for (const hz of f) { const o = m.osc('square', 0.01, 0.5), lp = m.filt('lowpass', 1400), e = m.env([[0.01, 0], [0.03, 0.3], [0.45, 0.28], [0.55, 0.0001]]); o.frequency.value = hz; o.connect(lp); lp.connect(e); e.connect(dest); } } },
   glas:    { len: 1.1, variants: 2, cat: 'crash', bus: 'sfx', noiseLen: 3, fn: glassSnd },
   tuer_auf: { len: 0.5, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: m => doorSnd(m, true) },
   tuer_zu:  { len: 0.4, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: m => doorSnd(m, false) },
@@ -346,13 +373,23 @@ const SOUND_DEFS = {
   alarm:   { len: 2.4, variants: 1, cat: 'sfx', bus: 'ambience', noiseLen: 2, fn: alarmSnd },
   feuer_loop: { len: 6.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 8, fn: fireLoop },
   skid_loop:  { len: 4.8, variants: 1, loop: true, peak: 0.45, bus: 'sfx', cat: 'ambience', noiseLen: 6, fn: skidLoop },
-  schritt_asphalt: { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'asphalt') },
-  schritt_platte:  { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'platte') },
-  schritt_beton:   { len: 0.3, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'beton') },
-  schritt_metall:  { len: 0.45, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'metall') },
-  schritt_pfuetze: { len: 0.4, variants: 3, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.55, fn: m => stepSnd(m, 'pfuetze') },
-  ueberfahren_toedlich: { len: 4.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, true, v % 2 ? 'frau' : 'mann') },
-  ueberfahren_verletzt: { len: 5.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, false, v % 2 ? 'mann' : 'frau') },
+  koerper_toedlich: { len: 1.2, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 3, fn: m => bodyImpact(m, true) },
+  koerper_verletzt: { len: 1.2, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 3, fn: m => bodyImpact(m, false) },
+  raum_hum:    { len: 7.6, variants: 1, loop: true, peak: 0.4, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => roomLoop(m, 'hum') },
+  raum_bar:    { len: 7.6, variants: 1, loop: true, peak: 0.55, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => roomLoop(m, 'bar') },
+  raum_klinik: { len: 7.6, variants: 1, loop: true, peak: 0.4, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => roomLoop(m, 'klinik') },
+  raum_halle:  { len: 7.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => roomLoop(m, 'halle') },
+  tuer_schieb: { len: 0.5, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: schiebetuer },
+  kiste_auf:   { len: 0.6, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: kistaAuf },
+  fund:        { len: 0.7, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: fundSnd },
+  kasse:       { len: 1.0, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: kasseSnd },
+  schritt_asphalt: { len: 0.3, variants: 2, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'asphalt') },
+  schritt_platte:  { len: 0.3, variants: 2, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'platte') },
+  schritt_beton:   { len: 0.3, variants: 2, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'beton') },
+  schritt_metall:  { len: 0.45, variants: 2, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'metall') },
+  schritt_pfuetze: { len: 0.4, variants: 2, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.55, fn: m => stepSnd(m, 'pfuetze') },
+  ueberfahren_toedlich: { len: 4.4, variants: 1, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, true, v % 2 ? 'frau' : 'mann') },
+  ueberfahren_verletzt: { len: 5.4, variants: 1, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, false, v % 2 ? 'mann' : 'frau') },
   panik_menge:   { len: 4.8, variants: 1, cat: 'schrei', bus: 'stimmen', fn: panic },
   vollstreckung: { len: 4.0, variants: 1, cat: 'sfx', bus: 'sfx', fn: execution },
   mandat_anruf:  { len: 3.8, variants: 1, cat: 'sfx', bus: 'stimmen', fn: mandatCall }

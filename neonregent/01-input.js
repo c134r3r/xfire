@@ -39,9 +39,9 @@ const Input = {
     const up = e => { e.preventDefault(); for (const t of e.changedTouches) for (const s of [T.move, T.aim]) if (s.id === t.identifier) s.id = null; };
     c.addEventListener('touchend', up, { passive: false }); c.addEventListener('touchcancel', up, { passive: false });
     // Kontextknöpfe (DOM): halten = Zustand, Antippen = Flanke
-    for (const [id, name] of [['tbEnter', 'enter'], ['tbAct', 'act'], ['tbSprint', 'sprint'], ['tbHorn', 'horn'], ['tbMap', 'map']]) {
+    for (const [id, name] of [['tbEnter', 'enter'], ['tbAct', 'act'], ['tbSprint', 'sprint'], ['tbHorn', 'horn'], ['tbMap', 'map'], ['tbUse', 'use']]) {
       const el = document.getElementById(id); if (!el) continue;
-      el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); T.on = true; T.btn[name] = true; if (name === 'enter') this.edge.KeyF = true; if (name === 'map') this.edge.Tab = true; if (name === 'act') this.edge.Space = true; if (typeof Aud !== 'undefined') Aud.init(); }, { passive: false });
+      el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); T.on = true; T.btn[name] = true; if (name === 'enter') this.edge.KeyF = true; if (name === 'map') this.edge.Tab = true; if (name === 'act') this.edge.Space = true; if (name === 'use') this.edge.KeyE = true; if (typeof Aud !== 'undefined') Aud.init(); }, { passive: false });
       const end = e => { e.preventDefault(); T.btn[name] = false; };
       el.addEventListener('touchend', end, { passive: false }); el.addEventListener('touchcancel', end, { passive: false });
     }

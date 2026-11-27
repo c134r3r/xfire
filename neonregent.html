@@ -58,6 +58,10 @@ body.ingame #hud { opacity: 1; }
 #mapPanel { width: min(980px, 96vw); text-align: center; }
 #mapCanvas { width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; background: #05070c; }
 #mapLegend { margin-top: 10px; font-size: 11px; letter-spacing: 2px; color: var(--muted); }
+#place { position: absolute; left: 50%; top: 78px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
+#place.on { opacity: 1; } #place .val { font-size: 13px; letter-spacing: 3px; color: #ffb3d9; text-shadow: 0 0 12px rgba(255,63,164,0.6); text-align: left; }
+#findsList { margin-top: 14px; max-height: 200px; overflow-y: auto; text-align: left; font-size: 12px; line-height: 1.5; color: var(--muted); }
+#findsList b { color: var(--gold); } #findsList i { color: var(--text); font-style: normal; }
 #nowPlaying { position: absolute; left: 12px; bottom: 96px; font-family: var(--font-display); font-size: 10px; letter-spacing: 4px; color: var(--mag); text-shadow: 0 0 10px rgba(255,63,164,0.7); opacity: 0; transition: opacity 0.6s; }
 #nowPlaying.on { opacity: 1; }
 .tctl { position: absolute; pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; border: 1.5px solid var(--line); background: rgba(8,10,18,0.55); color: var(--accent-hi);
@@ -70,7 +74,8 @@ body.touch #radarBox { right: auto; left: 50%; transform: translateX(-50%); widt
 body.touch #hint, body.touch #nowPlaying, body.touch #district { display: none; }
 body.touch .hud-card { padding: 4px 8px; gap: 6px; } body.touch .lbl { font-size: 8px; letter-spacing: 2px; } body.touch .val { font-size: 13px; } body.touch .bar { width: 110px; height: 7px; }
 body.touch .hud-tl, body.touch .hud-tr { top: 6px; gap: 3px; } body.touch .hud-tl { left: 6px; } body.touch .hud-tr { right: 6px; } body.touch #chipTag { font-size: 8px; letter-spacing: 2px; }
-body.touch .tctl { width: 54px; height: 54px; font-size: 9px; } body.touch #tbMap { top: 84px; right: 10px; width: 40px; height: 40px; } body.touch #tbEnter { right: 10px; bottom: 46%; } body.touch #tbAct { right: 76px; bottom: 30%; } body.touch #tbHorn { right: 10px; bottom: 27%; width: 42px; height: 42px; } body.touch #tbSprint { left: 10px; bottom: 50%; }
+body.touch .tctl { width: 54px; height: 54px; font-size: 9px; } body.touch #tbMap { top: 84px; right: 10px; width: 40px; height: 40px; } body.touch #tbEnter { right: 10px; bottom: 46%; } body.touch #tbAct { right: 76px; bottom: 30%; } body.touch #tbHorn { right: 10px; bottom: 27%; width: 42px; height: 42px; } body.touch #tbSprint { left: 10px; bottom: 50%; } body.touch #tbUse { right: 76px; bottom: 46%; }
+#tbUse { right: 96px; bottom: 44%; }
 body.touch #banner { font-size: 30px; letter-spacing: 5px; }
 #debugBox { position: absolute; left: 12px; top: 120px; font: 11px/1.45 ui-monospace, 'DejaVu Sans Mono', monospace; color: #9dff4a;
   background: rgba(0,0,0,0.55); padding: 6px 8px; border-radius: 4px; white-space: pre; display: none; }
@@ -113,12 +118,14 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
     <div class="hud-tr">
       <div class="hud-card"><span class="lbl">CREDITS</span><span class="val" id="credVal">0</span></div>
       <div class="hud-card"><span class="lbl">FAHNDUNG</span><span id="heat"><b>♦</b><b>♦</b><b>♦</b><b>♦</b><b>♦</b></span></div>
+      <div class="hud-card" id="findCard"><span class="lbl">FUNDE</span><span class="val" id="findVal">0/30</span></div>
       <div class="hud-card"><span id="district">HALOGEN</span></div>
     </div>
     <div id="banner"></div>
     <div id="pager"></div>
     <div id="nowPlaying"></div>
-    <button class="tctl" id="tbEnter">EIN / AUS</button><button class="tctl" id="tbAct">ROLLE</button><button class="tctl" id="tbSprint">SPRINT</button><button class="tctl" id="tbHorn">HUPE</button><button class="tctl" id="tbMap">KARTE</button>
+    <div id="place" class="hud-card"><span class="lbl">INNENRAUM</span><span class="val" id="placeName"></span></div>
+    <button class="tctl" id="tbEnter">EIN / AUS</button><button class="tctl" id="tbAct">ROLLE</button><button class="tctl" id="tbSprint">SPRINT</button><button class="tctl" id="tbUse" style="display:none">NEHMEN</button><button class="tctl" id="tbHorn">HUPE</button><button class="tctl" id="tbMap">KARTE</button>
     <div id="hint"></div>
     <div id="radarBox"><canvas id="radar" width="168" height="168"></canvas></div>
     <div id="debugBox"></div>
@@ -154,6 +161,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
   <div class="panel" style="max-width:420px">
     <div class="title" style="font-size:38px">PAUSE</div>
     <div class="subtitle">STANDBY</div>
+    <div id="findsList"></div>
     <div class="actions">
       <button class="btn" id="resumeBtn">WEITER</button>
       <button class="btn secondary" id="quitBtn">HAUPTMENÜ</button>
@@ -179,10 +187,12 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
 <script src="neonregent/02c-music.js?v=20261127a"></script>
 <script src="neonregent/03-sprites.js?v=20261127a"></script>
 <script src="neonregent/03b-vehicle-art.js?v=20261127a"></script>
+<script src="neonregent/03c-ped-art.js?v=20261127a"></script>
 <script src="neonregent/04-data.js?v=20261127a"></script>
 <script src="neonregent/05-citygen.js?v=20261127a"></script>
 <script src="neonregent/06-world.js?v=20261127a"></script>
 <script src="neonregent/06b-interiors.js?v=20261127a"></script>
+<script src="neonregent/06c-rooms.js?v=20261127a"></script>
 <script src="neonregent/07-entities.js?v=20261127a"></script>
 <script src="neonregent/08-vehicles.js?v=20261127a"></script>
 <script src="neonregent/09-peds.js?v=20261127a"></script>

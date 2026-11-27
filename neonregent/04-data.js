@@ -11,6 +11,7 @@ const LIGHT_TYPES = {
   neonGreen:{ color: '#9dff4a', r: 124, k: 1.0, flicker: 0.08 },
   fire:    { color: '#ff8a30', r: 140, k: 0.8,  flicker: 0.25 },
   neon:    { color: '#ff3fa4', r: 124, k: 1.0,  flicker: 0.08 },   // Farbe je Lampe (l.color)
+  door:    { color: '#ffb070', r: 84, k: 0.9, flicker: 0.04 },       // beleuchtete Eingangstür begehbarer Gebäude
   player:  { color: '#bfe8ff', r: 60,  k: 0.6,  flicker: 0 },       // Spieler-Eigenlicht (Lesbarkeit)
   marker:  { color: '#3fe8ff', r: 92,  k: 1.0,  flicker: 0 }
 };
@@ -95,3 +96,46 @@ const TRAFFIC_MIX = {
   krone: { limo: 40, gleiter: 25, pfeil: 20, taxi: 10, bike: 5 }
 };
 const CAR_PAINTS = ['#3a6ea5', '#b0305e', '#d8d2c4', '#2a2a30', '#3f9a8a', '#7a3fb0', '#8a8f99', '#a04a2a'];
+
+// ---- Fundstücke (Sammlung) und Behälter (PLAN §7.11 Beute). Namen und Texte sind Teil des Humors der Spielwelt. ----
+const FUNDE = [
+  { id: 'socke', n: 'Einzelne Socke', v: 2, t: 'Die andere ist beim Regenten. Wie alles.' },
+  { id: 'nudelbon', n: 'Nudelgutschein (abgelaufen)', v: 3, t: 'Gültig bis: vor dem Feuertag.' },
+  { id: 'chipentferner', n: '„Chip-Entferner“ aus Plastik', v: 25, t: 'Kleingedrucktes: Entfernt keine Chips. Entfernt Hoffnung.' },
+  { id: 'orden', n: 'Regenten-Orden (Pappe)', v: 15, t: 'Für 41 Jahre stilles Dasein.' },
+  { id: 'schirm', n: 'Ersatzschirm, einmal benutzt', v: 12, t: 'Mit Abo. Der Regen auch.' },
+  { id: 'mandatbrief', n: 'Ungeöffneter Mandatsbrief', v: 20, t: '„Sie haben gewonnen: Ihr Leben. Bitte verlängern.“' },
+  { id: 'goldzahn', n: 'Goldzahn (echt?)', v: 60, t: 'Ist er nicht. Der Pfandleiher zahlt trotzdem.' },
+  { id: 'whisky', n: 'Synth-Whisky „Feuertag 41“', v: 18, t: 'Schmeckt nach Wunsch und Rost.' },
+  { id: 'kassette', n: 'Kassette „Hits der Stille“', v: 9, t: 'Seite A: Nichts. Seite B: Mehr davon.' },
+  { id: 'kaktus', n: 'Plastikkaktus mit Treuechip', v: 14, t: 'Selbst der hat einen. Er wirkt zufrieden.' },
+  { id: 'ente', n: 'Quietscheente (Alarm-Edition)', v: 11, t: 'Quietscht ab Fahndungsstufe 3. Angeblich.' },
+  { id: 'pfand', n: 'Pfandflasche (0,05 CR)', v: 1, t: 'Der Aufwand rechnet sich nie. Du tust es trotzdem.' },
+  { id: 'brille', n: 'Brille mit Neon-Rahmen', v: 22, t: 'Macht jeden interessant. Fast jeden.' },
+  { id: 'haarteil', n: 'Haarteil (Regentenfrisur)', v: 16, t: 'Die Frisur gibt es seit 41 Jahren. Den Regenten nicht.' },
+  { id: 'haustier', n: 'Digitales Haustier, verhungert', v: 7, t: 'RIP Biscuit. Er wurde drei Tage alt.' },
+  { id: 'handtuch', n: 'Notfallhandtuch (42 × 42)', v: 4, t: 'Wer sein Handtuch kennt, kennt auch die Stadt.' },
+  { id: 'umarmung', n: 'Gutschein: eine Umarmung', v: 5, t: 'Bisher von niemandem eingelöst.' },
+  { id: 'zahnrad', n: 'Zahnrad, Herkunft unbekannt', v: 30, t: 'Passt in nichts. Klingt wertvoll.' },
+  { id: 'postkarte', n: 'Postkarte aus der Ödnis', v: 10, t: '„Wetter schön. Wünschte, du wärst nicht hier.“ Rückseite verbrannt.' },
+  { id: 'hoverpad', n: 'Gebrauchtes Schwebebrett-Pad', v: 35, t: 'Riecht nach Ozon und schlechten Entscheidungen.' },
+  { id: 'aschenbecher', n: 'Aschenbecher mit Regentengesicht', v: 8, t: 'Er sieht auch mit Asche streng aus.' },
+  { id: 'stempel', n: 'Stempel „GENEHMIGT“', v: 28, t: 'Alles, was du damit abstempelst, wird kurz wahr.' },
+  { id: 'notizbuch', n: 'Notizbuch: „Dinge, die ich nicht sagen darf“', v: 13, t: 'Alle Seiten leer. Sehr vorsichtig.' },
+  { id: 'pokal', n: 'Pokal „Bürger des Monats (Okt. ’89)“', v: 40, t: 'Der Monat wurde nie bestätigt.' },
+  { id: 'schluessel', n: 'Schlüssel ohne Schloss', v: 17, t: 'Das Schloss hat gekündigt.' },
+  { id: 'bonbon', n: 'Hustenbonbon (Geschmack: Chip)', v: 3, t: 'Schmeckt nach Metall und Pflicht.' },
+  { id: 'wecker', n: 'Wecker, der rückwärts läuft', v: 21, t: 'Er geht richtig. Die Welt nicht.' },
+  { id: 'radio', n: 'Taschenradio: nur Rauschen', v: 19, t: 'Es sendet gerade die Stimme des Regenten. Klingt trotzdem wie Rauschen.' },
+  { id: 'minipanzer', n: 'Miniatur-Tribunal 1:87', v: 26, t: 'Völlig harmlos. Nur hier drin.' }
+];
+// Behälter: n Name, cr Credits (min, max), f Chance auf ein Fundstück, food = Essen (heilt), noisy = laut (Safe)
+const LOOT = {
+  spind:        { n: 'Spind', cr: [5, 30], f: 0.5 },
+  schublade:    { n: 'Schublade', cr: [3, 20], f: 0.6 },
+  kuehlschrank: { n: 'Kühlschrank', cr: [0, 6], f: 0.3, food: true },
+  safe:         { n: 'Safe', cr: [60, 150], f: 0.35, noisy: true },
+  kiste:        { n: 'Kiste', cr: [8, 40], f: 0.45 },
+  truhe:        { n: 'Truhe', cr: [30, 90], f: 0.5 },
+  kasse:        { n: 'Kasse', cr: [15, 60], f: 0.15 }
+};

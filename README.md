@@ -465,19 +465,27 @@ Solo play is unchanged.
 
 Top-down open-world game (working title) in the rainy neon city of HALOGEN, built on the look and tech of IRONCLAD.
 Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry point; progress log in §14).
-**Status: milestone MS2 (vehicles), plus music and touch pulled forward.** The whole city is generated from the zone plan (three districts,
-gated bridges, leaning GTA-2 buildings, night lightmap, rain, radar and full map on `Tab`). Ten retro-futuristic cyberpunk vehicle classes
-(compact, limo, taxi, sports car, hover glider, pickup, van, container truck, light-cycle courier bike and **hoverboards**) with arcade
-physics, drift, crashes, fire, explosions and chain reactions, parked cars (30 % locked: `F` breaks in), boost and horn.
-Sound: per-class engines, tyre squeal, crashes, doors, boost, fire, rain, per-district hum, footsteps, and **five dystopian 80s synth
-tracks** (shuffled playlist, `U` = next track). Touch: floating twin sticks plus context buttons; driving uses the "direct" mode
-(stick = target heading). Keyboard: `W/S` throttle/brake, `A/D` steer, `Space` handbrake, `Shift` boost, `H` horn, `F` enter/exit
-(menu option switches to the direct mode). Gates are closed unless `?debug=1` or `?gates=open`.
-Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `F8` spawn next vehicle, `B` explosion, `V` scream,
-`N` run-over, `Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` (e.g. `cars`, `drive`, `hover`) loads a deterministic test scene.
-Tests: `node tools/neonregent-test/smoke.mjs` (scenes, console errors, rAF timing), `walk.mjs` (zone plan vs. tiles, reachability,
-random walk), `vehicles.mjs` (physics per class, crash to wreck, break-in, hoverboard, real touch events), `audio.mjs` (renders every
-sound and every track to WAV, level checks, decodes the recording bundle).
+**Status: MS0-MS2 plus the life of the city (MS4) and enterable buildings (MS5); music and touch pulled forward.**
+- **City:** generated from the zone plan (three districts, gated bridges, leaning GTA-2 buildings, night lightmap, rain, radar, full map on `Tab`).
+- **People:** the hero and ~50 pedestrians are animated rigs with legs, arms, hoods, caps, visors, backpacks, glowing soles and umbrellas.
+  Pedestrians walk the pavements, wait at crossings, dodge or freeze when a car rushes at them, scream (recorded voices, one speaker per
+  person), get run over (lethal or hurt, they groan and get up), drop wallets, panic as a crowd and comment on the world. Every citizen
+  has a pulsing Treuechip dot. Traffic follows the lanes, picks exits at junctions and honks; `F` on a stopped car is a carjacking.
+- **Buildings:** about 40 buildings are enterable (all services, story places and ~10 % of the rest, spread over all districts). Their doors glow
+  warm. Walking in lifts the roof and shows the floor plan (rooms, doors, furniture, residents, shop keepers). `E` searches lockers, drawers,
+  fridges, safes and tills and talks to residents; 29 collectable finds with their own jokes (list in the pause menu).
+- **Vehicles:** ten retro-futuristic cyberpunk classes incl. light-cycle courier bike and hoverboards, arcade physics, drift, crashes, fire,
+  chain explosions, parked cars (`F` breaks in), boost, horn.
+- **Sound:** per-class engines, tyres, crashes, rain, per-district hum, footsteps, room atmospheres (bar bass leaks through the door), and
+  five dystopian 80s synth tracks (`U` = next).
+- **Touch:** floating twin sticks plus context buttons (incl. a "take" button); driving uses the direct mode (stick = heading).
+Keyboard: `WASD` move/drive, mouse aim, `Shift` sprint/boost, `Space` roll/handbrake, `F` enter/exit/carjack, `E` search/talk, `H` horn, `Tab` map,
+`U` next track, `P` pause, `M` mute. Gates are closed unless `?debug=1` or `?gates=open`.
+Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `F8` spawn vehicle, `B` explosion, `V` scream, `N` run-over,
+`Z` panic, `X` execution, `K` MANDAT. `?scene=<name>` (e.g. `cars`, `drive`, `hover`, `interior`) loads a deterministic test scene; hash `#nosim`,
+`#nopeds`, `#novehicles`, `#norain`, `#nolightmap` switch passes off for measurements.
+Tests (all headless): `smoke.mjs` (scenes, errors, timing), `walk.mjs` (zone plan, reachability), `vehicles.mjs` (physics, crashes, touch),
+`peds.mjs` (population, run-over, panic, traffic flow, carjack), `interiors.mjs` (floor plans reachable, enter/exit, loot), `audio.mjs` (all sounds + tracks as WAV).
 
 ## Releasing
 

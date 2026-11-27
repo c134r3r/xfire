@@ -9,7 +9,7 @@ let bad = 0; const ok = (name, cond, extra = '') => { console.log((cond ? 'ok   
   const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const ctx = await b.newContext({ viewport: { width: 1304, height: 744 }, hasTouch: true });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
-  await p.goto('file://' + ROOT + '/neonregent.html?scene=docks_street&debug=1');
+  await p.goto('file://' + ROOT + '/neonregent.html?scene=docks_street&debug=1#nosim');
   await p.waitForFunction(() => NR_TEST.state().bake.done, null, { timeout: 90000 });
   await p.evaluate(() => { Settings.d.drive = 'classic'; });
   const N = await p.evaluate(() => ({ n: G.vehicles.length, bad: G.vehicles.filter(v => vehBlock(v, v.x, v.y, v.a).n).length, boards: G.vehicles.filter(v => v.cls === 'board').length, cls: [...new Set(G.vehicles.map(v => v.cls))] }));
