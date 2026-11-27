@@ -7,13 +7,14 @@
 // Mini-Synthese-Bausteine auf einem OfflineAudioContext
 // ------------------------------------------------------------------
 class Mix {
-  constructor(oc, seed) {
-    this.oc = oc; this.rnd = rng(seed);
+  constructor(oc, seed, noiseLen = 8) {
+    this.oc = oc; this.rnd = rng(seed); this.nl = noiseLen;
     this.master = oc.createGain(); this.master.connect(oc.destination);
-    this.verbIn = oc.createGain();
-    const cv = oc.createConvolver(); cv.buffer = this.impulse(1.6);
-    this.verbIn.connect(cv); cv.connect(this.master);
-    this._noise = this.noiseBuf(8);
+    this._noise = this.noiseBuf(noiseLen);
+  }
+  get verbIn() {                                  // Straßenhall erst bei erster Nutzung bauen (kurze Klänge brauchen ihn nicht)
+    if (!this._verbIn) { this._verbIn = this.oc.createGain(); const cv = this.oc.createConvolver(); cv.buffer = this.impulse(1.6); this._verbIn.connect(cv); cv.connect(this.master); }
+    return this._verbIn;
   }
   r(a, b) { return a + (b - a) * this.rnd(); }
   pick(a) { return a[(this.rnd() * a.length) | 0]; }
@@ -36,7 +37,7 @@ class Mix {
     if (send) { const s = this.gain(send); head.connect(s); s.connect(this.verbIn); }
     return g;
   }
-  noise(t, dur) { const s = this.oc.createBufferSource(); s.buffer = this._noise; s.start(Math.max(0, t), this.r(0, Math.max(0, 8 - dur - 0.1)), dur + 0.05); return s; }
+  noise(t, dur) { const s = this.oc.createBufferSource(); s.buffer = this._noise; s.start(Math.max(0, t), this.r(0, Math.max(0, this.nl - dur - 0.1)), dur + 0.05); return s; }
   osc(type, t, dur) { const o = this.oc.createOscillator(); o.type = type; o.start(Math.max(0, t)); o.stop(t + dur + 0.05); return o; }
   filt(type, f, q = 0.7) { const b = this.oc.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
   gain(v) { const g = this.oc.createGain(); g.gain.value = v; return g; }
@@ -247,6 +248,41 @@ function mandatCall(m) {
   return t + 0.6;
 }
 
+
+// ---- Ambiente (MS1): Regen, Stadt-Brummen je Distrikt, Neon-Summen, ferne Hupen, Schritte je Untergrund ----
+function rainLoop(m) {
+  const L = 6.6, dest = m.bus(0, 1, 0, 0);
+  { const n = m.noise(0, L), hp = m.filt('highpass', 900), lp = m.filt('lowpass', 9000), g = m.gain(0.5); n.connect(hp); hp.connect(lp); lp.connect(g); g.connect(dest); }        // Rauschteppich
+  { const n = m.noise(0, L), bp = m.filt('bandpass', 380, 0.6), g = m.gain(0.32); n.connect(bp); bp.connect(g); g.connect(dest); }                                                   // Dach-/Asphaltwummern
+  m.clicks(0, L, 300, 2600, 7800, 0.1, dest);                                                                                                                                        // einzelne Tropfen
+}
+function humLoop(m, kind) {
+  const L = 6.6, dest = m.bus(0, 1, 0, 0);
+  const drone = (f, type, lp, vol) => { const o = m.osc(type, 0, L); o.frequency.value = f; const fl = m.filt('lowpass', lp, 1), g = m.gain(vol); o.connect(fl); fl.connect(g); g.connect(dest); };
+  const wash = (f, q, vol) => { const n = m.noise(0, L), bp = m.filt('bandpass', f, q), g = m.gain(vol); n.connect(bp); bp.connect(g); g.connect(dest); };
+  if (kind === 'docks') { drone(46, 'sawtooth', 120, 0.35); drone(69.3, 'sine', 120, 0.22); wash(160, 0.5, 0.35); wash(900, 0.4, 0.03); }               // Hafen: tiefes Grollen, Wasser, ferne Maschinen
+  else if (kind === 'neon') { drone(55, 'sawtooth', 200, 0.22); drone(110.5, 'sawtooth', 260, 0.1); wash(500, 0.5, 0.22); wash(1800, 0.5, 0.05); }       // Neonmeile: Verkehr, Menschen, mehr Mitten
+  else { drone(55, 'sine', 90, 0.14); wash(300, 0.5, 0.12); }                                                                                              // Krone: leise, gedämpft
+}
+function neonBuzz(m) {
+  const L = 3.4, dest = m.bus(0, 1, 0, 0);
+  for (const [f, v] of [[120, 0.3], [240.4, 0.14], [360.9, 0.05]]) { const o = m.osc('sawtooth', 0, L), lp = m.filt('lowpass', 900), g = m.gain(v); o.frequency.value = f; o.connect(lp); lp.connect(g); g.connect(dest); }
+  m.clicks(0, L, 9, 1500, 5000, 0.06, dest);
+}
+function hornFar(m) {
+  const dest = m.bus(0, 1, 0.5, 1500), f = m.pick([[350, 440], [392, 494]]);
+  for (const hz of f) { const o = m.osc('square', 0.02, 0.6), lp = m.filt('lowpass', 1100), e = m.env([[0.02, 0], [0.06, 0.3], [0.5, 0.25], [0.62, 0.0001]]); o.frequency.value = hz * m.r(0.99, 1.01); o.connect(lp); lp.connect(e); e.connect(dest); }
+}
+// Schritt: Untergrund bestimmt Filter und Anteile (Asphalt dumpf, Platte hart, Metall klingend, Pfütze nass)
+function stepSnd(m, surf) {
+  const dest = m.bus(0, 1, 0.04), v = m.r(0.85, 1.1);
+  if (surf === 'asphalt' || surf === 'pfuetze') { m.thump(0, 130 * v, 70, 0.06, 0.55, dest); m.hit(0, 0.05, 'lowpass', 900 * v, 0.8, 0.7, dest); m.hit(0, 0.015, 'highpass', 3200, 0.7, 0.14, dest); }
+  else if (surf === 'platte') { m.thump(0, 170 * v, 90, 0.04, 0.4, dest); m.hit(0, 0.04, 'lowpass', 1500 * v, 0.9, 0.6, dest); m.hit(0, 0.012, 'bandpass', 2400, 2, 0.35, dest); }
+  else if (surf === 'metall') { m.thump(0, 150, 80, 0.05, 0.4, dest); m.hit(0, 0.05, 'bandpass', 1800 * v, 3, 0.55, dest); const o = m.osc('sine', 0, 0.2), e = m.env([[0, 0], [0.003, 0.1], [0.2, 0.0001]]); o.frequency.value = 880 * v; o.connect(e); e.connect(dest); }
+  else { m.thump(0, 120 * v, 65, 0.05, 0.45, dest); m.hit(0, 0.06, 'lowpass', 1100 * v, 0.8, 0.55, dest); }
+  if (surf === 'pfuetze') { m.hit(0.01, 0.14, 'bandpass', 2500, 0.9, 0.45, dest, 1100); m.hit(0.03, 0.08, 'highpass', 4500, 0.7, 0.12, dest); }
+}
+
 // ------------------------------------------------------------------
 // Klangbank-Definitionen: id -> { len (s), variants, cat (Stimmen-Limit), bus, gain, first (zuerst backen), fn(m, variantIndex) }
 // "first" = was das Spiel sofort braucht (Explosion + Schreie); der Rest wird im Hintergrund nachgebacken.
@@ -259,6 +295,17 @@ const SOUND_DEFS = {
   scream_frau: { len: 1.7, variants: 3, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'frau') },
   scream_alt:  { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'alt') },
   scream_jung: { len: 1.7, variants: 2, cat: 'schrei', bus: 'stimmen', first: true, fn: m => scream(m, 0.05, 'jung') },
+  rain_loop:  { len: 7.6, variants: 1, loop: true, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: rainLoop },
+  hum_docks:  { len: 7.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'docks') },
+  hum_neon:   { len: 7.6, variants: 1, loop: true, peak: 0.38, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'neon') },
+  hum_krone:  { len: 7.6, variants: 1, loop: true, peak: 0.16, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => humLoop(m, 'krone') },
+  neon_buzz:  { len: 4.4, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 6, fn: neonBuzz },
+  horn_far:   { len: 1.8, variants: 3, bus: 'ambience', cat: 'sfx', noiseLen: 3, fn: hornFar },
+  schritt_asphalt: { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'asphalt') },
+  schritt_platte:  { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'platte') },
+  schritt_beton:   { len: 0.3, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'beton') },
+  schritt_metall:  { len: 0.45, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.5, fn: m => stepSnd(m, 'metall') },
+  schritt_pfuetze: { len: 0.4, variants: 4, bus: 'sfx', cat: 'schritt', noiseLen: 2, gain: 0.55, fn: m => stepSnd(m, 'pfuetze') },
   ueberfahren_toedlich: { len: 4.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, true, v % 2 ? 'frau' : 'mann') },
   ueberfahren_verletzt: { len: 5.4, variants: 2, cat: 'schrei', bus: 'sfx', fn: (m, v) => runOver(m, false, v % 2 ? 'mann' : 'frau') },
   panik_menge:   { len: 4.8, variants: 1, cat: 'schrei', bus: 'stimmen', fn: panic },

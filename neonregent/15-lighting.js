@@ -19,7 +19,7 @@ const Lights = {
     for (const l of G.lamps) {
       const T = LIGHT_TYPES[l.type];
       const fl = T.flicker ? 1 - T.flicker * (0.5 + 0.5 * Math.sin(t * (0.21 + (l.ph % 7) * 0.03) + l.ph) * Math.sin(t * 0.9 + l.ph * 3)) : 1;
-      this.add(l.x, l.y, T.r, T.color, T.k * fl);
+      this.add(l.x, l.y, T.r, l.color || T.color, T.k * fl);
     }
     for (const q of G.parts) {
       if (q.kind === 'light') this.add(q.x, q.y, q.size * 1.25, q.color, Math.min(1, q.life / q.max * 1.1));
@@ -36,9 +36,8 @@ const Lightmap = {
   // (Neu)aufbau bei Qualitätswechsel oder anderer Umgebungsfarbe (Distrikt, Morgengrauen)
   build(ambient, scale) {
     this.ambient = ambient; this.scale = scale;
-    this.w = Math.ceil(VIEW_W * scale); this.h = Math.ceil(VIEW_H * scale);
-    this.lm = mkCanvas(this.w, this.h); this.lg = this.lm.getContext('2d');
-    this.base = mkCanvas(this.w, this.h);
+    const w = Math.ceil(VIEW_W * scale), h = Math.ceil(VIEW_H * scale);
+    if (w !== this.w || !this.lm) { this.w = w; this.h = h; this.lm = mkCanvas(w, h); this.lg = this.lm.getContext('2d'); this.base = mkCanvas(w, h); }   // Umfärben (Distrikt) ohne neue Canvas
     const g = this.base.getContext('2d');
     g.fillStyle = ambient; g.fillRect(0, 0, this.w, this.h);
     const gr = g.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.38, this.w / 2, this.h / 2, this.w * 0.62);

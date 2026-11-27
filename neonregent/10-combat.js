@@ -54,10 +54,9 @@ function explosion(x, y, size, opts = {}) {
   if (s >= 1.6) G.zoomPunch = Math.max(G.zoomPunch, 0.012 * s);
   Aud.explosion(s, x, y);
 }
-// Brandflecken: MS0 als kurze Liste, die vor den Entitäten gezeichnet wird. Ab MS1 in die Boden-Chunks gestempelt (PLAN §4.5).
+// Brandflecken werden in die Boden-Chunks gestempelt (PLAN §4.5).
 function stampScorch(x, y, scale) {
-  if (G.decals.length > 120) G.decals.shift();
-  G.decals.push({ x, y, rot: rand(0, TAU), s: scale, v: randi(0, 2) });
+  Ground.decal({ x, y, rot: rand(0, TAU), s: scale, v: randi(0, 2) });
 }
 function muzzleFlash(x, y, ang, s = 1, color = '#ffd27a') {
   glow(x, y, 22 * s, color, 4); glow(x + Math.cos(ang) * 10 * s, y + Math.sin(ang) * 10 * s, 14 * s, color, 3);

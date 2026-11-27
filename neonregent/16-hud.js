@@ -37,13 +37,36 @@ const HUD = {
     if (P.i < full) { P.i = Math.min(full, P.i + 45 / 60); $('pagerTxt').textContent = P.cur.text.slice(0, Math.floor(P.i)); }
     else if (++P.hold > (2.5 + 0.05 * full) * 60) P.cur = null;
   },
+  // Radar (unten rechts, Norden oben): Ausschnitt der vorgerenderten Minikarte, 2 px je Kachel (PLAN §5.8)
+  radar() {
+    const p = G.player, cv = $('radar'); if (!p || !World.mini) return;
+    const g = cv.getContext('2d'), S = cv.width, N = S / 2, tx = p.x / C.TILE, ty = p.y / C.TILE;
+    g.imageSmoothingEnabled = false; g.fillStyle = '#060912'; g.fillRect(0, 0, S, S);
+    g.drawImage(World.mini, tx - N / 2, ty - N / 2, N, N, 0, 0, S, S);
+    g.fillStyle = 'rgba(255,255,255,0.0)';
+    for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) { g.fillStyle = '#ff3b4a'; g.fillRect(((r.x0 + r.x1) / 2 / C.TILE - tx + N / 2) * 2 - 2, ((r.y0 + r.y1) / 2 / C.TILE - ty + N / 2) * 2 - 2, 5, 5); }
+    g.save(); g.translate(S / 2, S / 2); g.rotate(p.a); g.fillStyle = '#5fd4e6'; g.strokeStyle = '#04121a'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(7, 0); g.lineTo(-5, 5); g.lineTo(-3, 0); g.lineTo(-5, -5); g.closePath(); g.fill(); g.stroke(); g.restore();
+  },
+  // Vollkarte (Tab): ganze Stadt, Distrikte, Dienste, Landmarken, Spieler, geschlossene Tore
+  map() {
+    const cv = $('mapCanvas'), g = cv.getContext('2d'), k = cv.width / World.W;
+    g.imageSmoothingEnabled = false; g.drawImage(World.mini, 0, 0, cv.width, cv.height);
+    g.font = '900 11px "Arial Black", "Arial Bold", Verdana, "DejaVu Sans", sans-serif'; g.textAlign = 'center';
+    for (const d of DISTRICTS) { g.fillStyle = 'rgba(168,246,255,0.55)'; g.fillText(d.name, (d.c0 + d.c1 + 1) / 2 * C.CELL * k, 11); }
+    for (const l in G.city.landmarks) { const m = G.city.landmarks[l]; if (LANDMARKS[l].kind === 'plaza') continue; g.fillStyle = '#ffd84a'; g.fillText('✦', m.center.x / C.TILE * k, m.center.y / C.TILE * k + 4); }
+    g.fillStyle = '#ff3fa4'; for (const s of G.city.services) { const b = G.buildings[s.building]; g.fillRect((b.x0 + b.x1) / 2 / C.TILE * k - 2, (b.y0 + b.y1) / 2 / C.TILE * k - 2, 4, 4); }
+    for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) { g.fillStyle = '#ff3b4a'; g.fillRect((r.x0 + r.x1) / 2 / C.TILE * k - 2, (r.y0 + r.y1) / 2 / C.TILE * k - 5, 4, 10); }
+    const p = G.player; if (p) { g.fillStyle = '#5fd4e6'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x / C.TILE * k, p.y / C.TILE * k, 4.5, 0, TAU); g.fill(); g.stroke(); }
+  },
   update() {
     const p = G.player; if (!p) return;
     const f = clamp(p.hp / p.maxHp, 0, 1) * 100 + '%';
     $('hpFill').style.width = f; $('hpGhost').style.width = f; $('hpFill').classList.toggle('low', p.hp < p.maxHp * 0.3);
     $('credVal').textContent = (G.credits || 0).toLocaleString('de-DE');
     const hs = $('heat').children; for (let i = 0; i < hs.length; i++) hs[i].classList.toggle('on', i < (G.heat || 0));
-    $('chipTag').textContent = STR.chip.on; $('district').textContent = STR.district.test;
+    $('chipTag').textContent = STR.chip.on; $('district').textContent = 'HALOGEN · ' + (G.district ? G.district.name : '');
+    this.radar();
     if (DEBUG) {
       const tx = Math.floor(p.x / C.TILE), ty = Math.floor(p.y / C.TILE);
       $('debugBox').textContent = `rAF ${G.rafMs.toFixed(1)} ms · Q ${G.quality.toFixed(2)} · tick ${G.time}\nTeile ${G.parts.length} · Lichter ${Lights.list.length} · Stimmen ${Aud.active.length}\nKachel ${tx},${ty} · Pos ${p.x | 0},${p.y | 0}\nKlangbank ${Aud.bakeLog.n} Klänge${Aud.bakeLog.done ? ' (' + Aud.bakeLog.ms.toFixed(0) + ' ms)' : ' …'} · ${Aud.ac ? Aud.ac.state : 'kein Audio'}`;

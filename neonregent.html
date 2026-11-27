@@ -52,7 +52,12 @@ body.ingame #hud { opacity: 1; }
   border-radius: 6px; padding: 8px 12px; font-size: 13px; line-height: 1.4; font-family: var(--font-ui); color: var(--text);
   box-shadow: 0 0 18px rgba(255,63,164,0.25); opacity: 0; transition: opacity 0.25s; }
 #pager.on { opacity: 1; } #pager .who { font-family: var(--font-display); font-size: 10px; letter-spacing: 3px; color: var(--mag); display: block; margin-bottom: 3px; }
-#hint { position: absolute; right: 12px; bottom: 12px; font-family: var(--font-ui); font-size: 12px; color: var(--muted); text-align: right; line-height: 1.5; }
+#hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; font-family: var(--font-ui); font-size: 12px; color: var(--muted); text-align: center; line-height: 1.5; white-space: pre-line; text-shadow: 0 1px 3px #000; }
+#radarBox { position: absolute; right: 12px; bottom: 12px; width: 168px; height: 168px; border-radius: 50%; overflow: hidden; border: 2px solid var(--line); background: #060912; box-shadow: 0 0 22px rgba(63,232,255,0.18), inset 0 0 18px rgba(0,0,0,0.8); }
+#radar { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+#mapPanel { width: min(980px, 96vw); text-align: center; }
+#mapCanvas { width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; background: #05070c; }
+#mapLegend { margin-top: 10px; font-size: 11px; letter-spacing: 2px; color: var(--muted); }
 #debugBox { position: absolute; left: 12px; top: 120px; font: 11px/1.45 ui-monospace, 'DejaVu Sans Mono', monospace; color: #9dff4a;
   background: rgba(0,0,0,0.55); padding: 6px 8px; border-radius: 4px; white-space: pre; display: none; }
 body.debug #debugBox { display: block; }
@@ -93,11 +98,12 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
     <div class="hud-tr">
       <div class="hud-card"><span class="lbl">CREDITS</span><span class="val" id="credVal">0</span></div>
       <div class="hud-card"><span class="lbl">FAHNDUNG</span><span id="heat"><b>♦</b><b>♦</b><b>♦</b><b>♦</b><b>♦</b></span></div>
-      <div class="hud-card"><span id="district">HALOGEN · TESTFELD</span></div>
+      <div class="hud-card"><span id="district">HALOGEN</span></div>
     </div>
     <div id="banner"></div>
     <div id="pager"></div>
     <div id="hint"></div>
+    <div id="radarBox"><canvas id="radar" width="168" height="168"></canvas></div>
     <div id="debugBox"></div>
     <button class="tbtn" id="touchPause" style="left:calc(50% - 52px);top:8px">II</button>
     <button class="tbtn" id="touchFullscreen" style="left:calc(50% + 6px);top:8px">&#x26F6;</button>
@@ -137,6 +143,15 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
   </div>
 </div>
 
+<!-- Vollkarte (Tab) -->
+<div class="overlay hidden" id="mapScreen">
+  <div class="panel" id="mapPanel">
+    <div class="title" style="font-size:30px;letter-spacing:8px">HALOGEN</div>
+    <canvas id="mapCanvas" width="918" height="288"></canvas>
+    <div id="mapLegend">◆ SPIELER &nbsp; ▣ DIENST &nbsp; ✦ LANDMARKE &nbsp; ▮ TOR (GESCHLOSSEN) &nbsp; · &nbsp; <span class="key">TAB</span> schließen</div>
+  </div>
+</div>
+
 <script>window.NR_VERSION = '20261127a';</script>
 <script src="assets/sound/neonregent.sound.js?v=20261127a"></script>
 <script src="neonregent/00-core.js?v=20261127a"></script>
@@ -157,6 +172,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
 <script src="neonregent/12-missions.js?v=20261127a"></script>
 <script src="neonregent/13-story.js?v=20261127a"></script>
 <script src="neonregent/14-render.js?v=20261127a"></script>
+<script src="neonregent/14b-facades.js?v=20261127a"></script>
 <script src="neonregent/15-lighting.js?v=20261127a"></script>
 <script src="neonregent/16-hud.js?v=20261127a"></script>
 <script src="neonregent/17-main.js?v=20261127a"></script>

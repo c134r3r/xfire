@@ -465,12 +465,14 @@ Solo play is unchanged.
 
 Top-down open-world game (working title) in the rainy neon city of HALOGEN, built on the look and tech of IRONCLAD.
 Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry point; progress log in §14).
-**Status: milestone MS0 (skeleton).** A dark test crossing with a walkable placeholder player, night lightmap, the Ironclad
-explosion, and the full audio engine (buses, ducking, positioning, voice limits, baked sound bank, recorded human voices).
-Open `neonregent.html` directly (works from `file://`; no build step). With `?debug=1`: `B` explosion, `V` scream, `N` run-over,
-`Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` loads a deterministic test scene.
-Tests: `node tools/neonregent-test/smoke.mjs` (scenes, console errors, rAF timing) and `node tools/neonregent-test/audio.mjs`
-(renders every sound to WAV, level checks, decodes the recording bundle).
+**Status: milestone MS1 (city and rendering).** The whole city (306 x 96 tiles, three districts, canals with gated bridges) is generated
+from the zone plan; buildings lean in GTA-2 perspective with lazily baked facades, a night lightmap with street lamps and neon, rain,
+a radar and a full map (`Tab`). Sound: rain, per-district city hum, neon buzz, distant horns, footsteps per surface, plus the audio
+engine from MS0 (recorded human voices, baked sound bank). Gates are closed unless `?debug=1` or `?gates=open`.
+Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `B` explosion, `V` scream, `N` run-over,
+`Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` loads a deterministic test scene, `?seed=` changes the city.
+Tests: `node tools/neonregent-test/smoke.mjs` (scenes, console errors, rAF timing), `walk.mjs` (zone plan vs. tiles, reachability,
+random walk without clipping), `audio.mjs` (renders every sound to WAV, level checks, decodes the recording bundle).
 
 ## Releasing
 

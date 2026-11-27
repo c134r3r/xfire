@@ -11,12 +11,11 @@ const C = {
   ZOOM_FOOT: 1.35, ZOOM_CAR_SLOW: 1.15, ZOOM_CAR_FAST: 0.80, ZOOM_INSIDE: 1.65, CAM_LEAD_CAR: 22,
   PED_R: 7, PLAYER_WALK: 2.0, PLAYER_SPRINT: 2.9, STAMINA: 100, STAMINA_DRAIN: 0.8, STAMINA_REGEN: 0.4,
   DODGE_S: 0.35, DODGE_CD_S: 1,
-  LIGHTMAP_SCALE: 0.5, LIGHTS_MAX: 140, PARTICLES_MAX: 1600,
+  LIGHTMAP_SCALE: 0.5, LIGHTS_MAX: 140, PARTICLES_MAX: 1600, TEX_BUDGET: 24e6, CHUNK: 512, CHUNKS_MAX: 48, RAIN_DROPS: 420,
   AMBIENT: '#2a3150',                       // Konzept-Umgebung; Distrikte: WORLD.md §12
   VOICES_MAX: { schrei: 4, schuss: 8, explosion: 4, motor: 3, sirene: 2, gesamt: 32 },
   DUCK_DB: -6, DUCK_S: 1,
-  // MS0-Testfeld (wird durch den Stadtgenerator ersetzt, MS1)
-  ARENA_W: 2560, ARENA_H: 1792
+  CITY_SEED: 7741
 };
 
 // ----- Abfrage-Parameter -----
@@ -56,9 +55,9 @@ Settings.load();
 // state: boot | menu | play | paused | (spaeter: intro cutscene dying executed busted wasted missionFail missionDone ending credits)
 const G = {
   state: 'boot', time: 0, scene: null,
-  cam: { x: C.ARENA_W / 2, y: C.ARENA_H / 2 }, zoom: C.ZOOM_FOOT, zoomPunch: 0,
+  cam: { x: 0, y: 0 }, zoom: C.ZOOM_FOOT, zoomPunch: 0,
   trauma: 0, kickX: 0, kickY: 0, hurtFlash: 0, freeze: 0, quality: 1,
-  parts: [], texts: [], decals: [], lamps: [], solids: [],
-  ambient: C.AMBIENT, player: null, inside: null, arena: null,
+  parts: [], texts: [], lamps: [], buildings: [], flags: null,
+  ambient: C.AMBIENT, player: null, inside: null, city: null, rain: 1, district: null,
   in: {}                                  // Intent (01-input.js)
 };

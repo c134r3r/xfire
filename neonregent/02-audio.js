@@ -110,14 +110,32 @@ const Aud = {
   // Eine Variante rendern und auf Spitze 0.89 normalisieren; rawPeak für die Pegelprüfung (PLAN §9, R15)
   async render(d, seed, variant) {
     const oc = new OfflineAudioContext(2, Math.ceil(SR * d.len), SR);
-    d.fn(new Mix(oc, seed), variant);
-    const buf = await oc.startRendering();
+    d.fn(new Mix(oc, seed, d.noiseLen || 8), variant);
+    let buf = await oc.startRendering();
+    if (d.loop) buf = this.makeLoop(buf, 1.0);
     let pk = 0, nan = false;
     for (let c = 0; c < 2; c++) { const x = buf.getChannelData(c); for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a !== a) nan = true; if (a > pk) pk = a; } }
-    const k = pk > 0 && !nan ? 0.89 / pk : 1, fade = Math.floor(0.03 * SR);
+    const k = pk > 0 && !nan ? (d.peak || (d.loop ? 0.6 : 0.89)) / pk : 1, fade = d.loop ? 1 : Math.floor(0.03 * SR);
     for (let c = 0; c < 2; c++) { const x = buf.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = nan ? 0 : x[i] * k * Math.min(1, (x.length - i) / fade); }
     buf.rawPeak = pk; buf.hadNaN = nan; return buf;
   },
+
+  // Nahtloser Loop: das Ende wird über den Anfang geblendet, die Überblendzeit fällt aus der Länge heraus
+  makeLoop(buf, xfSec) {
+    const xf = Math.floor(xfSec * SR), n = buf.length - xf, out = new OfflineAudioContext(2, 1, SR).createBuffer(2, n, SR);
+    for (let c = 0; c < 2; c++) { const s = buf.getChannelData(c), o = out.getChannelData(c); for (let i = 0; i < n; i++) o[i] = i < xf ? s[i] * (i / xf) + s[n + i] * (1 - i / xf) : s[i]; }
+    return out;
+  },
+  // Schleife auf einem Bus starten (Regen, Brummen). Gibt { setLevel(v, pan) } zurück.
+  loop(id, bus = 'ambience') {
+    const buf = this.bank[id] && this.bank[id][0]; if (!buf || !this.ac) return null;
+    const ac = this.ac, src = ac.createBufferSource(), g = ac.createGain(), p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    src.buffer = buf; src.loop = true; g.gain.value = 0; src.connect(g); if (p) { g.connect(p); p.connect(this.bus[bus]); } else g.connect(this.bus[bus]);
+    src.start(0, Math.random() * buf.duration);
+    return { setLevel: (v, pan = 0) => { g.gain.setTargetAtTime(v, ac.currentTime, 0.25); if (p) p.pan.setTargetAtTime(pan, ac.currentTime, 0.25); } };
+  },
+  // Schritt je Untergrund (Bank: schritt_<untergrund>)
+  step(surface, sprint) { this.play('schritt_' + surface, { gain: sprint ? 1.25 : 1, rate: sprint ? 1.08 : 1, cat: 'schritt' }); },
 
   // ---- Wiedergabe ----
   // Weltposition -> Lautstärke, Panorama, Tiefpass (Entfernung zum Kamerazentrum; rausgezoomt = weiter weg)
@@ -180,4 +198,25 @@ const Aud = {
     if (size >= 1.6) this.duck();
   },
   scream(voice = 'mann', x, y) { this.play('scream_' + voice, { x, y, cat: 'schrei', bus: 'stimmen' }); }
+};
+
+// ------------------------------------------------------------------
+// Ambiente (PLAN §4.10): Regen, Stadt-Brummen je Distrikt (weich übergeblendet), Neon-Summen nahe Schildern, ferne Hupen
+// ------------------------------------------------------------------
+const Amb = {
+  L: null, nextHorn: 600,
+  start() {
+    if (this.L || !Aud.ac || Aud.ac.state !== 'running' || !Aud.bank.rain_loop || !Aud.bank.neon_buzz || !Aud.bank.hum_krone) return;
+    this.L = { rain: Aud.loop('rain_loop'), docks: Aud.loop('hum_docks'), neon: Aud.loop('hum_neon'), krone: Aud.loop('hum_krone'), buzz: Aud.loop('neon_buzz') };
+  },
+  // Aufruf alle 6 Ticks mit Hörerposition (Weltpixel)
+  update(x, y) {
+    this.start(); const L = this.L; if (!L || Aud.muted) return;
+    const tx = x / C.TILE, sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const krone = sm(194, 214, tx), docks = (1 - sm(90, 110, tx)) * (1 - krone), neon = Math.max(0, 1 - docks - krone);
+    L.rain.setLevel(0.55 * G.rain); L.docks.setLevel(0.5 * docks); L.neon.setLevel(0.5 * neon); L.krone.setLevel(0.5 * krone);
+    const n = G.city ? World.nearestNeon(x, y, 220) : null;                       // Neon-Summen: lauter und seitlich nahe am Schild
+    if (n) L.buzz.setLevel(0.5 * (1 - n.d / 220) * (1 - n.d / 220), clamp((n.x - x) / 160, -0.8, 0.8)); else L.buzz.setLevel(0);
+    if (--this.nextHorn <= 0) { this.nextHorn = 480 + Math.floor(Math.random() * 900); const a = Math.random() * TAU, d = 700 + Math.random() * 500; Aud.play('horn_far', { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, gain: 0.8 }); }
+  }
 };

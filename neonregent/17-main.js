@@ -1,105 +1,75 @@
 'use strict';
-// 17-main.js - Zustandsautomat, fixer 60-Hz-Takt, Testfeld (MS0), Debug-Tasten, Szenen, NR_TEST, Boot (PLAN §4.4, §4.12).
+// 17-main.js - Zustandsautomat, fixer 60-Hz-Takt, Stadt-Start, Distrikte, Debug-Tasten, Szenen, NR_TEST, Boot (PLAN §4.4, §4.12).
 // Exportiert: window.NR_TEST, startGame, SCENES
-
-// ------------------------------------------------------------------
-// Testfeld (MS0): kleine Kreuzung mit vier Blöcken, Laternen und Neon. Ersetzt in MS1 durch den Stadtgenerator.
-// ------------------------------------------------------------------
-function buildArena() {
-  const T = C.TILE, cols = C.ARENA_W / T, rows = C.ARENA_H / T;
-  const rH = gy => gy >= 12 && gy <= 15, rV = gx => gx >= 18 && gx <= 21;
-  const A = {
-    w: C.ARENA_W, h: C.ARENA_H, cols, rows,
-    tileAt(gx, gy) {                                    // -1 außerhalb, 0 Straße, 1 Gehweg, 2 Grundstück
-      if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) return -1;
-      if (rH(gy) || rV(gx)) return 0;
-      if (gy === 11 || gy === 16 || gx === 17 || gx === 22 || gx === 0 || gy === 0 || gx === cols - 1 || gy === rows - 1) return 1;
-      return 2;
-    },
-    laneH(gx, gy) { return (gy === 13 || gy === 14) && !rV(gx); },
-    laneV(gx, gy) { return (gx === 19 || gx === 20) && !rH(gy); }
-  };
-  G.arena = A;
-  const cols2 = ['#2b3040', '#303546', '#262b3a', '#34364a'];
-  G.solids = [[2, 2, 16, 10], [24, 2, 38, 10], [2, 18, 16, 26], [24, 18, 38, 26]].map(([a, b, c, d], i) => ({ x0: a * T, y0: b * T, x1: c * T, y1: d * T, col: cols2[i] }));
-  G.lamps = []; let n = 0;
-  const lamp = (x, y, type, pole = true) => G.lamps.push({ x, y, type, pole, ph: n++ * 1.7 });
-  for (let gx = 2; gx < cols - 2; gx += 4) if (!(gx >= 16 && gx <= 23)) { lamp(gx * T + 32, 11 * T + 32, n % 2 ? 'sodium' : 'led'); lamp(gx * T + 32, 16 * T + 32, n % 2 ? 'led' : 'sodium'); }
-  for (let gy = 2; gy < rows - 2; gy += 4) if (!(gy >= 11 && gy <= 16)) { lamp(17 * T + 32, gy * T + 32, 'sodium'); lamp(22 * T + 32, gy * T + 32, 'led'); }
-  lamp(8 * T, 10 * T + 20, 'neonPink', false); lamp(30 * T, 10 * T + 20, 'neonCyan', false);
-  lamp(8 * T, 18 * T - 20, 'neonGreen', false); lamp(30 * T, 18 * T - 20, 'neonPink', false);
-}
-
-function newPlayer() {
-  return { x: 19.5 * C.TILE, y: 11.5 * C.TILE, vx: 0, vy: 0, a: 0, r: C.PED_R, hp: 100, maxHp: 100, walk: 0, stamina: C.STAMINA, dodge: 0, dodgeCd: 0 };
-}
-
-// Platzhalter-Spieler zu Fuß (PLAN §4.7: Ironclad-Inertia, Kreis gegen AABBs, Sprint mit Ausdauer, Ausweichrolle)
-function updatePlayer() {
-  const p = G.player, i = G.in, A = G.arena;
-  const ap = aimPoint(); p.a = Math.atan2(ap.y - p.y, ap.x - p.x);
-  const sprint = i.sprint && p.stamina > 1 && (i.mx || i.my);
-  const sp = sprint ? C.PLAYER_SPRINT : C.PLAYER_WALK;
-  p.stamina = clamp(p.stamina + (sprint ? -C.STAMINA_DRAIN : C.STAMINA_REGEN), 0, C.STAMINA);
-  if (p.dodgeCd > 0) p.dodgeCd--;
-  if (i.dodgeP && p.dodgeCd <= 0 && p.dodge <= 0) { p.dodge = Math.round(C.DODGE_S * 60); p.dodgeCd = Math.round(C.DODGE_CD_S * 60); p.dvx = (i.mx || Math.cos(p.a)) * 5.2; p.dvy = (i.my || Math.sin(p.a)) * 5.2; Bus.emit('dodge', p); }
-  if (p.dodge > 0) { p.dodge--; p.vx = p.dvx; p.vy = p.dvy; }
-  else { p.vx += (i.mx * sp - p.vx) * 0.2; p.vy += (i.my * sp - p.vy) * 0.2; }
-  p.x += p.vx; p.y += p.vy;
-  p.walk += Math.hypot(p.vx, p.vy);
-  p.x = clamp(p.x, C.TILE, A.w - C.TILE); p.y = clamp(p.y, C.TILE, A.h - C.TILE);
-  for (const b of G.solids) {                              // Kreis gegen AABB herausschieben
-    const cx = clamp(p.x, b.x0, b.x1), cy = clamp(p.y, b.y0, b.y1), dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
-    if (d < p.r && d > 0.0001) { p.x = cx + dx / d * p.r; p.y = cy + dy / d * p.r; }
-    else if (d <= 0.0001 && p.x > b.x0 && p.x < b.x1 && p.y > b.y0 && p.y < b.y1) p.y = b.y0 - p.r;
-  }
-}
 
 // ------------------------------------------------------------------
 // Zustand und Schleife
 // ------------------------------------------------------------------
+// Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.decals.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0;
-  G.player = newPlayer(); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false;
+  const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
+  G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
   if (scene) R.set(7741); else R.fn = Math.random;
-  const S = scene && SCENES[scene]; if (S) { S.setup(); G.sceneLabel = STR.banner.scene(scene) + ' · Platzhalter (MS0)'; }
+  const S = scene && SCENES[scene]; if (S) { S.setup(); G.sceneLabel = STR.banner.scene(scene) + ' · Platzhalter (MS1)'; }
   G.cam.x = G.player.x; G.cam.y = G.player.y; updateCamera(true);
-  G.state = 'play'; $('menuScreen').classList.add('hidden'); $('pauseScreen').classList.add('hidden');
+  G.district = null; updateDistrict(true);
+  G.state = 'play'; $('menuScreen').classList.add('hidden'); $('pauseScreen').classList.add('hidden'); $('mapScreen').classList.add('hidden');
   Aud.init(); Aud.setInside(false);
-  HUD.banner(STR.banner.start, STR.banner.startSub);
 }
 function setPaused(on) {
   if (on && G.state === 'play') { G.state = 'paused'; $('pauseScreen').classList.remove('hidden'); }
-  else if (!on && G.state === 'paused') { G.state = 'play'; $('pauseScreen').classList.add('hidden'); }
+  else if (!on && G.state === 'paused' && !G.mapOpen) { G.state = 'play'; $('pauseScreen').classList.add('hidden'); }
 }
-function toMenu() { G.state = 'menu'; G.player = null; $('pauseScreen').classList.add('hidden'); $('menuScreen').classList.remove('hidden'); }
+function setMap(on) {
+  if (on && G.state === 'play') { G.mapOpen = true; G.state = 'paused'; HUD.map(); $('mapScreen').classList.remove('hidden'); }
+  else if (!on && G.mapOpen) { G.mapOpen = false; G.state = 'play'; $('mapScreen').classList.add('hidden'); }
+}
+function toMenu() { G.state = 'menu'; G.player = null; G.mapOpen = false; $('pauseScreen').classList.add('hidden'); $('mapScreen').classList.add('hidden'); $('menuScreen').classList.remove('hidden'); }
 
-// Testszenen (§4.12): fester Seed, feste Kamera. MS0: Platzhalter-Positionen im Testfeld; echte Orte ab MS1.
-const T_ = C.TILE;
+// Distrikt wechseln: Banner + Umgebungsfarbe der Lightmap (weich übergeblendet, WORLD.md §12)
+function hexLerp(a, b, t) { const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16), ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1); }
+function updateDistrict(snap) {
+  const p = G.player, d = districtAt(p.x / C.TILE);
+  if (d !== G.district) { const first = !G.district; G.district = d; if (snap) G.ambient = d.ambient; if (!first && !snap) HUD.banner(d.name, 'HALOGEN', 2200); }
+  if (G.ambient !== d.ambient) G.ambient = hexLerp(G.ambient, d.ambient, 0.06) === G.ambient ? d.ambient : hexLerp(G.ambient, d.ambient, 0.06);
+}
+
+// Testszenen (§4.12): fester Seed, feste Kamera. Orte: Straßenkachel (Zelle c, r) bzw. Landmarke.
+const tileXY = (tx, ty) => ({ x: (tx + 0.5) * C.TILE, y: (ty + 0.5) * C.TILE });
+const at = (tx, ty) => () => tp(tileXY(tx, ty));
 const SCENES = {
-  docks_street:  { setup() { tp(6.5 * T_, 11.5 * T_); } },
-  neon_crossing: { setup() { tp(19.5 * T_, 13.5 * T_); } },
-  krone_palace:  { setup() { tp(31.5 * T_, 16.5 * T_); } },
-  police_l3:     { setup() { tp(19.5 * T_, 20.5 * T_); } },
-  police_l5:     { setup() { tp(19.5 * T_, 5.5 * T_); } },
-  mandat_call:   { setup() { tp(10.5 * T_, 16.5 * T_); } },
-  execution:     { setup() { tp(28.5 * T_, 11.5 * T_); } },
-  dawn:          { setup() { tp(19.5 * T_, 11.5 * T_); } },
-  runover:       { setup() { tp(19.5 * T_, 13.5 * T_); } },
-  interior:      { setup() { tp(8.5 * T_, 11.5 * T_); } },
-  explosion:     { setup() { tp(19.5 * T_, 11.5 * T_); G.sceneEvents = [[40, () => explosion(19.5 * T_ + 150, 13 * T_, 1.8)], [58, () => explosion(19.5 * T_ - 120, 14 * T_, 1.0)]]; } }
+  docks_street:  { setup: at(74, 27) },                  // Gehweg am Terminalplatz (Zelle 9,3), Docks
+  neon_crossing: { setup: at(161, 17) },                 // Kreuzung in der Neonmeile (Zelle 20,2)
+  krone_palace:  { setup: at(250, 36) },                 // Gehweg vor dem Regentenpalast (Zelle 31,3), Krone
+  police_l3:     { setup: at(152, 76) },
+  police_l5:     { setup: at(120, 52) },
+  mandat_call:   { setup: at(112, 20) },
+  execution:     { setup: at(168, 52) },
+  dawn:          { setup: at(74, 27) },
+  runover:       { setup: at(160, 44) },
+  interior:      { setup: at(60, 44) },
+  gate_tor1:     { setup: at(99, 17) },                  // Brücke Docks <-> Neonmeile (Tor 1)
+  explosion:     { setup() { tp(tileXY(74, 27)); const p = G.player; G.sceneEvents = [[40, () => explosion(p.x + 150, p.y + 60, 1.8)], [58, () => explosion(p.x - 120, p.y + 90, 1.0)]]; } }
 };
-function tp(x, y) { G.player.x = x; G.player.y = y; G.cam.x = x; G.cam.y = y; }
+function tp(pt) { const f = World.freeSpot(pt.x, pt.y); G.player.x = f.x; G.player.y = f.y; G.cam.x = f.x; G.cam.y = f.y; }
 
+let gateMsgT = 0;
 function step() {
   G.time++;
   G.trauma = Math.max(0, G.trauma - 0.024); G.hurtFlash *= 0.9; G.zoomPunch *= 0.9; G.kickX *= 0.75; G.kickY *= 0.75;
   if (G.freeze > 0) { G.freeze--; return; }
   Input.poll();
+  if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
   updateParticles();
   updateCamera();
+  updateDistrict(false);
+  if (G.time % 6 === 0) Amb.update(G.player.x, G.player.y);
+  if (G.time % 15 === 0) for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) {      // geschlossenes Tor: Hinweis in der Nähe
+    const p = G.player; if (Math.hypot((r.x0 + r.x1) / 2 - p.x, (r.y0 + r.y1) / 2 - p.y) < 130 && G.time - gateMsgT > 240) { gateMsgT = G.time; floatText((r.x0 + r.x1) / 2, r.y0 - 20, STR.gate, '#ff3b4a', 12); }
+  }
   HUD.tick();
 }
 
@@ -108,7 +78,8 @@ let dbgSize = 0, dbgVoice = 0, dbgOver = 0;
 function globalKeys() {
   if (Input.took('Fullscreen')) toggleFullscreen();
   if (Input.took('KeyM')) { Aud.init(); Aud.toggleMute(); HUD.banner(Aud.muted ? 'TON AUS' : 'TON AN', '', 900); }
-  if (Input.took('KeyP') || Input.took('Escape')) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') setPaused(false); }
+  if (G.mapOpen && (Input.took('Tab') || Input.took('Escape') || Input.took('KeyP'))) setMap(false);
+  else if (Input.took('KeyP') || Input.took('Escape')) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') setPaused(false); }
   if (G.state !== 'play' || !(DEBUG || G.scene)) return;
   if (Input.took('KeyB')) { const a = aimPoint(), s = [0.8, 1.5, 3.0][dbgSize++ % 3]; Aud.init(); explosion(a.x, a.y, s); }
   if (Input.took('KeyV')) { Aud.init(); const v = STR.voices[dbgVoice++ % 4]; Aud.scream(v, G.player.x, G.player.y); floatText(G.player.x, G.player.y - 26, 'Schrei · ' + v, '#ff9ad0'); }
@@ -143,7 +114,7 @@ function frame(now) {
     render(); if (++hudT % 3 === 0) HUD.update();
   } else if (G.state === 'menu' || G.state === 'boot') {
     G.time++; const t = now * 0.00005;                             // langsamer Überflug hinter dem Menü
-    G.cam.x = G.arena.w / 2 + Math.sin(t * 1.3) * 700; G.cam.y = G.arena.h / 2 + Math.sin(t * 0.9 + 1) * 300; G.zoomBase = 1.0;
+    G.cam.x = 175 * C.TILE + Math.sin(t * 1.3) * 900; G.cam.y = 38 * C.TILE + Math.sin(t * 0.9 + 1) * 400; G.zoomBase = 1.1; G.ambient = DISTRICTS[1].ambient;
     updateParticles(); render();
   } else if (G.state === 'paused') render();
 }
@@ -165,10 +136,26 @@ function wavBase64(buf) {
 }
 window.NR_TEST = {
   state: () => ({ state: G.state, time: G.time, player: G.player && { x: G.player.x, y: G.player.y, hp: G.player.hp }, parts: G.parts.length, lights: Lights.list.length,
-    quality: G.quality, rafMs: G.rafMs, recs: recSummary(), bank: Object.keys(Aud.bank).length, bake: Aud.bakeLog, audio: Aud.ac ? Aud.ac.state : null }),
+    quality: G.quality, rafMs: G.rafMs, recs: recSummary(), bank: Object.keys(Aud.bank).length, bake: Aud.bakeLog, audio: Aud.ac ? Aud.ac.state : null, amb: !!Amb.L }),
   setIntent(o) { Input.forced = o ? Object.assign({}, o) : null; },
   frames(n = 1) { for (let i = 0; i < n; i++) step(); render(); },
-  teleport(x, y) { tp(x, y); },
+  teleport(x, y) { tp({ x, y }); },
+  city: () => ({ ms: G.cityMs, buildings: G.buildings.length, lamps: G.lamps.length, services: G.city.services.length, landmarks: Object.keys(G.city.landmarks), tex: Tex.cache.size, texMpx: Tex.px / 1e6, chunks: Ground.cache.size }),
+  // Erreichbarkeit: Flutfüllung über begehbare Kacheln ab dem Spieler (Gebäude/Tore/Wasser blockieren). gatesOpen steuert tor1/tor2.
+  reach(gatesOpen) {
+    const W = World.W, H = World.H, T = C.TILE; World.override = !!gatesOpen;
+    const ok = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !World.blocked((x + 0.5) * T, (y + 0.5) * T, C.PED_R);
+    const seen = new Uint8Array(W * H), q = [], sx = Math.floor(G.player.x / T), sy = Math.floor(G.player.y / T), n = { docks: 0, neon: 0, krone: 0 };
+    q.push(sx, sy); seen[sy * W + sx] = 1;
+    for (let i = 0; i < q.length; i += 2) {
+      const x = q[i], y = q[i + 1]; n[districtAt(x).id]++;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (ok(nx, ny) && !seen[ny * W + nx]) { seen[ny * W + nx] = 1; q.push(nx, ny); } }
+    }
+    World.override = null; return n;
+  },
+  zone: (c, r) => ZONE_ROWS[r][c],
+  blockedAt: (x, y) => World.blocked(x, y, C.PED_R),
+  tileAt: (x, y) => World.tile(x, y),
   explosion(x, y, s) { explosion(x, y, s); },
   perf() { return { rafMs: G.rafMs, quality: G.quality }; },
   scenes: () => Object.keys(SCENES),
@@ -187,7 +174,8 @@ window.NR_TEST = {
 // ------------------------------------------------------------------
 (function boot() {
   fitCanvas(); addEventListener('resize', fitCanvas); addEventListener('orientationchange', () => setTimeout(fitCanvas, 150));
-  Input.init(canvas); buildArena(); HUD.init();
+  Input.init(canvas);
+  const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); G.cityMs = performance.now() - t0; HUD.init();
   Lightmap.build(G.ambient, C.LIGHTMAP_SCALE); G.rafMs = 16.7;
   G.state = 'menu';
   $('startBtn').addEventListener('click', () => startGame());

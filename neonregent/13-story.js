@@ -5,12 +5,13 @@
 const STR = {
   title: 'NEON REGENT',
   chip: { on: '● TREUECHIP AKTIV', glitch: '◌ TREUECHIP GESTÖRT', off: '○ TREUECHIP STUMM' },
-  district: { test: 'HALOGEN · TESTFELD' },
+  district: { test: 'HALOGEN' },
   status: { baking: 'Klangbank wird gebacken …', ready: n => `Klangbank bereit (${n} Klänge)`, recs: s => `Aufnahmen: ${s}`, norecs: 'Keine Aufnahmen im Bundle – synthetischer Rückfall' },
   hint: {
-    play: 'WASD laufen · Maus zielen · Shift sprinten · P Pause · M Ton',
+    play: 'WASD laufen · Maus zielen · Shift sprinten · Leertaste Rolle · Tab Karte · P Pause · M Ton',
     debug: 'B Explosion · V Schrei · N Überfahren · Z Panik · X Vollstreckung · K MANDAT'
   },
-  banner: { start: 'HALOGEN', startSub: 'Testfeld · Meilenstein 0', paused: 'PAUSE', scene: n => `SZENE ${n}` },
+  banner: { start: 'HALOGEN', startSub: 'Nacht · Regen', paused: 'PAUSE', scene: n => `SZENE ${n}` },
+  gate: 'PASSIERSCHEIN ERFORDERLICH',
   voices: ['mann', 'frau', 'alt', 'jung']
 };
