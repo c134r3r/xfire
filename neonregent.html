@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NEON REGENT</title>
+<!--
+  NEON REGENT - Top-down-Open-World bei Nacht (Arbeitstitel). Plan: docs/neon-regent/PLAN.md.
+  Klassische Scripts (kein Build, keine ES-Module): laeuft von file:// und GitHub Pages.
+  Ladereihenfolge = PLAN §4.1.
+-->
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --accent: #3fe8ff; --accent-hi: #a8f6ff; --mag: #ff3fa4; --danger: #ff3b4a; --gold: #ffd84a;
+  --bg: #07080d; --panel: rgba(8,10,18,0.80); --line: rgba(63,232,255,0.32);
+  --text: #e6ecf5; --muted: #8a93a6; --player: #5fd4e6;
+  --font-display: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Verdana, 'DejaVu Sans', sans-serif;
+  --font-ui: 'Segoe UI', 'Trebuchet MS', 'DejaVu Sans', sans-serif;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); overflow: hidden;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #141a2c 0%, #07080d 70%); }
+#gameCanvas { display: block; background: #05060a; cursor: crosshair; touch-action: none; border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(63,232,255,0.18), 0 30px 80px rgba(0,0,0,0.6); }
+body.touch #gameCanvas { border-radius: 0; box-shadow: none; }
+
+/* ---------- HUD (per JS exakt ueber den Canvas gelegt) ---------- */
+#hud { position: absolute; pointer-events: none; z-index: 5; font-family: var(--font-display); opacity: 0; transition: opacity 0.3s; }
+body.ingame #hud { opacity: 1; }
+.hud-tl, .hud-tr { position: absolute; top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.hud-tl { left: 12px; } .hud-tr { right: 12px; align-items: flex-end; }
+.hud-card { background: linear-gradient(180deg, rgba(10,14,26,0.82), rgba(6,8,16,0.82)); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.lbl { font-size: 10px; letter-spacing: 3px; color: var(--muted); }
+.val { font-size: 18px; color: var(--accent-hi); letter-spacing: 1px; text-shadow: 0 0 12px rgba(63,232,255,0.55); min-width: 30px; text-align: right; }
+.bar { position: relative; width: 170px; height: 10px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; display: block; border-radius: 2px; }
+#hpFill { background: linear-gradient(90deg, #1ec7a0, #7dffd8); box-shadow: 0 0 10px rgba(63,232,255,0.5); transition: width 0.12s; }
+#hpFill.low { background: linear-gradient(90deg, #ff3b4a, #ff8a3a); box-shadow: 0 0 12px rgba(255,59,74,0.8); animation: pulse 0.5s infinite; }
+#hpGhost { background: rgba(255,255,255,0.35); transition: width 0.6s 0.25s; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+#chipTag { font-size: 10px; letter-spacing: 3px; color: var(--danger); text-shadow: 0 0 10px rgba(255,59,74,0.9); animation: pulse 1.4s infinite; }
+#heat { display: flex; gap: 4px; font-size: 14px; color: rgba(255,216,74,0.25); letter-spacing: 2px; }
+#heat b { font-weight: normal; } #heat b.on { color: var(--gold); text-shadow: 0 0 10px rgba(255,216,74,0.8); }
+#district { font-size: 10px; letter-spacing: 4px; color: var(--muted); }
+#banner { position: absolute; top: 38%; left: 50%; transform: translate(-50%,-50%); font-size: 54px; letter-spacing: 8px; color: var(--accent-hi);
+  text-shadow: 0 0 30px rgba(63,232,255,0.85), 0 0 4px #fff; opacity: 0; transition: opacity 0.35s; white-space: nowrap; text-align: center; }
+#banner.on { opacity: 1; } #banner small { display: block; font-size: 14px; letter-spacing: 6px; color: var(--muted); margin-top: 6px; text-shadow: none; }
+#pager { position: absolute; left: 12px; bottom: 12px; max-width: 46%; background: var(--panel); border: 1px solid var(--mag);
+  border-radius: 6px; padding: 8px 12px; font-size: 13px; line-height: 1.4; font-family: var(--font-ui); color: var(--text);
+  box-shadow: 0 0 18px rgba(255,63,164,0.25); opacity: 0; transition: opacity 0.25s; }
+#pager.on { opacity: 1; } #pager .who { font-family: var(--font-display); font-size: 10px; letter-spacing: 3px; color: var(--mag); display: block; margin-bottom: 3px; }
+#hint { position: absolute; right: 12px; bottom: 12px; font-family: var(--font-ui); font-size: 12px; color: var(--muted); text-align: right; line-height: 1.5; }
+#debugBox { position: absolute; left: 12px; top: 120px; font: 11px/1.45 ui-monospace, 'DejaVu Sans Mono', monospace; color: #9dff4a;
+  background: rgba(0,0,0,0.55); padding: 6px 8px; border-radius: 4px; white-space: pre; display: none; }
+body.debug #debugBox { display: block; }
+
+/* ---------- Overlays ---------- */
+.overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 35%, rgba(20,26,44,0.82), rgba(4,5,10,0.95)); }
+.overlay.hidden, .hidden { display: none !important; }
+.panel { width: min(640px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 28px 30px; text-align: center;
+  box-shadow: 0 0 60px rgba(63,232,255,0.12), 0 30px 80px rgba(0,0,0,0.6); }
+.title { font-family: var(--font-display); font-size: 54px; letter-spacing: 10px; color: var(--accent); text-shadow: 0 0 28px rgba(63,232,255,0.7), 3px 0 0 rgba(255,63,164,0.55); }
+.subtitle { margin-top: 6px; font-size: 12px; letter-spacing: 6px; color: var(--muted); }
+.controls { margin: 20px 0 6px; font-size: 13px; color: var(--text); line-height: 1.9; }
+.controls .hint { color: var(--muted); margin-top: 10px; font-size: 12px; line-height: 1.6; }
+.key { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+  background: rgba(63,232,255,0.08); color: var(--accent-hi); font-size: 11px; font-family: var(--font-display); }
+.actions { margin-top: 22px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.btn { font-family: var(--font-display); font-size: 14px; letter-spacing: 4px; padding: 12px 22px; border-radius: 6px; cursor: pointer; text-decoration: none;
+  color: #04121a; background: linear-gradient(180deg, var(--accent-hi), var(--accent)); border: 0; box-shadow: 0 0 22px rgba(63,232,255,0.4); }
+.btn:hover { filter: brightness(1.12); }
+.btn.secondary { color: var(--accent); background: rgba(63,232,255,0.06); border: 1px solid var(--line); box-shadow: none; }
+.vol { margin-top: 16px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; font-size: 11px; letter-spacing: 2px; color: var(--muted); }
+.vol label { display: flex; flex-direction: column; gap: 4px; align-items: center; } .vol input { width: 96px; accent-color: var(--accent); }
+#status { margin-top: 14px; font-size: 11px; color: var(--muted); letter-spacing: 1px; min-height: 16px; }
+.tbtn { position: absolute; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: rgba(8,10,18,0.6); color: var(--accent); pointer-events: auto; }
+body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud">
+    <div class="hud-tl">
+      <div class="hud-card"><span class="lbl">VITAL</span><div class="bar"><i id="hpGhost" style="width:100%"></i><i id="hpFill" style="width:100%"></i></div></div>
+      <div class="hud-card"><span id="chipTag">● TREUECHIP AKTIV</span></div>
+    </div>
+    <div class="hud-tr">
+      <div class="hud-card"><span class="lbl">CREDITS</span><span class="val" id="credVal">0</span></div>
+      <div class="hud-card"><span class="lbl">FAHNDUNG</span><span id="heat"><b>♦</b><b>♦</b><b>♦</b><b>♦</b><b>♦</b></span></div>
+      <div class="hud-card"><span id="district">HALOGEN · TESTFELD</span></div>
+    </div>
+    <div id="banner"></div>
+    <div id="pager"></div>
+    <div id="hint"></div>
+    <div id="debugBox"></div>
+    <button class="tbtn" id="touchPause" style="left:calc(50% - 52px);top:8px">II</button>
+    <button class="tbtn" id="touchFullscreen" style="left:calc(50% + 6px);top:8px">&#x26F6;</button>
+  </div>
+</div>
+
+<!-- Hauptmenue -->
+<div class="overlay" id="menuScreen">
+  <div class="panel">
+    <div class="title">NEON REGENT</div>
+    <div class="subtitle">HALOGEN · NACHT · REGEN</div>
+    <div class="controls">
+      <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> laufen &nbsp;·&nbsp; <span class="key">MAUS</span> zielen &nbsp;·&nbsp; <span class="key">SHIFT</span> sprinten</div>
+      <div><span class="key">P</span> Pause &nbsp;·&nbsp; <span class="key">M</span> Ton aus &nbsp;·&nbsp; <span class="key">ALT</span>+<span class="key">ENTER</span> Vollbild</div>
+      <div class="hint">◈ Meilenstein MS0: Grundger&uuml;st. Mit <b>?debug=1</b> gibt es Testtasten:<br>
+        <span class="key">B</span> Explosion &nbsp; <span class="key">V</span> Schrei &nbsp; <span class="key">N</span> &Uuml;berfahren &nbsp; <span class="key">Z</span> Panik &nbsp; <span class="key">X</span> Vollstreckung &nbsp; <span class="key">K</span> MANDAT</div>
+    </div>
+    <div class="vol" id="volBox"></div>
+    <div class="actions">
+      <button class="btn" id="startBtn">NEUES SPIEL</button>
+      <a class="btn secondary" href="ironclad.html">IRONCLAD</a>
+      <a class="btn secondary" href="index.html">XFIRE</a>
+    </div>
+    <div id="status">Klangbank wird gebacken …</div>
+  </div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="panel" style="max-width:420px">
+    <div class="title" style="font-size:38px">PAUSE</div>
+    <div class="subtitle">STANDBY</div>
+    <div class="actions">
+      <button class="btn" id="resumeBtn">WEITER</button>
+      <button class="btn secondary" id="quitBtn">HAUPTMENÜ</button>
+    </div>
+  </div>
+</div>
+
+<script>window.NR_VERSION = '20261127a';</script>
+<script src="assets/sound/neonregent.sound.js?v=20261127a"></script>
+<script src="neonregent/00-core.js?v=20261127a"></script>
+<script src="neonregent/01-input.js?v=20261127a"></script>
+<script src="neonregent/02-audio.js?v=20261127a"></script>
+<script src="neonregent/02b-sfx.js?v=20261127a"></script>
+<script src="neonregent/02c-music.js?v=20261127a"></script>
+<script src="neonregent/03-sprites.js?v=20261127a"></script>
+<script src="neonregent/04-data.js?v=20261127a"></script>
+<script src="neonregent/05-citygen.js?v=20261127a"></script>
+<script src="neonregent/06-world.js?v=20261127a"></script>
+<script src="neonregent/06b-interiors.js?v=20261127a"></script>
+<script src="neonregent/07-entities.js?v=20261127a"></script>
+<script src="neonregent/08-vehicles.js?v=20261127a"></script>
+<script src="neonregent/09-peds.js?v=20261127a"></script>
+<script src="neonregent/10-combat.js?v=20261127a"></script>
+<script src="neonregent/11-police.js?v=20261127a"></script>
+<script src="neonregent/12-missions.js?v=20261127a"></script>
+<script src="neonregent/13-story.js?v=20261127a"></script>
+<script src="neonregent/14-render.js?v=20261127a"></script>
+<script src="neonregent/15-lighting.js?v=20261127a"></script>
+<script src="neonregent/16-hud.js?v=20261127a"></script>
+<script src="neonregent/17-main.js?v=20261127a"></script>
+</body>
+</html>

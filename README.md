@@ -461,6 +461,17 @@ Solo play is unchanged.
   footsteps by surface.
 - Touch: floating stick plus slide-able JUMP / FIRE / SMASH / DASH.
 
+## NEON REGENT (`neonregent.html`) — in development
+
+Top-down open-world game (working title) in the rainy neon city of HALOGEN, built on the look and tech of IRONCLAD.
+Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry point; progress log in §14).
+**Status: milestone MS0 (skeleton).** A dark test crossing with a walkable placeholder player, night lightmap, the Ironclad
+explosion, and the full audio engine (buses, ducking, positioning, voice limits, baked sound bank, recorded human voices).
+Open `neonregent.html` directly (works from `file://`; no build step). With `?debug=1`: `B` explosion, `V` scream, `N` run-over,
+`Z` panic, `X` execution, `K` MANDAT call. `?scene=<name>` loads a deterministic test scene.
+Tests: `node tools/neonregent-test/smoke.mjs` (scenes, console errors, rAF timing) and `node tools/neonregent-test/audio.mjs`
+(renders every sound to WAV, level checks, decodes the recording bundle).
+
 ## Releasing
 
 GitHub Pages lets browsers cache files for 10 minutes, so right after a
