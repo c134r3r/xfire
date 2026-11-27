@@ -7,7 +7,7 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; Police.init(); G.weapon = 'faust'; G.own = { faust: true }; G.ammo = {}; G.armor = 0; G.pu = { rapid: 0, shield: 0, slowmo: 0, drones: 0 }; G.grenades.length = 0; G.allyDrones.length = 0; initProps(); initCrates(); G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; Police.init(); G.weapon = 'faust'; G.own = { faust: true }; G.ammo = {}; G.armor = 0; G.pu = { rapid: 0, shield: 0, slowmo: 0, drones: 0 }; G.grenades.length = 0; G.allyDrones.length = 0; initProps(); initCrates(); Missions.reset(); G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
   G.vehicles = G.vehicles.filter(v => !v.ai);
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
@@ -17,6 +17,7 @@ function startGame(scene) {
   G.district = null; updateDistrict(true);
   G.state = 'play'; $('menuScreen').classList.add('hidden'); $('pauseScreen').classList.add('hidden'); $('mapScreen').classList.add('hidden');
   Aud.init(); Aud.setInside(false);
+  if (!scene && !Q.get('nomission')) Missions.autoT = 150;
 }
 function setPaused(on) {
   if (on && G.state === 'play') { G.state = 'paused'; HUD.finds(); $('pauseScreen').classList.remove('hidden'); }
@@ -72,13 +73,15 @@ function step() {
   G.time++;
   G.trauma = Math.max(0, G.trauma - 0.024); G.hurtFlash *= 0.9; G.zoomPunch *= 0.9; G.kickX *= 0.75; G.kickY *= 0.75;
   if (G.freeze > 0) { G.freeze--; return; }
+  if (Missions.exec) { if (Missions.exec.s > 0.2 && Missions.exec.s < 3.4 && (G.time & 1)) { Missions.update(); return; } }
   if (G.pu.slowmo > 0 && (G.time & 1)) { G.pu.slowmo--; return; }
-  Input.poll(); if (G.respawn) G.in = Input.neutral(G.in);
+  Input.poll(); if (G.respawn || Missions.locked()) G.in = Input.neutral(G.in);
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
   updateCombat();
   Police.update();
+  Missions.update();
   Interiors.update();
   updateVehicles();
   if (!ABL.has('nosim')) { updateTraffic(); updatePeds(); }
@@ -158,6 +161,10 @@ function wavBase64(buf) {
   return btoa(bin);
 }
 window.NR_TEST = {
+  mis: {
+    state: () => ({ run: Missions.run ? { id: Missions.run.def.id, i: Missions.run.i, t: Missions.run.step.t, left: Missions.run.left, prog: Missions.run.sst.prog } : null, offer: Missions.offerDef ? Missions.offerDef.id : null, flags: Object.keys(G.flags).filter(k => /^M\d\d$/.test(k)), exec: Missions.exec ? { s: Missions.exec.s, ph: Missions.exec.ph } : null, pushT: Missions.pushT, pushId: Missions.pushDef ? Missions.pushDef.id : null, cr: G.credits, route: Missions.route.length, tags: Object.keys(G.tags) }),
+    accept: id => Missions.accept(MISSIONS[id]), offer: id => Missions.offer(MISSIONS[id], false), fail: () => Missions.fail('test'), tag: t => { const e = G.tags[t]; return e ? { x: e.x, y: e.y, hp: e.hp, state: e.state, dead: !!e.dead } : null; },
+    skip: () => Missions.stepDone(), target: () => Missions.targetPos() },
   state: () => ({ state: G.state, time: G.time, player: G.player && { x: G.player.x, y: G.player.y, hp: G.player.hp }, parts: G.parts.length, lights: Lights.list.length,
     quality: G.quality, rafMs: G.rafMs, recs: recSummary(), bank: Object.keys(Aud.bank).length, bake: Aud.bakeLog, audio: Aud.ac ? Aud.ac.state : null, amb: !!Amb.L }),
   setIntent(o) { Input.forced = o ? Object.assign({}, o) : null; },

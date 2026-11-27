@@ -465,7 +465,13 @@ Solo play is unchanged.
 
 Top-down open-world game (working title) in the rainy neon city of HALOGEN, built on the look and tech of IRONCLAD.
 Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry point; progress log in §14).
-**Status: MS0-MS2 plus the life of the city (MS4) and enterable buildings (MS5); music and touch pulled forward.**
+**Status: MS0-MS2, the life of the city (MS4), enterable buildings (MS5), fists/pistol (MS7 start), wanted level + OD (MS6), the mandate system with the prologue and missions M00-M02 (MS8) and the full weapon set; music and touch pulled forward.**
+- **Mandates (MS8):** a new game starts the prologue M00; later mandates arrive as MANDAT calls (jingle + pager) and wait at a magenta eye marker
+  (`E`), or are requested at the MANDAT terminal on the terminal plaza. Each has a deadline (60/30/10 s warnings), a route line, a distance arrow and
+  radar blip. **Failing a timed mandate triggers the execution sequence (beeps, discharge, slow motion, panel) and you wake up at the mandate start;
+  the mandate has to be accepted again by hand.** Dying only costs the usual clinic fee. Tests: `tools/neonregent-test/missions.mjs`.
+- **Weapons:** keys 1-7 / Q / wheel: fists, pistol, SMG, shotgun, flamethrower, rocket launcher (Act II), EMP grenade; limited ammo, dealer sells
+  weapons, ammo and a vest; "?" power-up crates and red barrels (chain reaction). Tests: `tools/neonregent-test/weapons.mjs`.
 - **City:** generated from the zone plan (three districts, gated bridges, leaning GTA-2 buildings, night lightmap, rain, radar, full map on `Tab`).
 - **People:** the hero and ~50 pedestrians are animated rigs with legs, arms, hoods, caps, visors, backpacks, glowing soles and umbrellas.
   Pedestrians walk the pavements, wait at crossings, dodge or freeze when a car rushes at them, scream (recorded voices, one speaker per

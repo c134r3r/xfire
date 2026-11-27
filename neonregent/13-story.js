@@ -42,3 +42,62 @@ const STR = {
   place: 'INNENRAUM',
   voices: ['mann', 'frau', 'alt', 'jung']
 };
+
+// ------------------------------------------------------------------
+// Missionen (STORY.md §5, Texte §6.1/6.2). t = Schritt-Typ; at = { lm, dx, dy } (Landmarke + Kacheln) | { tag } | { near:'player', min, max, onRoad }.
+// failMode 'execute' = Vollstreckung, danach zurück zum Start (Mandat muss neu angenommen werden, Entscheidung D2); 'retry' = ohne Vollstreckung.
+// ------------------------------------------------------------------
+const MIS_TEXT = {
+  header: 'MANDAT ▸ EINGEHEND', ok: ['Mandat erfüllt. Der Regent ist zufrieden.', 'Ihre Treue wurde vermerkt.', 'Ein erfülltes Mandat ist ein langes Leben.'],
+  frist: { 60: 'Frist läuft ab: 60 Sekunden.', 30: '30 Sekunden.', 10: '10 Sekunden.' }, failLine: 'Mandat nicht erfüllt. Das Urteil wird vollstreckt.',
+  execTitle: 'MANDAT NICHT ERFÜLLT', execSub: 'Nummer 7741 wurde vollstreckt.', okTitle: 'MANDAT ERFÜLLT', killed: 'AUSGELÖSCHT', killedSub: 'Das Mandat wurde nicht erfüllt',
+  again: ['Nummer 7741. Ihr Mandat wurde neu aufgelegt. Bitte erscheinen Sie pünktlich.', 'Neue Ausgabe Ihres Chips: kostenlos. Ein zweites Mal ist nicht vorgesehen.'],
+  reoffer: 'Mandat wartet. [E] am Markierungsauge annehmen.', accept: '[E] Mandat annehmen', terminal: 'MANDAT-TERMINAL – Nächstes Mandat anfordern?', terminalKey: '[E] Mandat anfordern', noMore: 'Derzeit liegen keine Mandate vor. Der Regent wacht.',
+  ambient: ['Der Regent wacht.', 'Gehorsam ist Freiheit.', 'Melden Sie Unregelmäßigkeiten.', 'Treue zahlt sich aus.', 'Die Sperrstunde gilt für alle ohne Mandat.'],
+  ambientExec: nr => `Bürger ${nr} – Mandat nicht erfüllt. Die Ordnung wurde wiederhergestellt.`, deadlineLbl: 'FRIST', reward: n => `+${n} CR`, acts: { 1: ['AKT I', 'GEHORSAM'] }
+};
+const MISSIONS = {
+  M00: { id: 'M00', act: 0, title: 'Erwachen', giver: 'MANDAT', requires: [], push: false, start: { lm: 'k', dx: 0, dy: 6 }, deadline: 0, failMode: 'retry', auto: true,
+    intro: { card: ['HALOGEN', '41 Jahre nach dem Feuertag'] },
+    steps: [
+      { t: 'cutscene', secs: 6, hud: 'Chip wird aktualisiert …',
+        say: [['MANDAT', 'Guten Abend, Nummer 7741. Ihr Treuechip wurde aktualisiert.'], ['MANDAT', 'Der Regent hat Sie als Mandatsläufer ausgewählt. Das ist eine Ehre.']] },
+      { t: 'goto', at: { lm: 'k', dx: 4, dy: 6 }, r: 60, hud: 'Geh zum markierten Wagen', hint: 'WASD laufen · Maus zielen',
+        spawn: [{ kind: 'vehicle', type: 'kapsel', tag: 'zuteilung', at: { lm: 'k', dx: 5, dy: 6 }, paint: '#3fe8ff' }] },
+      { t: 'enter', tag: 'zuteilung', hud: 'Steig ein', hint: 'F einsteigen' },
+      { t: 'goto', at: { lm: 't' }, r: 110, vehicleTag: 'zuteilung', hud: 'Fahr zum MANDAT-Terminal', hint: 'W/S Gas/Bremse · A/D lenken · Leertaste Handbremse',
+        spawn: [{ kind: 'ped', type: 'civ', tag: 'opfer', at: { lm: 't', dx: 1.5, dy: 1 }, ai: 'stand', immune: true }],
+        events: [{ when: { near: 'opfer', r: 460 }, script: 'ambientExecution', target: 'opfer', say: [['MANDAT', 'Bürger 3390 – Mandat nicht erfüllt. Die Ordnung wurde wiederhergestellt.']] }] },
+      { t: 'hold', at: { lm: 't' }, r: 70, secs: 1.5, foot: true, hud: 'Benutze das Terminal', hint: 'F aussteigen · am Terminal warten' },
+      { t: 'cutscene', secs: 9, letterbox: false, hud: 'Einweisung',
+        say: [['MANDAT', 'Jedes Mandat hat eine Frist. Erfüllen Sie es, und der Regent belohnt Sie.'], ['MANDAT', 'Scheitern Sie, und Ihr Treuechip vollstreckt das Urteil.'], ['MANDAT', 'Ihr erstes Mandat folgt in Kürze. Der Regent wacht.']] }
+    ],
+    reward: { cr: 200, flags: ['M00'] }, outro: [] },
+  M01: { id: 'M01', act: 1, title: 'Lieferschein', giver: 'MANDAT', requires: ['M00'], push: { after: 60 }, start: { lm: 'a', dx: 0, dy: 5 }, deadline: 180, failMode: 'execute', actCard: ['AKT I', 'GEHORSAM'],
+    call: [['MANDAT', 'Nummer 7741. Ein Container mit Medikamenten wartet an Dock 3.'], ['MANDAT', 'Bringen Sie ihn zur Chipklinik. Der Regent sorgt für seine Bürger.']],
+    steps: [
+      { t: 'enter', tag: 'laster', hud: 'Steig in den Laster', hint: 'F einsteigen', spawn: [{ kind: 'vehicle', type: 'laster', tag: 'laster', at: { lm: 'a', dx: 0, dy: 3 }, angle: 'road' }] },
+      { t: 'deliver', tag: 'laster', at: { lm: 'k', dx: -6, dy: 0 }, r: 90, minHp: 0.5, time: 150, hud: 'Liefere den Container zur Chipklinik – mind. 50 % Zustand', hint: 'Der Laster ist schwer und träge. Vorsicht in den Kurven.', fail: ['destroyed:laster'],
+        events: [{ when: { progress: 0.45 }, spawn: [{ kind: 'vehicle', type: 'pritsche', tag: 'pluenderer', count: 2, paint: '#6b6f3a', at: { near: 'player', min: 500, max: 700, onRoad: true }, ai: 'ram', target: 'laster' }], say: [['MANDAT', 'Plünderer. Fahren Sie weiter.']] }] },
+      { t: 'cutscene', secs: 6, hud: 'Lieferung wird geprüft',
+        say: [['ARBEITER', 'Medikamente? Auf den Kisten ist ein Schlüssel. „NOTARIAT · PRIVAT“ …'], ['MANDAT', 'Lieferung bestätigt. Fragen sind nicht Teil Ihres Mandats.']] }
+    ],
+    reward: { cr: 1000, flags: ['M01'] }, outro: [['MANDAT', 'Mandat erfüllt. Der Regent ist zufrieden.']] },
+  M02: { id: 'M02', act: 1, title: 'Tributeintreibung', giver: 'MANDAT', requires: ['M01'], push: { after: 90 }, start: { lm: 'f', dx: 0, dy: 4 }, deadline: 180, failMode: 'execute',
+    call: [['MANDAT', 'Nummer 7741. Drei Händler am Fischmarkt sind mit der Regentensteuer im Rückstand.'], ['MANDAT', 'Treiben Sie sie ein. Eine Dienstwaffe wurde Ihnen zugeteilt. Der Regent wacht.']],
+    onStart: { give: { pistole: 120 } },
+    steps: [
+      { t: 'talk', tag: 'h1', hud: 'Kassiere bei Händler 1', hint: 'E sprechen',
+        spawn: [{ kind: 'ped', type: 'haendler', tag: 'h1', at: { lm: 'f', dx: -3, dy: 0 }, ai: 'stand' }, { kind: 'ped', type: 'haendler', tag: 'h2', at: { lm: 'f', dx: 0, dy: -1 }, ai: 'stand' }, { kind: 'ped', type: 'haendler', tag: 'h3', at: { lm: 'f', dx: 3, dy: 0 }, ai: 'stand', immune: true },
+          { kind: 'prop', type: 'stand', tag: 'stand3', at: { lm: 'f', dx: 3, dy: -1.6 } }, { kind: 'vehicle', type: 'kasten', tag: 'van3', at: { lm: 'f', dx: 4.5, dy: 2.5 }, paint: '#5a6a7a', immune: true },
+          { kind: 'vehicle', type: 'od_streife', tag: 'zuschauer', at: { lm: 'f', dx: -4.5, dy: 3.5 }, ai: 'parked', crew: 'od' }],
+        say: [['HÄNDLER', 'Hier … nimm. Sag ihnen, ich hab bezahlt.']], pay: 150 },
+      { t: 'talk', tag: 'h2', hud: 'Kassiere bei Händlerin 2', say: [['HÄNDLERIN', 'Letztes Jahr waren es zweihundert. Jetzt sechshundert. Wer bekommt das alles?']], pay: 300 },
+      { t: 'talk', tag: 'h3', hud: 'Kassiere bei Händler 3', say: [['HÄNDLER', 'Keinen Cent mehr! Sag deinem Regenten, er soll selbst kommen – wenn er kann!']], pay: 0 },
+      { t: 'destroy', tags: ['stand3'], hud: 'Zerstöre seinen Stand', hint: 'LMB feuern', immune: true, say: [['MANDAT', 'Ein Exempel. Zerstören Sie seinen Stand.']], events: [{ when: { time: 0 }, script: 'fleeToVehicle', target: 'h3', vehicle: 'van3' }] },
+      { t: 'chase', tag: 'van3', surrenderAt: 0.25, time: 120, immune: true, hud: 'Stell den Händler', hint: 'Rammen oder beschießen', say: [['MANDAT', 'Er flieht. Halten Sie ihn auf.'], ['SYS', 'Die Streife schaut weg.']] },
+      { t: 'cutscene', secs: 6, hud: 'Tribut wird gebucht', say: [['HÄNDLER', 'Schon gut! Schon gut! Hier ist alles!'], ['MANDAT', 'Tribut eingezogen: 900 Credits. Ihr Anteil: 10 Prozent.']], onDone: { cr: 90 } }
+    ],
+    reward: { cr: 1500, flags: ['M02'] }, outro: [['MANDAT', 'Mandat erfüllt. Die Regentensteuer sichert unser aller Zukunft.']] }
+};
+const MIS_ORDER = ['M00', 'M01', 'M02'];

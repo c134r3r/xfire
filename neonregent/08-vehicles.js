@@ -201,10 +201,10 @@ function updateVehicles() {
     if (v.flameT > 0) v.flameT -= 0.5;
     if (v.empT > 0) { v.empT--; v.vx *= 0.94; v.vy *= 0.94; if (!v.driver) { if (G.time % 20 === 0) sparks(v.x, v.y, 2, '#3fe8ff', 3); updateBurning(v); continue; } }
     if (v.breaking > 0) { if (!near || near !== v || nd > 40) v.breaking = 0; else if (--v.breaking === 0) { v.unlocked = true; Bus.emit('crime', 'breakin'); if (p && !p.veh) enterVehicle(p, v); } }
-    const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai;
+    const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai || (v.mis && v.mis.mode === 'ram');
     if (!active) { updateBurning(v); continue; }
     if (v.dead) { v.vx *= 0.9; v.vy *= 0.9; moveVehicle(v); vehPairs(v); continue; }
-    const ctl = v.driver === p ? driveCtl(v) : v.od ? odCarCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
+    const ctl = v.driver === p ? driveCtl(v) : v.mis && v.mis.mode === 'ram' ? missionCtl(v) : v.od ? odCarCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
     if (v.driver === p) v.engine = true;
     stepVehicle(v, ctl);
     if (v.driver !== p && !v.ai) { v.vx *= 0.97; v.vy *= 0.97; }
@@ -250,7 +250,7 @@ function trafficCtl(v) {
   else if (L) { ai.exit = undefined; ai.lane = L; const o = laneOff(L.dx, L.dy); tgt = { x: (L.tx + 0.5) * T + L.dx * 46 + o[0], y: (L.ty + 0.5) * T + L.dy * 46 + o[1] }; }
   if (!tgt) tgt = ai.lane ? { x: (ai.lane.tx + 0.5) * T + ai.lane.dx * 90, y: (ai.lane.ty + 0.5) * T + ai.lane.dy * 90 } : { x: v.x + c * 100, y: v.y + s * 100 };
   const err = angDiff(v.a, Math.atan2(tgt.y - v.y, tgt.x - v.x));
-  let want = D.top * 0.55 * scale * (1 - Math.min(0.5, Math.abs(err) * 0.5));
+  let want = D.top * (ai.fast || 0.55) * scale * (1 - Math.min(0.5, Math.abs(err) * 0.5));
   // Vorausschau: Fahrzeuge und Menschen vor mir (Kasten 50 + 9 x Tempo lang)
   let gap = 1e9; const reach = 55 + spd * 9;
   const chk = (ox, oy, hw) => { const rx = ox - v.x, ry = oy - v.y, along = rx * c + ry * s, lat = -rx * s + ry * c; if (along > 0 && along < reach + hw && Math.abs(lat) < D.B / 2 + hw + 4) gap = Math.min(gap, along - D.L / 2 - hw); };
@@ -272,7 +272,7 @@ function updateTraffic() {
   const cam = G.cam, z = G.zoom || 1, half = Math.hypot(VIEW_W, VIEW_H) / 2 / z, d = G.district ? G.district.id : 'neon';
   let n = 0;
   for (let i = G.vehicles.length - 1; i >= 0; i--) { const v = G.vehicles[i]; if (!v.ai) continue; n++;
-    if (v.despawn || (!v.driver && Math.hypot(v.x - cam.x, v.y - cam.y) > half * 2.4)) { G.vehicles.splice(i, 1); n--; } }
+    if (v.despawn && !v.keep || (!v.driver && !v.keep && Math.hypot(v.x - cam.x, v.y - cam.y) > half * 2.4)) { G.vehicles.splice(i, 1); n--; } }
   if (G.time % 20 !== 0 || n >= TRAFFIC_MAX[d]) return;
   const T = C.TILE;
   for (let t = 0; t < 8; t++) {

@@ -41,16 +41,16 @@ const Flow = {
 
 // ---- Delikte ----
 function crime(kind, n = 1) {
-  const W = G.wanted; if (!W || G.respawn) return; const pts = (CRIME[kind] || 0) * n; if (!pts) return;
+  const W = G.wanted; if (!W || G.respawn || G.crimeMute) return; const pts = (CRIME[kind] || 0) * n; if (!pts) return;
   const before = W.level; W.pts = Math.min(HEAT_MAX, W.pts + pts); let lv = 0; for (let i = HEAT_LEVELS.length - 1; i >= 0; i--) if (W.pts >= HEAT_LEVELS[i].pts) { lv = i; break; }
   if (lv > W.level) { W.level = lv; Police.levelUp(before); }
   W.decayT = HEAT_LEVELS[W.level].decay * 60; W.seenT = G.time;
   if (G.player) { W.last.x = G.player.x; W.last.y = G.player.y; }
 }
 Bus.on('crime', (k, n) => crime(k, n));
-Bus.on('pedKilled', (p, v) => { const mine = v === null || v === undefined || (G.player && v === G.player.veh); if (p.team === 'od') { G.pickups.push({ x: p.x, y: p.y, type: 'gun', v: 12, life: 1800, bob: 0 }); if (mine) crime('copKilled'); return; } if (mine) crime('pedKilled'); });
-Bus.on('pedHurt', (p, v) => { const mine = v === null || v === undefined || (G.player && v === G.player.veh); if (p.team === 'od') { if (mine) { crime('copHurt'); p.provoked = true; } return; } if (mine) crime('pedHurt'); });
-Bus.on('assault', (p, src) => { if (p.team === 'od') { p.provoked = true; if (src === 'fist') crime('copHurt'); return; } if (src === 'fist') crime('assault'); });
+Bus.on('pedKilled', (p, v) => { if (p.immune) return; const mine = v === null || v === undefined || (G.player && v === G.player.veh); if (p.team === 'od') { G.pickups.push({ x: p.x, y: p.y, type: 'gun', v: 12, life: 1800, bob: 0 }); if (mine) crime('copKilled'); return; } if (mine) crime('pedKilled'); });
+Bus.on('pedHurt', (p, v) => { if (p.immune) return; const mine = v === null || v === undefined || (G.player && v === G.player.veh); if (p.team === 'od') { if (mine) { crime('copHurt'); p.provoked = true; } return; } if (mine) crime('pedHurt'); });
+Bus.on('assault', (p, src) => { if (p.immune) return; if (p.team === 'od') { p.provoked = true; if (src === 'fist') crime('copHurt'); return; } if (src === 'fist') crime('assault'); });
 let lastShotCrime = -99; Bus.on('gunshot', () => { if (G.time - lastShotCrime > 60) { lastShotCrime = G.time; crime('shot'); } });
 Bus.on('boom', (x, y, s) => { let n = 0; for (const p of G.peds) if (p.team !== 'od' && p.state !== 'dead' && Math.hypot(p.x - x, p.y - y) < 120 * Math.sqrt(s)) n++; if (n) crime('explosionPeds'); });
 
@@ -80,7 +80,7 @@ function updateRespawn() {
     const loss = Math.min(G.credits || 0, Math.max(100, Math.floor((G.credits || 0) * 0.1))); G.credits = (G.credits || 0) - loss;
     if (R_.kind === 'busted') { G.own = { faust: true }; G.ammo = {}; G.weapon = 'faust'; G.armor = 0; }
     const f = respawnTarget(R_.kind); p.x = f.x; p.y = f.y; p.vx = p.vy = 0; p.hp = p.maxHp; p.dodge = 0; G.cam.x = p.x; G.cam.y = p.y;
-    Police.standDown(true); G.wanted.pts = 0; G.wanted.level = 0; G.hurtFlash = 0;
+    Police.standDown(true); G.wanted.pts = 0; G.wanted.level = 0; G.hurtFlash = 0; Missions.onRespawn();
     HUD.say(R_.kind === 'busted' ? 'OD · WACHE' : 'KLINIK', R_.kind === 'busted' ? `Kaution ${loss} CR einbehalten. Waffen konfisziert (Fäuste dürfen Sie behalten). Bitte keine Wiederholung.` : `Behandlung abgeschlossen. Gebühr ${loss} CR. Der Regent wünscht gute Besserung.`, '#4a8cff');
   }
   if (R_.t >= 150) G.respawn = null;

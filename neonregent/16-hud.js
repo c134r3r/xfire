@@ -56,6 +56,7 @@ const HUD = {
     g.fillStyle = '#ffd84a'; for (const b of Interiors.list) { const d = b._door, dx = (d.x / C.TILE - tx + N / 2) * 2, dy = (d.y / C.TILE - ty + N / 2) * 2; if (dx > 2 && dx < S - 2 && dy > 2 && dy < S - 2) g.fillRect(dx - 1.5, dy - 1.5, 3, 3); }   // Türen begehbarer Gebäude
     const blink = (G.time >> 3) & 1, dot = (x, y, col) => { const dx = (x / C.TILE - tx + N / 2) * 2, dy = (y / C.TILE - ty + N / 2) * 2; if (dx > 2 && dx < S - 2 && dy > 2 && dy < S - 2) { g.fillStyle = col; g.fillRect(dx - 2, dy - 2, 4, 4); } };
     if (G.wanted && G.wanted.level > 0) { for (const q of G.peds) if (q.team === 'od' && q.state !== 'dead') dot(q.x, q.y, blink ? '#ff3b4a' : '#4a8cff'); for (const v of G.vehicles) if (v.od && !v.dead) dot(v.x, v.y, blink ? '#4a8cff' : '#ff3b4a'); for (const d of G.drones) dot(d.x, d.y, '#e8f4ff'); }
+    Missions.radarDot(dot);
     g.save(); g.translate(S / 2, S / 2); g.rotate(p.a); g.fillStyle = '#5fd4e6'; g.strokeStyle = '#04121a'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(7, 0); g.lineTo(-5, 5); g.lineTo(-3, 0); g.lineTo(-5, -5); g.closePath(); g.fill(); g.stroke(); g.restore();
   },
@@ -82,7 +83,7 @@ const HUD = {
     $('tbEnter').textContent = v ? 'AUSSTEIGEN' : (G.nearVeh ? 'EINSTEIGEN' : 'EIN / AUS'); $('tbAct').textContent = v ? 'BREMSE' : 'ROLLE'; $('tbSprint').textContent = v ? 'BOOST' : 'SPRINT'; $('tbHorn').style.display = v ? '' : 'none';
     const W = WEAPONS[G.weapon]; $('wpnName').textContent = W.name; $('wpnAmmo').textContent = (W.melee ? (isTouch ? '' : '[LMB / J]') : '▮ ' + (G.ammo[G.weapon] || 0)) + (G.armor > 0 ? ' · WESTE ' + Math.ceil(G.armor) : '') + puText(); $('tbFire').textContent = W.melee ? 'SCHLAG' : 'FEUER'; $('tbSwap').style.display = Object.keys(G.own).length > 1 && isTouch ? 'flex' : 'none';
     const I = Interiors.cur; $('place').classList.toggle('on', !!I); if (I) $('placeName').textContent = I.name;
-    const nf = Object.keys(G.finds).length; $('findVal').textContent = nf + '/' + FUNDE.length; $('tbUse').style.display = G.near && isTouch ? 'flex' : 'none';
+    const nf = Object.keys(G.finds).length; $('findVal').textContent = nf + '/' + FUNDE.length; $('tbUse').style.display = (G.near || Missions.promptOn) && isTouch ? 'flex' : 'none';
     this.radar();
     if (DEBUG) {
       const tx = Math.floor(p.x / C.TILE), ty = Math.floor(p.y / C.TILE);

@@ -86,6 +86,7 @@ const Aud = {
     this.inG.gain.setTargetAtTime(inside ? Math.pow(10, -8 / 20) : 1, t, 0.08);
   },
   // Ducking: Musik -6 dB für 1 s (tödlicher Treffer, Explosion >= 1.6, MANDAT)
+  beep(f, dur = 0.1, g = 0.3) { if (!this.ac || !this.bus.ui) return; const ac = this.ac, o = ac.createOscillator(), e = ac.createGain(), t = ac.currentTime; o.type = 'square'; o.frequency.value = f; e.gain.setValueAtTime(g * 0.4, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(e); e.connect(this.bus.ui); o.start(t); o.stop(t + dur + 0.02); },
   duck(db = C.DUCK_DB, secs = C.DUCK_S) {
     if (!this.ac || !this.bus.musik) return;
     const g = this.bus.musik.gain, t = this.ac.currentTime, base = Settings.d.vol.musik;

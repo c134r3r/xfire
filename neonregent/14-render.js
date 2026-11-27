@@ -266,7 +266,7 @@ function render() {
 
   drawDrones();                                                                // Luftschicht: Drohnen über den Dächern
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; drawBullets(); drawGrenades(); drawAllyDrones(); drawEBullets(); drawDroneGlow(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); drawCrates('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; drawBullets(); drawGrenades(); drawAllyDrones(); drawEBullets(); drawDroneGlow(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); drawCrates('glow'); Missions.drawWorld(); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {
@@ -337,6 +337,7 @@ function drawPlayer(p) {
   }
   ctx.globalAlpha = 0.7; ctx.drawImage(shadowSprite(9, 6), p.x - 12 + 3, p.y - 9 + 5); ctx.globalAlpha = 1;
   const rec = p.recoil > 0 ? p.recoil * 0.35 : 0;
+  if (Missions.exec && Missions.exec.fell) { ctx.globalAlpha = 0.6; ctx.drawImage(shadowSprite(9, 6), p.x - 12 + 3, p.y - 9 + 5); ctx.globalAlpha = 1; drawPerson(p.x, p.y, p.a, des, 0, { dead: true, scale: 1.3 }); return; }
   drawPerson(p.x - Math.cos(p.a) * rec, p.y - Math.sin(p.a) * rec, p.a, des, f, { scale: 1.3 });
   if (p.punchT > 0) {                                                                                                                     // Schlagarm mit Faust (Handschuh in Neon-Cyan)
     const t = 1 - p.punchT / 9, ext = Math.sin(t * Math.PI), len = (p.punchHook ? 12 : 10) * ext;

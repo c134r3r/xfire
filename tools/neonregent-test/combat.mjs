@@ -31,7 +31,7 @@ const ROOT = process.cwd(); let bad = 0; const ok = (n, c, x = '') => { console.
   });
   ok('Pistole: Leerklick, Treffer tötet, Munition sinkt, Zeuge flieht', gun.dry && gun.dead && gun.ammo < 5 && gun.shot && gun.bystander === 'flee', JSON.stringify(gun));
   // 4. Waffenwechsel (Q, 1, 2)
-  const sw = await p.evaluate(() => { G.weapon = 'pistole'; Input.forced = { swapP: true }; step(); Input.forced = null; const a = G.weapon; Input.forced = { weaponSlot: 2 }; step(); Input.forced = null; const bb = G.weapon; Input.forced = { weaponSlot: 1 }; step(); Input.forced = null; return [a, bb, G.weapon]; });
+  const sw = await p.evaluate(() => { G.freeze = 0; G.weapon = 'pistole'; Input.forced = { swapP: true }; step(); Input.forced = null; const a = G.weapon; Input.forced = { weaponSlot: 2 }; step(); Input.forced = null; const bb = G.weapon; Input.forced = { weaponSlot: 1 }; step(); Input.forced = null; return [a, bb, G.weapon]; });
   ok('Waffenwechsel Q / 1 / 2', sw[0] === 'faust' && sw[1] === 'pistole' && sw[2] === 'faust', sw.join(','));
   // 5. Abrollen: Strecke, i-Frames, Rendern ohne Fehler, Rechts-/Linksrichtung
   const roll = await p.evaluate(() => { const pl = G.player; pl.x = 161.5 * 64; pl.y = 15.5 * 64; pl.dodgeCd = 0; pl.dodge = 0; const x0 = pl.x; Input.forced = { dodgeP: true, mx: 1, my: 0 }; step(); Input.forced = { mx: 0, my: 0 }; let mid = 0, frames = 0; for (let t = 0; t < 40; t++) { step(); if (pl.dodge > 0) { frames++; if (t === 8) { mid = pl.dodge; render(); } } } Input.forced = null; return { dist: Math.round(pl.x - x0), frames, mid, cd: pl.dodgeCd }; });

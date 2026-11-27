@@ -193,6 +193,7 @@ function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let 
 function updateProps() {
   for (let i = G.props.length - 1; i >= 0; i--) { const b = G.props[i];
     if (b.hp < 24 && b.hp > 0 && G.time % 6 === 0) smoke(b.x, b.y - 6, 5, 'dark', 24, 0, -0.4, 0.3);
+    if (b.hp <= 0 && b.kind !== 'barrel') { b.dead = true; G.props.splice(i, 1); for (let k = 0; k < 14; k++) part({ kind: 'debris', x: b.x, y: b.y, z: 4, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(2, 5), size: rand(2, 4), life: 60, rot: rand(0, TAU), vr: 0.3, color: pick(['#5a4a2a', '#c9a227', '#7a1620', '#3a3a46']), burning: false, drag: 0.97 }); smoke(b.x, b.y, 12, 'dark', 40); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.9, cat: 'sfx', rate: 0.5 }); addTrauma(0.15); continue; }
     if (b.hp <= 0) { b.dead = true; G.props.splice(i, 1); explosion(b.x, b.y, 1.1); blast(b.x, b.y, 90, 60); Bus.emit('boom', b.x, b.y, 1.1); propBlast(b.x, b.y, 90, 40); } }
 }
 function propBlast(x, y, r, dmg) {
@@ -201,7 +202,8 @@ function propBlast(x, y, r, dmg) {
   for (const d of G.drones) if (Math.hypot(d.x - x, d.y - y) < r) d.hp -= dmg;
 }
 function drawProps() {
-  for (const b of G.props) { if (!onScreen(b.x, b.y, 20)) continue;
+  for (const b of G.props) { if (!onScreen(b.x, b.y, 40)) continue;
+    if (b.kind === 'stand') { ctx.globalAlpha = 0.5; ctx.drawImage(shadowSprite(10, 6), b.x - 22 + 3, b.y - 18 + 6); ctx.globalAlpha = 1; ctx.fillStyle = '#4a3a22'; ctx.fillRect(b.x - 24, b.y - 4, 48, 16); ctx.fillStyle = '#2a2014'; ctx.fillRect(b.x - 24, b.y - 4, 48, 3); for (let k = 0; k < 4; k++) { ctx.fillStyle = k % 2 ? '#c42a38' : '#e8d8b0'; ctx.fillRect(b.x - 24 + k * 12, b.y - 16, 12, 12); } ctx.fillStyle = '#3fe8ff'; ctx.fillRect(b.x - 18, b.y + 2, 10, 3); ctx.fillStyle = '#ffd84a'; ctx.fillRect(b.x + 4, b.y + 2, 14, 3); continue; }
     ctx.globalAlpha = 0.5; ctx.drawImage(shadowSprite(6, 4), b.x - 18 + 2, b.y - 16 + 5); ctx.globalAlpha = 1;
     ctx.fillStyle = '#7a1620'; ctx.fillRect(b.x - 6, b.y - 8, 12, 14); ctx.fillStyle = '#c42a38'; ctx.fillRect(b.x - 5, b.y - 9, 10, 4); ctx.fillStyle = '#2a0a10'; ctx.fillRect(b.x - 6, b.y - 3, 12, 1.4); ctx.fillRect(b.x - 6, b.y + 2, 12, 1.4);
     ctx.fillStyle = '#ffd84a'; ctx.fillRect(b.x - 2, b.y - 6.5, 4, 1.6); }

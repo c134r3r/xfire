@@ -108,6 +108,22 @@ body.debug #debugBox { display: block; }
 #status { margin-top: 14px; font-size: 11px; color: var(--muted); letter-spacing: 1px; min-height: 16px; }
 .tbtn { position: absolute; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: rgba(8,10,18,0.6); color: var(--accent); pointer-events: auto; }
 body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
+
+/* Missionen (MS8) */
+#mis { display: none; flex-direction: column; align-items: flex-start; gap: 2px; border-color: var(--mag); max-width: 300px; }
+#mis.on { display: flex; }
+#misTitle { font-size: 10px; letter-spacing: 3px; color: var(--mag); } #misGoal { font-size: 13px; color: #e8eefc; line-height: 1.3; }
+#misTime { font-size: 18px; letter-spacing: 3px; color: var(--accent-hi); font-variant-numeric: tabular-nums; } #misTime.low { color: #ff3b4a; animation: misblink 0.5s steps(2) infinite; }
+#misDist { font-size: 11px; color: var(--muted); letter-spacing: 2px; } #misArrow { display: inline-block; color: var(--mag); margin-right: 6px; }
+@keyframes misblink { 50% { opacity: 0.35; } }
+#letterbox i { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.5s ease; z-index: 6; } #letterbox i:first-child { top: 0; } #letterbox i:last-child { bottom: 0; }
+#letterbox.on i { height: 11%; }
+#execFx { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,30,60,0.0) 30%, rgba(255,20,50,0.55) 100%); z-index: 5; }
+#execFx.pulse { opacity: 1; transition: none; } #execFx.fade { opacity: 0; transition: opacity 0.35s; }
+#execFx.glitch { opacity: 0.9; background: repeating-linear-gradient(0deg, rgba(255,40,70,0.25) 0 2px, rgba(0,0,0,0) 2px 5px); mix-blend-mode: screen; }
+#execBlack { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 7; }
+#misPrompt { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); padding: 6px 14px; border: 1px solid var(--mag); background: rgba(10,6,18,0.85); color: #ff9ad0; letter-spacing: 3px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+#misPrompt.on { opacity: 1; }
 </style>
 </head>
 <body>
@@ -119,6 +135,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
       <div class="hud-card"><span class="lbl">VITAL</span><div class="bar"><i id="hpGhost" style="width:100%"></i><i id="hpFill" style="width:100%"></i></div></div>
       <div class="hud-card"><span id="chipTag">● TREUECHIP AKTIV</span></div>
       <div class="hud-card" id="wpnCard"><span class="lbl">WAFFE</span><span class="val" id="wpnName" style="min-width:0;text-align:left">FAUST</span><span class="lbl" id="wpnAmmo"></span></div>
+      <div class="hud-card" id="mis"><span id="misTitle"></span><span id="misGoal"></span><span id="misTime"></span><span id="misDist"><span id="misArrow">▲</span><span id="misMeters"></span></span></div>
       <div class="hud-card" id="vehCard" style="display:none"><span class="lbl" id="vehName">FZ</span><div class="bar"><i id="vehFill" style="width:100%;background:linear-gradient(90deg,#ff3fa4,#ffb3d9)"></i></div><div class="bar" style="width:60px;height:5px"><i id="boostFill" style="width:100%;background:linear-gradient(90deg,#3aa8ff,#9fe6ff)"></i></div></div>
     </div>
     <div class="hud-tr">
@@ -127,6 +144,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
       <div class="hud-card" id="findCard"><span class="lbl">FUNDE</span><span class="val" id="findVal">0/30</span></div>
       <div class="hud-card"><span id="district">HALOGEN</span></div>
     </div>
+    <div id="letterbox"><i></i><i></i></div><div id="execFx"></div><div id="execBlack"></div><div id="misPrompt"></div>
     <div id="banner"></div>
     <div id="pager"></div>
     <div id="nowPlaying"></div>
