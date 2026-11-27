@@ -140,6 +140,13 @@ const VEHICLE_ART = {
   }
 };
 
+// OD-Fahrzeuge: Grundkörper der Zivilklasse (art), weißer Lack mit blauem Streifen, Dach-Lichtbalken (Blaulicht blinkt im Glow-Pass)
+function odDecor(g, e, h, w, D) {
+  g.fillStyle = '#2a6bff'; g.fillRect(-h * 0.9, -w * 0.12, h * 1.7, w * 0.24);                                    // blauer Streifen längs
+  g.fillStyle = '#10141c'; g.fillRect(-h * 0.2, -w * 0.62, 7, w * 1.24); g.fillStyle = '#2a6bff'; g.fillRect(-h * 0.2 + 1, -w * 0.58, 5, w * 0.54); g.fillStyle = '#ff2a3a'; g.fillRect(-h * 0.2 + 1, w * 0.04, 5, w * 0.54);   // Lichtbalken
+  g.fillStyle = 'rgba(255,255,255,0.85)'; g.font = '900 5px sans-serif'; g.fillText('OD', h * 0.3, w * 0.45);
+}
+for (const k of ['od_streife', 'od_abfang', 'od_sturm']) VEHICLE_ART[k] = (g, e, h, w, paint, D) => { VEHICLE_ART[D.art](g, e, h, w, '#d8dde6', D); odDecor(g, e, h, w, D); };
 const VART = new Map();
 // { body, glow } für Klasse + Lack. paint: Hex
 function vehicleArt(cls, paint) {

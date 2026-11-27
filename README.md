@@ -474,6 +474,12 @@ Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry p
 - **Buildings:** about 40 buildings are enterable (all services, story places and ~10 % of the rest, spread over all districts). Their doors glow
   warm. Walking in lifts the roof and shows the floor plan (rooms, doors, furniture, residents, shop keepers). `E` searches lockers, drawers,
   fridges, safes and tills and talks to residents; 29 collectable finds with their own jokes (list in the pause menu).
+- **Wanted level:** crimes (hurting or killing pedestrians, shooting, carjacking, hurting the Ordnungsdienst, destroying OD cars or drones,
+  explosions) add points; 6/25/60/110/180 points = level 1-5 (keys in the HUD, blinking while an officer sees you, `◈ VERBORGEN` when not).
+  The OD sends foot patrols, patrol cars, interceptors, an assault van with troopers, drones and road blocks, finds you with a flow field
+  and line of sight, arrests you on levels 1-2 (confiscated weapons, bail), shoots from level 2 and follows you into buildings.
+  The level only decays while nobody sees you (8-30 s). Hide in a house, kill drones, or pay for a **Chip-Wäsche** (service `2`, `E` at the desk).
+  Killing an officer drops his pistol. Busted or wasted: respawn at the OD station or clinic, 10 % of your credits gone.
 - **Fighting:** without a weapon the hero boxes (jab, jab, hook; fire = left mouse button, `J`, or the touch fire button): pedestrians get knocked
   out and drop pocket money. A pistol (120 CR at the weapon dealer, `E` in his shop) adds shooting incl. drive-by; gunshots panic the crowd.
   `Q`/`1`/`2` switch weapons. The dodge is now a proper low roll (tumbling squash, afterimages, splash, recovery).
@@ -488,7 +494,7 @@ Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1
 `Z` panic, `X` execution, `K` MANDAT. `?scene=<name>` (e.g. `cars`, `drive`, `hover`, `interior`) loads a deterministic test scene; hash `#nosim`,
 `#nopeds`, `#novehicles`, `#norain`, `#nolightmap` switch passes off for measurements.
 Tests (all headless): `smoke.mjs` (scenes, errors, timing), `walk.mjs` (zone plan, reachability), `vehicles.mjs` (physics, crashes, touch),
-`peds.mjs` (population, run-over, panic, traffic flow, carjack), `interiors.mjs` (floor plans reachable, enter/exit, loot), `combat.mjs` (punches, KO, pistol, shop, roll, drive-by, touch fire), `audio.mjs` (all sounds + tracks as WAV).
+`peds.mjs` (population, run-over, panic, traffic flow, carjack), `interiors.mjs` (floor plans reachable, enter/exit, loot), `combat.mjs` (punches, KO, pistol, shop, roll, drive-by, touch fire), `police.mjs` (wanted levels, units, arrest, shots, drones, hiding, chip wash, pathing), `audio.mjs` (all sounds + tracks as WAV).
 
 ## Releasing
 

@@ -7,12 +7,12 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; G.weapon = 'faust'; G.own = { faust: true, pistole: false }; G.ammo = { pistole: 0 }; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; Police.init(); G.weapon = 'faust'; G.own = { faust: true, pistole: false }; G.ammo = { pistole: 0 }; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
   G.vehicles = G.vehicles.filter(v => !v.ai);
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
   if (scene) R.set(7741); else R.fn = Math.random;
-  const S = scene && SCENES[scene]; if (S) { S.setup(); G.sceneLabel = STR.banner.scene(scene) + ' · Platzhalter (MS1)'; }
+  const S = scene && SCENES[scene]; if (S) { S.setup(); G.sceneLabel = STR.banner.scene(scene); }
   G.cam.x = G.player.x; G.cam.y = G.player.y; updateCamera(true);
   G.district = null; updateDistrict(true);
   G.state = 'play'; $('menuScreen').classList.add('hidden'); $('pauseScreen').classList.add('hidden'); $('mapScreen').classList.add('hidden');
@@ -43,8 +43,8 @@ const SCENES = {
   docks_street:  { setup: at(74, 27) },                  // Gehweg am Terminalplatz (Zelle 9,3), Docks
   neon_crossing: { setup: at(161, 17) },                 // Kreuzung in der Neonmeile (Zelle 20,2)
   krone_palace:  { setup: at(250, 36) },                 // Gehweg vor dem Regentenpalast (Zelle 31,3), Krone
-  police_l3:     { setup: at(152, 76) },
-  police_l5:     { setup: at(120, 52) },
+  police_l3:     { setup() { tp(tileXY(161, 18)); crime('odVehicle', 3); } },                // Stufe 3 (60 Punkte) mitten in der Neonmeile
+  police_l5:     { setup() { tp(tileXY(161, 18)); crime('odVehicle', 9); } },                // Stufe 5 (180 Punkte)
   mandat_call:   { setup: at(112, 20) },
   execution:     { setup: at(168, 52) },
   dawn:          { setup: at(74, 27) },
@@ -72,11 +72,12 @@ function step() {
   G.time++;
   G.trauma = Math.max(0, G.trauma - 0.024); G.hurtFlash *= 0.9; G.zoomPunch *= 0.9; G.kickX *= 0.75; G.kickY *= 0.75;
   if (G.freeze > 0) { G.freeze--; return; }
-  Input.poll();
+  Input.poll(); if (G.respawn) G.in = Input.neutral(G.in);
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
   updateCombat();
+  Police.update();
   Interiors.update();
   updateVehicles();
   if (!ABL.has('nosim')) { updateTraffic(); updatePeds(); }
@@ -182,6 +183,8 @@ window.NR_TEST = {
   interiors: () => Interiors.list.length,
   genInterior: i => { const b = Interiors.list[i]; return Interiors.ensure(b); },
   interiorInfo: () => Interiors.list.map(b => ({ id: b.id, kind: b._kind, d: districtAt(b.x0 / C.TILE).id })),
+  heat: () => ({ pts: G.wanted.pts, level: G.wanted.level, seen: G.wanted.seen, units: Police.count() }),
+  crime: (k, n) => crime(k, n),
   give: (w, n = 24) => { G.own[w] = true; if (w === 'pistole') G.ammo.pistole = Math.min(99, G.ammo.pistole + n); setWeapon(w); },
   weapon: () => ({ w: G.weapon, ammo: G.ammo.pistole, own: G.own }),
   blockedAt: (x, y) => World.blocked(x, y, C.PED_R),

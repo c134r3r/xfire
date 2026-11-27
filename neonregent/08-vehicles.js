@@ -140,7 +140,7 @@ function updateBurning(v) {
     v.burn--;
     if (G.time % 3 === 0) { glow(v.x + rand(-12, 12), v.y + rand(-8, 8), rand(10, 18), R.fn() < 0.5 ? '#ff8a2a' : '#ffd25a', 14, rand(-0.3, 0.3), rand(-0.6, -0.1), 0.3); }
     if (G.time % 4 === 0) smoke(v.x + rand(-8, 8), v.y + rand(-6, 6), 12, 'dark', 50, rand(-0.2, 0.2), -0.4, 0.4);
-    if (v.burn === 0) { v.dead = true; explosion(v.x, v.y, D.expl); v.vx *= 0.3; v.vy *= 0.3; }
+    if (v.burn === 0) { if (v.od) Bus.emit('crime', 'odVehicle'); v.dead = true; explosion(v.x, v.y, D.expl); v.vx *= 0.3; v.vy *= 0.3; }
   } else if (!v.dead) {
     const f = v.hp / v.maxHp;
     if (f < 0.3 && G.time % 6 === 0) smoke(v.x, v.y, 9, 'dark', 40, rand(-0.2, 0.2), -0.3, 0.35);
@@ -162,11 +162,15 @@ function enterVehicle(p, v) {
   const D = VEHICLES[v.cls];
   if (v.ai) {                                   // Carjacking: Fahrer fliegt raus, schreit, flucht
     const c = Math.cos(v.a), s = Math.sin(v.a), px = v.x + s * (D.B / 2 + 10), py = v.y - c * (D.B / 2 + 10), d = makePed(px, py, {});
-    d.state = 'flee'; d.panic = 420; d.fx = v.x; d.fy = v.y; d.umb = null; bark(d, barkPick(STR.barks.carjack), 150); v.ai = null; v.locked = false;
+    d.state = 'flee'; d.panic = 420; d.fx = v.x; d.fy = v.y; d.umb = null; bark(d, barkPick(STR.barks.carjack), 150); v.ai = null; v.locked = false; Bus.emit('crime', 'carjack');
     if (R.fn() < 0.6) d.screamT = 6;
   }
   if (v.locked && !v.unlocked) {                // Aufbrechen: 1 s, Alarm
     if (!v.breaking) { v.breaking = 60; v.alarm = 240; Bus.emit('alarm', v); } return;
+  }
+  if (v.od) {                                                                                       // OD-Fahrzeug gekapert: Besatzung steigt aus und ist feindlich
+    Bus.emit('crime', 'odCarJack'); const c = Math.cos(v.a), s = Math.sin(v.a); for (let k = 0; k < (v.od.cargo || 1); k++) { const q = Police.spawnCop(v.x - s * (D.B / 2 + 10) * (k % 2 ? 1 : -1), v.y + c * (D.B / 2 + 10) * (k % 2 ? 1 : -1), false); q.provoked = true; q.state = 'chase'; }
+    v.od = null; v.ai = null; v.locked = false;
   }
   v.driver = p; p.veh = v; p.x = v.x; p.y = v.y; v.engine = true; v.breaking = 0; p.vx = p.vy = 0; p.stride = 0; p.dodge = 0;
   Bus.emit('door', v, true);
@@ -194,11 +198,11 @@ function updateVehicles() {
   if (p && G.in.enterP) { if (p.veh) { if (Math.hypot(p.veh.vx, p.veh.vy) < 14) exitVehicle(p); } else if (near && Math.hypot(near.vx, near.vy) < (near.ai ? 4.5 : 2.5)) enterVehicle(p, near); }
   for (const v of G.vehicles) {
     if (v.alarm > 0) v.alarm--;
-    if (v.breaking > 0) { if (!near || near !== v || nd > 40) v.breaking = 0; else if (--v.breaking === 0) { v.unlocked = true; if (p && !p.veh) enterVehicle(p, v); } }
+    if (v.breaking > 0) { if (!near || near !== v || nd > 40) v.breaking = 0; else if (--v.breaking === 0) { v.unlocked = true; Bus.emit('crime', 'breakin'); if (p && !p.veh) enterVehicle(p, v); } }
     const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai;
     if (!active) { updateBurning(v); continue; }
     if (v.dead) { v.vx *= 0.9; v.vy *= 0.9; moveVehicle(v); vehPairs(v); continue; }
-    const ctl = v.driver === p ? driveCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
+    const ctl = v.driver === p ? driveCtl(v) : v.od ? odCarCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
     if (v.driver === p) v.engine = true;
     stepVehicle(v, ctl);
     if (v.driver !== p && !v.ai) { v.vx *= 0.97; v.vy *= 0.97; }
@@ -334,12 +338,14 @@ function drawVehicles(layer) {
       if (v.hp < v.maxHp * 0.3) a *= 0.4 + 0.6 * ((G.time + v.id * 7) % 9 < 5);          // kaputte Elektrik flackert
       if (v.alarm > 0) a = (G.time >> 3) & 1 ? 1 : 0.2;
       ctx.save(); ctx.translate(v.x, v.y + bob); ctx.rotate(v.a); ctx.globalAlpha = a; ctx.drawImage(art.glow, -art.w / 2, -art.h / 2, art.w, art.h);
+      if (v.od && (v.od.siren || G.wanted.level > 0) && !v.od.leave) { const k = (G.time >> 3) & 1; ctx.globalAlpha = 1; ctx.drawImage(glowSprite(k ? '#ff2a3a' : '#2a6bff'), -h0(D) * 0.2 - 12, -D.B * 0.3 - 12, 24, 24); ctx.drawImage(glowSprite(k ? '#2a6bff' : '#ff2a3a'), -h0(D) * 0.2 - 12, D.B * 0.3 - 12, 24, 24); }
       if (v.braking) { ctx.globalAlpha = 0.9; ctx.drawImage(glowSprite('#ff2a3a'), -D.L / 2 - 8, -D.B * 0.7 - 8, 16, 16); ctx.drawImage(glowSprite('#ff2a3a'), -D.L / 2 - 8, D.B * 0.7 - 8, 16, 16); }
       ctx.restore(); ctx.globalAlpha = 1;
     }
   }
 }
 // Lichter für die Lightmap: Scheinwerferkegel, Rücklichter, Unterboden-Glow der Schweber, Feuer
+function h0(D) { return D.L / 2; }
 function vehicleLights() {
   for (const v of G.vehicles) {
     if (!onScreen(v.x, v.y, 330)) continue;
@@ -354,5 +360,6 @@ function vehicleLights() {
       Lights.add(v.x - c * D.L * 0.48, v.y - s * D.L * 0.48, v.braking ? 52 : 28, '#ff2a3a', (v.braking ? 1 : 0.7) * flick);
     }
     if (v.alarm > 0 && (G.time >> 3) & 1) Lights.add(v.x, v.y, 90, '#ffb35c', 0.9);
+    if (v.od && (v.od.siren || G.wanted.level > 0) && !v.od.leave) Lights.add(v.x, v.y, 230, ((G.time >> 3) & 1) ? '#ff2a3a' : '#2a6bff', 1.0);
   }
 }

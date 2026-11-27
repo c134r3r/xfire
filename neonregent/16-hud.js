@@ -53,6 +53,8 @@ const HUD = {
     g.fillStyle = 'rgba(255,255,255,0.0)';
     for (const gr in G.gates) if (!World.gateOpen(gr)) for (const r of G.gates[gr]) { g.fillStyle = '#ff3b4a'; g.fillRect(((r.x0 + r.x1) / 2 / C.TILE - tx + N / 2) * 2 - 2, ((r.y0 + r.y1) / 2 / C.TILE - ty + N / 2) * 2 - 2, 5, 5); }
     g.fillStyle = '#ffd84a'; for (const b of Interiors.list) { const d = b._door, dx = (d.x / C.TILE - tx + N / 2) * 2, dy = (d.y / C.TILE - ty + N / 2) * 2; if (dx > 2 && dx < S - 2 && dy > 2 && dy < S - 2) g.fillRect(dx - 1.5, dy - 1.5, 3, 3); }   // Türen begehbarer Gebäude
+    const blink = (G.time >> 3) & 1, dot = (x, y, col) => { const dx = (x / C.TILE - tx + N / 2) * 2, dy = (y / C.TILE - ty + N / 2) * 2; if (dx > 2 && dx < S - 2 && dy > 2 && dy < S - 2) { g.fillStyle = col; g.fillRect(dx - 2, dy - 2, 4, 4); } };
+    if (G.wanted && G.wanted.level > 0) { for (const q of G.peds) if (q.team === 'od' && q.state !== 'dead') dot(q.x, q.y, blink ? '#ff3b4a' : '#4a8cff'); for (const v of G.vehicles) if (v.od && !v.dead) dot(v.x, v.y, blink ? '#4a8cff' : '#ff3b4a'); for (const d of G.drones) dot(d.x, d.y, '#e8f4ff'); }
     g.save(); g.translate(S / 2, S / 2); g.rotate(p.a); g.fillStyle = '#5fd4e6'; g.strokeStyle = '#04121a'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(7, 0); g.lineTo(-5, 5); g.lineTo(-3, 0); g.lineTo(-5, -5); g.closePath(); g.fill(); g.stroke(); g.restore();
   },
@@ -72,7 +74,7 @@ const HUD = {
     const f = clamp(p.hp / p.maxHp, 0, 1) * 100 + '%';
     $('hpFill').style.width = f; $('hpGhost').style.width = f; $('hpFill').classList.toggle('low', p.hp < p.maxHp * 0.3);
     $('credVal').textContent = (G.credits || 0).toLocaleString('de-DE');
-    const hs = $('heat').children; for (let i = 0; i < hs.length; i++) hs[i].classList.toggle('on', i < (G.heat || 0));
+    const lvl = G.wanted ? G.wanted.level : 0, hs = $('heat').children; for (let i = 0; i < hs.length; i++) hs[i].classList.toggle('on', i < lvl); $('heat').classList.toggle('seen', lvl > 0 && G.wanted.seen); $('hiddenTag').textContent = lvl > 0 && !G.wanted.seen ? STR.police.hidden : '';
     $('chipTag').textContent = STR.chip.on; $('district').textContent = 'HALOGEN · ' + (G.district ? G.district.name : '');
     const v = p.veh, vc = $('vehCard'); vc.style.display = v ? 'flex' : 'none';
     if (v) { $('vehName').textContent = VEHICLES[v.cls].name; $('vehFill').style.width = clamp(v.hp / v.maxHp, 0, 1) * 100 + '%'; $('boostFill').style.width = v.boost + '%'; }

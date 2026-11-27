@@ -80,6 +80,8 @@ body.touch .tctl { width: 54px; height: 54px; font-size: 9px; } body.touch #tbMa
 body.touch #tbFire { right: 8px; bottom: 5%; width: 62px; height: 62px; } body.touch #tbSwap { right: 76px; bottom: 6%; }
 #wpnCard.flash { border-color: var(--gold); box-shadow: 0 0 18px rgba(255,216,74,0.6); }
 body.touch #banner { font-size: 30px; letter-spacing: 5px; }
+#heat.seen b.on { animation: pulse 0.35s infinite; color: #ff3b4a; text-shadow: 0 0 12px rgba(255,59,74,0.9); }
+#hiddenTag { font-size: 9px; letter-spacing: 2px; color: #8fd0ff; text-shadow: 0 0 10px rgba(143,208,255,0.9); animation: pulse 1.2s infinite; }
 #debugBox { position: absolute; left: 12px; top: 120px; font: 11px/1.45 ui-monospace, 'DejaVu Sans Mono', monospace; color: #9dff4a;
   background: rgba(0,0,0,0.55); padding: 6px 8px; border-radius: 4px; white-space: pre; display: none; }
 body.debug #debugBox { display: block; }
@@ -121,7 +123,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
     </div>
     <div class="hud-tr">
       <div class="hud-card"><span class="lbl">CREDITS</span><span class="val" id="credVal">0</span></div>
-      <div class="hud-card"><span class="lbl">FAHNDUNG</span><span id="heat"><b>♦</b><b>♦</b><b>♦</b><b>♦</b><b>♦</b></span></div>
+      <div class="hud-card"><span class="lbl">FAHNDUNG</span><span id="heat"><b>♦</b><b>♦</b><b>♦</b><b>♦</b><b>♦</b></span><span id="hiddenTag"></span></div>
       <div class="hud-card" id="findCard"><span class="lbl">FUNDE</span><span class="val" id="findVal">0/30</span></div>
       <div class="hud-card"><span id="district">HALOGEN</span></div>
     </div>

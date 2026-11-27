@@ -31,7 +31,7 @@ const Lights = {
       else if (q.kind === 'glow' && q.size > 18) this.add(q.x, q.y, q.size * 2.6, q.color, 0.4 * Math.min(1, q.life / q.max));
       else if (q.kind === 'debris' && q.burning && q.life > 20) this.add(q.x, q.y - q.z, 38, '#ff8a2a', 0.5);
     }
-    vehicleLights(); Interiors.lights();
+    vehicleLights(); Interiors.lights(); odLights();
     const p = G.player;
     if (p && G.state !== 'menu' && !p.veh) { const T = LIGHT_TYPES.player; this.add(p.x, p.y, T.r * (G.inside ? 2.4 : 1.6), T.color, T.k * (G.inside ? 0.8 : 1)); }
   }

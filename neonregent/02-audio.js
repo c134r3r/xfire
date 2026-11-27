@@ -310,6 +310,15 @@ const Eng = {
       let bd = 1e9, bv = null; for (const v of G.vehicles) if (v.burn > 0) { const d = Math.hypot(v.x - G.cam.x, v.y - G.cam.y); if (d < bd) { bd = d; bv = v; } }
       if (bv && bd < 600) { const pl = Aud.place(bv.x, bv.y); this.L.fire.setLevel(0.7 * Math.pow(1 - bd / 600, 1.5), pl.pan); } else this.L.fire.setLevel(0);
     }
+    // Sirenen (max. 2): Zweiton 650/900 Hz, Lautstärke nach Abstand, Doppler nach Annäherungsgeschwindigkeit
+    this.sir = this.sir || new Map(); const sc = []; for (const v of G.vehicles) if (v.od && !v.dead && (v.od.siren || G.wanted.level > 0) && !v.od.leave && onScreen(v.x, v.y, 900)) sc.push(v);
+    sc.sort((a, b) => Math.hypot(a.x - G.cam.x, a.y - G.cam.y) - Math.hypot(b.x - G.cam.x, b.y - G.cam.y)); const keepS = new Set(sc.slice(0, C.VOICES_MAX.sirene).map(v => v.id));
+    for (const [id, o] of this.sir) if (!keepS.has(id)) { const n = ac.currentTime; o.g.gain.setTargetAtTime(0, n, 0.05); try { o.o.stop(n + 0.3); } catch (e) {} this.sir.delete(id); }
+    for (const v of sc.slice(0, C.VOICES_MAX.sirene)) {
+      let o = this.sir.get(v.id); if (!o) { o = { o: ac.createOscillator(), lp: ac.createBiquadFilter(), g: ac.createGain(), pan: ac.createStereoPanner ? ac.createStereoPanner() : null }; o.o.type = 'square'; o.lp.type = 'lowpass'; o.lp.frequency.value = 1800; o.g.gain.value = 0; o.o.connect(o.lp); o.lp.connect(o.g); if (o.pan) { o.g.connect(o.pan); o.pan.connect(Aud.bus.sfx); } else o.g.connect(Aud.bus.sfx); o.o.start(); this.sir.set(v.id, o); }
+      const pl = Aud.place(v.x, v.y), rx = v.x - G.cam.x, ry = v.y - G.cam.y, dd = Math.hypot(rx, ry) || 1, vr = ((v.vx) * rx + (v.vy) * ry) / dd, dop = 1 / (1 + 0.5 * vr / 22), f = (((G.time / 33) | 0) % 2 ? 900 : 650) * clamp(dop, 0.8, 1.25);
+      o.o.frequency.setTargetAtTime(f, t, 0.02); o.g.gain.setTargetAtTime(0.1 * pl.v * pl.v, t, 0.1); if (o.pan) o.pan.pan.setTargetAtTime(pl.pan, t, 0.1);
+    }
     // Hupe (H): zwei Rechtecktöne 350/440 Hz, solange gedrückt
     const hornOn = !!(p && p.veh && G.in.horn);
     if (hornOn && !this.horn) {

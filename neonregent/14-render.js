@@ -264,8 +264,9 @@ function render() {
     }
   }
 
+  drawDrones();                                                                // Luftschicht: Drohnen über den Dächern
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; drawBullets(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; drawBullets(); drawEBullets(); drawDroneGlow(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {
@@ -301,6 +302,8 @@ function render() {
     }
     ctx.globalAlpha = 1;
   }
+  if (G.fadeA > 0.01) { ctx.fillStyle = `rgba(0,0,0,${G.fadeA})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
+  if (G.respawn && G.respawn.t < 90) { ctx.fillStyle = G.respawn.kind === 'busted' ? 'rgba(60,110,255,0.18)' : 'rgba(255,20,30,0.22)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   if (G.hurtFlash > 0.02) { ctx.fillStyle = `rgba(255,30,40,${G.hurtFlash * 0.4})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   if (G.sceneLabel) { ctx.font = '12px "DejaVu Sans", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(230,236,245,0.6)'; ctx.fillText(G.sceneLabel, VIEW_W / 2, 66); }
 }

@@ -140,6 +140,8 @@ function updateBullets() {
       for (const q of G.peds) { if (q.state === 'dead' || Math.abs(q.x - b.x) > 11 || Math.abs(q.y - b.y) > 11) continue;
         if (Math.hypot(q.x - b.x, q.y - b.y) < (q.state === 'down' ? 6 : 9)) { const m = Math.hypot(b.vx, b.vy); damagePed(q, b.dmg, b.vx / m, b.vy / m, 'bullet'); dead = true; break; } }
       if (dead) break;
+      for (const d of G.drones) if (Math.hypot(d.x - b.x, d.y - b.y) < 12) { d.hp -= b.dmg; sparks(b.x, b.y, 4, '#9fd0ff', 3); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; }
+      if (dead) break;
       for (const v of G.vehicles) { if (Math.abs(v.x - b.x) > 90 || Math.abs(v.y - b.y) > 90 || (v.driver === G.player)) continue; if (vehDist(v, b.x, b.y) < 2) { damageVeh(v, b.dmg * 0.4, 'bullet'); sparks(b.x, b.y, 4, '#ffd27a', 3, Math.atan2(-b.vy, -b.vx), 0.9); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; } }
     }
     if (dead) G.bullets.splice(i, 1);

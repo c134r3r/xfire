@@ -13,8 +13,18 @@ const World = {
     };
     for (const b of city.buildings) put(b);
     for (const g in city.gates) for (const r of city.gates[g]) put(r);
+    // Pfadfindung/Sicht: Kacheln, die ein (nicht begehbares) Gebäude um mehr als 40 % überdeckt
+    this.solid = new Uint8Array(this.W * this.H); const T = C.TILE;
+    for (const b of city.buildings) { if (b.gate) continue; for (let ty = Math.floor(b.y0 / T); ty <= Math.floor(b.y1 / T); ty++) for (let tx = Math.floor(b.x0 / T); tx <= Math.floor(b.x1 / T); tx++) { const ox = Math.min(b.x1, (tx + 1) * T) - Math.max(b.x0, tx * T), oy = Math.min(b.y1, (ty + 1) * T) - Math.max(b.y0, ty * T); if (ox > 6 && oy > 6 && ox * oy > 0.4 * T * T && tx >= 0 && ty >= 0 && tx < this.W && ty < this.H) this.solid[ty * this.W + tx] = 1; } }
     this.buildMini();
   },
+  // Sichtlinie: blockiert nur durch Gebäude und Innenwände (nicht durch Wasser oder niedrige Möbel)
+  sightBlocked(x, y) {
+    const l = this.grid.get(Math.floor(x / this.CELLPX) + Math.floor(y / this.CELLPX) * 4096); if (!l) return false;
+    for (const b of l) { if (b.gate || b.furn) continue; if (x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1 && (b.wall || !b.hollow)) return true; }
+    return false;
+  },
+  los(x0, y0, x1, y1) { const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy), n = Math.ceil(d / 20); for (let i = 1; i < n; i++) if (this.sightBlocked(x0 + dx * i / n, y0 + dy * i / n)) return false; return true; },
   // Gebäude/Tore, deren Rechteck das Rechteck berührt (einmalig)
   near(x0, y0, x1, y1) {
     const out = new Set();

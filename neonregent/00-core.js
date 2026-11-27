@@ -58,7 +58,7 @@ const G = {
   state: 'boot', time: 0, scene: null,
   cam: { x: 0, y: 0 }, zoom: C.ZOOM_FOOT, zoomPunch: 0,
   trauma: 0, kickX: 0, kickY: 0, hurtFlash: 0, freeze: 0, quality: 1,
-  parts: [], texts: [], lamps: [], buildings: [], vehicles: [], bullets: [], weapon: 'faust', own: { faust: true, pistole: false }, ammo: { pistole: 0 }, peds: [], pickups: [], barks: [], npcs: [], finds: {}, stats: { peds: 0, finds: 0, cr: 0 }, nearVeh: null, flags: null,
+  parts: [], texts: [], lamps: [], buildings: [], vehicles: [], bullets: [], ebullets: [], drones: [], wanted: { pts: 0, level: 0, seen: false, decayT: 0, seenT: 0, last: { x: 0, y: 0 }, spawnT: 0, block: null }, respawn: null, fadeA: 0, weapon: 'faust', own: { faust: true, pistole: false }, ammo: { pistole: 0 }, peds: [], pickups: [], barks: [], npcs: [], finds: {}, stats: { peds: 0, finds: 0, cr: 0 }, nearVeh: null, flags: null,
   ambient: C.AMBIENT, player: null, inside: null, city: null, rain: 1, district: null,
   in: {}                                  // Intent (01-input.js)
 };

@@ -12,6 +12,7 @@ const LIGHT_TYPES = {
   fire:    { color: '#ff8a30', r: 140, k: 0.8,  flicker: 0.25 },
   neon:    { color: '#ff3fa4', r: 124, k: 1.0,  flicker: 0.08 },   // Farbe je Lampe (l.color)
   door:    { color: '#ffb070', r: 84, k: 0.9, flicker: 0.04 },       // beleuchtete Eingangstür begehbarer Gebäude
+  drone:   { color: '#e8f4ff', r: 96, k: 0.9, flicker: 0 },        // Drohnen-Suchscheinwerfer (Bodenkreis)
   player:  { color: '#bfe8ff', r: 60,  k: 0.6,  flicker: 0 },       // Spieler-Eigenlicht (Lesbarkeit)
   marker:  { color: '#3fe8ff', r: 92,  k: 1.0,  flicker: 0 }
 };
@@ -87,6 +88,9 @@ const VEHICLES = {
   kasten:   { name: 'KASTEN',   sub: 'KASTENWAGEN',   L: 78,  B: 34, mass: 1.6, top: 6.6,  accel: 0.11, grip: 0.22, steer: 0.042, hp: 140, expl: 1.8, glow: '#a66bff', snd: 'diesel' },
   laster:   { name: 'LASTER',   sub: 'CONTAINERZUG',  L: 124, B: 38, mass: 3.2, top: 5.6,  accel: 0.07, grip: 0.20, steer: 0.032, hp: 260, expl: 2.2, glow: '#ff3b4a', snd: 'heavy' },
   bike:     { name: 'KURIER-BIKE', sub: 'LICHTRAD',   L: 40,  B: 14, mass: 0.4, top: 11.0, accel: 0.25, grip: 0.34, steer: 0.075, hp: 40,  expl: 1.0, glow: '#3fe8ff', snd: 'bike', exposed: true },
+  od_streife: { name: 'OD-STREIFE', sub: 'ORDNUNGSDIENST', L: 72, B: 30, mass: 1.1, top: 9.4, accel: 0.18, grip: 0.28, steer: 0.055, hp: 130, expl: 1.7, glow: '#2a6bff', snd: 'hybrid', od: true, art: 'limo' },
+  od_abfang:  { name: 'OD-ABFANGJÄGER', sub: 'ORDNUNGSDIENST', L: 70, B: 30, mass: 1.0, top: 11.0, accel: 0.22, grip: 0.30, steer: 0.058, hp: 110, expl: 1.6, glow: '#2a6bff', snd: 'turbine', od: true, art: 'pfeil' },
+  od_sturm:   { name: 'OD-STURMWAGEN', sub: 'ORDNUNGSDIENST', L: 90, B: 38, mass: 2.4, top: 6.8, accel: 0.10, grip: 0.22, steer: 0.040, hp: 320, expl: 2.0, glow: '#2a6bff', snd: 'heavy', od: true, art: 'kasten' },
   board:    { name: 'HOVERBOARD', sub: 'SCHWEBEBRETT', L: 34, B: 16, mass: 0.25, top: 9.5, accel: 0.26, grip: 0.10, steer: 0.075, hp: 35, expl: 0.7, glow: '#ff3fa4', snd: 'board', hover: true, board: true, exposed: true }
 };
 // Verkehrsmix je Distrikt (WORLD.md §5; erbe_limo folgt mit den Erben als limo)
@@ -147,3 +151,16 @@ const WEAPONS = {
   pistole: { name: 'PISTOLE', cd: 13, dmg: 14, speed: 15, range: 560, spread: 0.035, price: 120, ammoPrice: 40, pack: 24, maxAmmo: 99 }
 };
 const COMIC = ['PAFF!', 'WUMM!', 'KLATSCH!', 'ZACK!', 'BAMM!', 'PENG!'];
+
+// ---- Fahndung (WORLD.md §9): Schwellen, Soll-Einheiten je Stufe, Abklingzeit (Sekunden unbeobachtet) ----
+const HEAT_LEVELS = [
+  { pts: 0,   foot: 0, car: 0, abfang: 0, sturm: 0, drone: 0, block: 0, decay: 0 },
+  { pts: 6,   foot: 2, car: 1, abfang: 0, sturm: 0, drone: 0, block: 0, decay: 8 },
+  { pts: 25,  foot: 2, car: 3, abfang: 0, sturm: 0, drone: 0, block: 0, decay: 12 },
+  { pts: 60,  foot: 2, car: 4, abfang: 1, sturm: 0, drone: 1, block: 1, decay: 16 },
+  { pts: 110, foot: 2, car: 4, abfang: 1, sturm: 1, drone: 2, block: 1, decay: 22 },
+  { pts: 180, foot: 3, car: 4, abfang: 2, sturm: 1, drone: 3, block: 1, decay: 30 }
+];
+const HEAT_MAX = 240;
+// Delikte (Punkte, WORLD.md §9.1)
+const CRIME = { pedHurt: 3, pedKilled: 8, shot: 2, carjack: 4, breakin: 4, odCarJack: 15, copHurt: 10, copKilled: 25, odVehicle: 20, drone: 10, explosionPeds: 6, assault: 2 };

@@ -13,6 +13,17 @@ const STR = {
   },
   banner: { start: 'HALOGEN', startSub: 'Nacht · Regen', paused: 'PAUSE', scene: n => `SZENE ${n}` },
   gate: 'PASSIERSCHEIN ERFORDERLICH',
+  police: {
+    levels: ['Der Ordnungsdienst ist informiert', 'Streifen rücken an – Waffen frei', 'Straßensperren und Drohnen', 'Sturmwagen im Anmarsch', 'Totale Ordnung'],
+    radio: [
+      ['Zentrale: Bürger 7741 hat die Ordnung gestört. Bitte höflich verhaften.', 'Zentrale: Ruhestörung mit Folgen. Verhaftung einleiten, Regenschirme bereithalten.'],
+      ['Verdächtiger flüchtig. Streifen zu Position. Waffeneinsatz freigegeben.', 'Alle Streifen: Der Mandatsaugen-Treffer ist bestätigt. Zugriff.'],
+      ['Straßensperren errichten. Drohne aufsteigen. Der Regent sieht alles.', 'Sperren voraus. Und bitte: nicht den Gegenverkehr erschießen. Nur diesen einen.'],
+      ['Sturmwagen und Gunship angefordert. Papierkram folgt.', 'Verstärkung unterwegs. Mittagspause wurde gestrichen.'],
+      ['Alle Einheiten: Tribunal-Protokoll. Aufgeben ist ab jetzt nicht mehr vorgesehen.']
+    ],
+    hidden: '◈ VERBORGEN', chipwash: ['Chip-Wäsche. Ihr Chip meldet: „Alles in Ordnung." Das tut er immer. Wir reiben ihn trotzdem ab.', 'Chip gereinigt. Sie waren nie hier. Wir waren nie hier. Niemand war irgendwo.']
+  },
   // Passanten-Sprüche (Humor der Spielwelt): Alltag, Panik, Zeugen, Wiederaufstehen
   barks: {
     idle: ['Mein Treuechip juckt schon wieder.', 'Ich habe nichts getan! …Noch nicht.', 'Der Regent wacht. Der Regent wacht? Der Regent wacht.', 'Regen. Immer Regen. Danke, MANDAT.',

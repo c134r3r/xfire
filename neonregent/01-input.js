@@ -52,6 +52,8 @@ const Input = {
     const r = c.getBoundingClientRect();
     this.mouse.x = (e.clientX - r.left) / r.width * VIEW_W; this.mouse.y = (e.clientY - r.top) / r.height * VIEW_H; this.mouse.in = true;
   },
+  // Neutrale Eingabe (Verhaftet/Ausgelöscht: Steuerung gesperrt)
+  neutral(o) { return { mx: 0, my: 0, throttle: 0, brake: 0, steer: 0, aimMode: o.aimMode, ax: o.ax, ay: o.ay, fire: false, alt: false, sprint: false, boost: false, handbrake: false, horn: false, enterP: false, interactP: false, dodgeP: false, weaponNextP: false, weaponPrevP: false, swapP: false, mapP: false, pauseP: false, weaponSlot: 0, touchDrive: o.touchDrive }; },
   // Flanke einmal abholen
   took(code) { if (this.edge[code]) { this.edge[code] = false; return true; } return false; },
   // Intent fuer einen Tick bilden. NR_TEST.setIntent ueberschreibt Felder (this.forced).

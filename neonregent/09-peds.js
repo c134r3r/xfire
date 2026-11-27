@@ -38,16 +38,6 @@ function updatePlayer() {
   if (p.stride > (sprint ? 15 : 19) && v > 0.5 && p.dodge <= 0) { p.stride = 0; p.surface = G.inside ? 'platte' : World.surface(p.x, p.y); Aud.step(p.surface, sprint); }
 }
 
-// Tod (MS2-Minimalfassung: Respawn am Terminalplatz; Verhaften/Klinik-Respawn und Strafen folgen mit MS6, WORLD.md §4.3)
-function killPlayer() {
-  const p = G.player; if (!p || p.dead) return;
-  if (p.veh) exitVehicle(p, true);
-  const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
-  p.x = f.x; p.y = f.y; p.vx = p.vy = 0; p.hp = p.maxHp; G.credits = Math.floor((G.credits || 0) * 0.9);
-  G.cam.x = p.x; G.cam.y = p.y; G.hurtFlash = 1; G.trauma = 0.6;
-  HUD.banner('AUSGELÖSCHT', 'Neustart am Terminalplatz', 2400);
-}
-
 // ------------------------------------------------------------------
 // Passanten
 // ------------------------------------------------------------------
@@ -89,7 +79,7 @@ const barkPick = list => list[Math.floor(R.fn() * list.length)];
 // ---- Panik ----
 function panicAt(x, y, radius, ticks) {
   for (const p of G.peds) {
-    if (p.state === 'dead' || p.state === 'down') continue;
+    if (p.state === 'dead' || p.state === 'down' || p.team === 'od') continue;
     const d = Math.hypot(p.x - x, p.y - y); if (d > radius) continue;
     if (p.state !== 'flee') { if (p.umb && R.fn() < 0.3) bark(p, STR.barks.panic[5], 120); else if (R.fn() < 0.25) bark(p, barkPick(STR.barks.panic), 100); }
     p.state = 'flee'; p.panic = ticks * rand(0.8, 1.2); p.fx = x; p.fy = y; p.umb = null; p.hasT = false;
@@ -99,7 +89,7 @@ function panicAt(x, y, radius, ticks) {
 function witness(x, y) {                         // Umstehende (< 300 px): 30-60 % schreien zeitversetzt, alle fliehen
   let n = 0;
   for (const p of G.peds) {
-    if (p.state === 'dead' || p.state === 'down') continue; const d = Math.hypot(p.x - x, p.y - y); if (d > 300) continue;
+    if (p.state === 'dead' || p.state === 'down' || p.team === 'od') continue; const d = Math.hypot(p.x - x, p.y - y); if (d > 300) continue;
     p.state = 'flee'; p.panic = rand(360, 600); p.fx = x; p.fy = y; p.umb = null; p.hasT = false;
     if (n < 3 && R.fn() < 0.5) { p.screamT = randi(24, 96); p.farScream = true; n++; }
     if (R.fn() < 0.2) bark(p, barkPick(STR.barks.witness), 160);
@@ -120,6 +110,7 @@ function killPed(p, v) {
 function hurtPed(p, v, dmg, dirx, diry) {
   p.hp -= dmg; p.vx = dirx * Math.min(5, dmg * 0.14); p.vy = diry * Math.min(5, dmg * 0.14); p.hitCool = 30;
   if (p.hp <= 0) { killPed(p, v); return; }
+  Bus.emit('pedHurt', p, v);
   pedStopScream(p, 0.09); p.state = 'down'; p.downT = randi(130, 270); p.painT = 40; p.groanT = 150; p.hasT = false;
   Aud.play('koerper_verletzt', { x: p.x, y: p.y, gain: 0.9, cat: 'sfx' });
   addTrauma(0.1 * screenFalloff(p.x, p.y)); witness(p.x, p.y);
@@ -155,6 +146,12 @@ Bus.on('gunshot', (x, y) => panicAt(x, y, 400, 420));
 const KO_BARKS = ['Aua! Ich bin Pazifist!', 'Dafür gibt es Punktabzug!', 'Mein Schirm! Mein Gesicht! In dieser Reihenfolge!', 'Ich habe ein Abo auf Unversehrtheit!', 'Das sage ich dem Regenten!'];
 function damagePed(q, dmg, dx, dy, src) {
   if (q.state === 'dead') return;
+  if (q.team === 'od') {                                                                   // OD-Beamte: Schläge/Kugeln verletzen, k.o. bzw. tot; sie schlagen zurück (provoziert)
+    q.hp -= dmg; q.provoked = true; q.vx = dx * 2.4; q.vy = dy * 2.4; q.hitCool = 10; Aud.play(src === 'fist' ? 'faustschlag' : 'querschlaeger', { x: q.x, y: q.y, gain: 0.9, cat: 'sfx' });
+    Bus.emit('pedHurt', q, null);
+    if (q.hp <= 0) { if (src === 'fist') { q.state = 'down'; q.downT = randi(300, 480); q.hp = 6; q.ko = true; Bus.emit('crime', 'copHurt'); } else killPed(q, null); }
+    return;
+  }
   pedStopScream(q, 0.03); q.hasT = false; q.umb = null; q.fx = q.x - dx * 40; q.fy = q.y - dy * 40;
   if (src === 'fist') {
     q.hp -= dmg; q.vx = dx * 3.4; q.vy = dy * 3.4; q.hitCool = 10; Aud.play('faustschlag', { x: q.x, y: q.y, gain: 1, cat: 'sfx' });
@@ -184,10 +181,16 @@ function updatePeds() {
       p.x += p.vx; p.y += p.vy; p.vx *= 0.86; p.vy *= 0.86; if (World.blocked(p.x, p.y, 4)) { p.x -= p.vx; p.y -= p.vy; p.vx = p.vy = 0; }
       if (p.painT > 0 && --p.painT === 0) Aud.playRec('schmerz', p.d.voice, { x: p.x, y: p.y, speaker: p.speaker, gain: 0.85 });
       if (p.groanT > 0 && --p.groanT === 0 && p.hp < p.maxHp) { Aud.playRec('stoehnen', p.d.voice, { x: p.x, y: p.y, speaker: p.speaker, gain: 0.8 }); p.groanT = randi(120, 240); }
+      if (--p.downT <= 0 && p.team === 'od') { p.state = 'chase'; p.hp = Math.max(p.hp, 10); p.hasT = false; continue; }
       if (--p.downT <= 0) { p.ko = false; p.state = 'flee'; p.panic = 300; p.hp = Math.max(p.hp, 6); p.hasT = false; p.fx = p.x - Math.cos(p.a) * 40; p.fy = p.y - Math.sin(p.a) * 40; if (R.fn() < 0.5) bark(p, barkPick(STR.barks.getup), 140); }
       continue;
     }
     if (p.frozen > 0) { p.frozen--; continue; }
+    if (p.team === 'od') {
+      if (p.leave && !onScreen(p.x, p.y, 60)) { G.peds.splice(i, 1); continue; }
+      if (G.wanted.level > 0 && p.state !== 'chase') { p.state = 'chase'; p.hasT = false; } else if (G.wanted.level === 0 && p.state === 'chase') { p.state = 'walk'; p.hasT = false; }
+      if (p.state === 'chase') { if (updateCop(p)) continue; }
+    }
     if (p.dodge > 0) { p.dodge--; World.move(p, p.dvx, p.dvy); p.walk += 3; continue; }
     if (p.state === 'flee') {
       let ax = p.x - p.fx, ay = p.y - p.fy; const m = Math.hypot(ax, ay) || 1; ax /= m; ay /= m;
@@ -210,7 +213,7 @@ function updatePeds() {
   }
   // Ansteckende Panik (alle 10 Ticks): fliehende Nachbarn < 120 px, Leichen < 150 px
   if (G.time % 10 === 0) for (const p of G.peds) {
-    if (p.state !== 'walk') continue;
+    if (p.state !== 'walk' || p.team === 'od') continue;
     for (const q of G.peds) {
       if (q === p) continue;
       if (q.state === 'flee' && Math.abs(q.x - p.x) < 120 && Math.abs(q.y - p.y) < 120 && Math.hypot(q.x - p.x, q.y - p.y) < 120) { p.state = 'flee'; p.panic = q.panic * 0.8; p.fx = q.fx; p.fy = q.fy; p.umb = null; p.hasT = false; break; }
@@ -239,7 +242,8 @@ function updatePickups() {
     const k = G.pickups[i]; k.bob += 0.1; if (--k.life <= 0) { G.pickups.splice(i, 1); continue; }
     if (Math.hypot(k.x - p.x, k.y - p.y) < (p.veh ? 30 : 20)) {
       G.pickups.splice(i, 1);
-      if (k.type === 'cr') { G.credits = (G.credits || 0) + k.v; floatText(k.x, k.y - 8, STR.loot.cr(k.v), '#ffd84a', 13); Aud.play('kasse', { gain: 0.7, cat: 'ui', bus: 'ui' }); }
+      if (k.type === 'gun') { G.own.pistole = true; G.ammo.pistole = Math.min(99, G.ammo.pistole + k.v); floatText(k.x, k.y - 8, 'DIENSTWAFFE +' + k.v, '#ffd84a', 12); Aud.play('klick', { gain: 0.8, cat: 'ui', bus: 'ui' }); if (G.weapon === 'faust') setWeapon('pistole'); }
+      else if (k.type === 'cr') { G.credits = (G.credits || 0) + k.v; floatText(k.x, k.y - 8, STR.loot.cr(k.v), '#ffd84a', 13); Aud.play('kasse', { gain: 0.7, cat: 'ui', bus: 'ui' }); }
     }
   }
 }
@@ -249,6 +253,7 @@ function drawPickups(layer) {
     const y = k.y + Math.sin(k.bob) * 1.6;
     if (layer === 'body') { ctx.globalAlpha = 0.5; ctx.drawImage(shadowSprite(6, 4), k.x - 18 + 2, y - 16 + 6); ctx.globalAlpha = 1;
       if (k.life < 200 && (k.life >> 3) & 1) continue;
+      if (k.type === 'gun') { ctx.save(); ctx.translate(k.x, y); ctx.rotate(0.4); ctx.fillStyle = '#12141a'; ctx.fillRect(-6, -2, 12, 4); ctx.fillRect(-1, 1, 4, 5); ctx.fillStyle = '#3fe8ff'; ctx.fillRect(4, -1.4, 2, 1.2); ctx.restore(); continue; }
       ctx.save(); ctx.translate(k.x, y); ctx.rotate(0.3 + Math.sin(k.bob * 0.5) * 0.2); ctx.fillStyle = '#3a2a14'; ctx.fillRect(-5, -3.5, 10, 7); ctx.fillStyle = '#c9a227'; ctx.fillRect(-4.3, -2.8, 8.6, 5.6); ctx.fillStyle = '#ffe48a'; ctx.fillRect(-2, -1.2, 4, 2.4); ctx.restore(); }
     else { ctx.globalAlpha = 0.5 + 0.2 * Math.sin(k.bob * 1.5); ctx.drawImage(glowSprite('#ffd84a'), k.x - 10, y - 10, 20, 20); ctx.globalAlpha = 1; }
   }

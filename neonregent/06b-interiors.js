@@ -208,14 +208,19 @@ const Interiors = {
   nearest(I) {
     const p = G.player; let best = null, bd = 34;
     for (const l of I.loot) { if (l.opened) continue; const d = Math.hypot(Math.max(l.x - p.x, 0, p.x - (l.x + l.w)), Math.max(l.y - p.y, 0, p.y - (l.y + l.h))); if (d < bd) { bd = d; best = { k: 'loot', o: l, x: l.x + l.w / 2, y: l.y, label: LOOT[l.type].n }; } }
-    for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y) - 8; if (d < bd) { bd = d; best = { k: 'npc', o: n, x: n.x, y: n.y - 10, label: n.role === 'haendler' ? (G.own.pistole ? `MUNITION KAUFEN · ${WEAPONS.pistole.ammoPrice} CR` : `PISTOLE KAUFEN · ${WEAPONS.pistole.price} CR`) : n.role === 'wirt' ? 'NUDELSUPPE · 8 CR' : 'ANSPRECHEN' }; } }
+    for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y) - 8; if (d < bd) { bd = d; best = { k: 'npc', o: n, x: n.x, y: n.y - 10, label: n.role === 'empfang' && I.kind === 'chipwaesche' ? `CHIP WASCHEN · ${300 + 400 * G.wanted.level} CR` : n.role === 'haendler' ? (G.own.pistole ? `MUNITION KAUFEN · ${WEAPONS.pistole.ammoPrice} CR` : `PISTOLE KAUFEN · ${WEAPONS.pistole.price} CR`) : n.role === 'wirt' ? 'NUDELSUPPE · 8 CR' : 'ANSPRECHEN' }; } }
     return best;
   },
   interact(I) {
     const t = this.nearest(I); if (!t) return; this.talkCd = 24;
     if (t.k === 'npc') {
       const n = t.o; let line;
-      if (n.role === 'haendler') {                                              // Pistole 120 CR, Munition 40 CR je 24 Schuss
+      if (n.role === 'empfang' && I.kind === 'chipwaesche') {                       // Chip-Wäsche: Fahndung löschen, 300 + 400 x Stufe CR
+        const lvl = G.wanted.level, price = 300 + 400 * lvl;
+        if (lvl === 0) line = 'Ihr Chip ist sauber. Zu sauber. Das fällt auf. Kommen Sie wieder, wenn Sie etwas getan haben.';
+        else if ((G.credits || 0) >= price) { G.credits -= price; G.wanted.pts = 0; G.wanted.level = 0; Police.standDown(true); line = barkPick(STR.police.chipwash); Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); Aud.play('sting_clear', { gain: 0.7, cat: 'ui', bus: 'ui' }); HUD.banner('CHIP GEWASCHEN', 'Fahndung gelöscht', 1800); }
+        else line = `Chip-Wäsche kostet ${price} CR. Kreditkarten nehmen wir nicht – wir kennen unsere Kunden.`;
+      } else if (n.role === 'haendler') {                                              // Pistole 120 CR, Munition 40 CR je 24 Schuss
         const w = WEAPONS.pistole;
         if (!G.own.pistole) { if ((G.credits || 0) >= w.price) { G.credits -= w.price; G.own.pistole = true; G.ammo.pistole = w.pack; setWeapon('pistole'); line = 'Pistole, geölt, 24 Schuss. Garantie: bis zur Tür. Viel Spaß – und nicht auf mich zielen.'; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); } else line = `Pistole: ${w.price} CR. Ohne Credits gibt es nur Prospekte und gute Ratschläge.`; }
         else if (G.ammo.pistole >= w.maxAmmo) line = 'Du hast schon mehr Munition als Freunde. Geh nach Hause.';

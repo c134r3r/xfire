@@ -353,6 +353,27 @@ function pistolSnd(m) {
 function klickSnd(m) { const dest = m.bus(0, 1, 0.02); m.hit(0, 0.012, 'bandpass', 3200, 3, 0.6, dest); m.hit(0.03, 0.01, 'bandpass', 2400, 3, 0.4, dest); }
 function querschlaegerSnd(m) { const dest = m.bus(0, 1, 0.2); m.hit(0, 0.02, 'highpass', 3000, 0.7, 0.4, dest); const o = m.osc('sine', 0.005, 0.35), e = m.env([[0.005, 0], [0.01, 0.18], [0.3, 0.0001]]); o.frequency.setValueAtTime(m.r(2500, 3600), 0.005); o.frequency.exponentialRampToValueAtTime(m.r(1100, 1700), 0.3); o.connect(e); e.connect(dest); }
 
+// ---- Fahndung (MS6): OD-Funk, Megafon, Warn-/Verhaftet-/Ausgelöscht-Signale ----
+function funkSnd(m) {                                                              // Funkspruch: Squelch, formantisches Geplapper durch Bandpass + Sättigung, Squelch-Ende
+  const dest = m.bus(0, 1, 0.12), radio = m.gain(1), hp = m.filt('highpass', 500), lp = m.filt('lowpass', 3200), sh = m.drive(5);
+  radio.connect(hp); hp.connect(lp); lp.connect(sh); sh.connect(dest);
+  m.hit(0, 0.05, 'bandpass', 1800, 1, 0.35, dest);
+  const VOW = [[[730, 8, 1], [1090, 10, 0.6]], [[270, 8, 1], [2290, 12, 0.5]], [[530, 8, 1], [1840, 10, 0.55]], [[570, 8, 1], [840, 10, 0.6]]]; let t = 0.12;
+  for (let w = 0; w < 5; w++) { for (let i = 0, n = 2 + ((m.rnd() * 3) | 0); i < n; i++) { const d = m.r(0.06, 0.12), src = m.osc('sawtooth', t, d); src.frequency.value = m.r(110, 150); const e = m.env([[t, 0], [t + 0.01, 0.3], [t + d - 0.01, 0.25], [t + d, 0.0001]]); for (const [f, q, a] of m.pick(VOW)) { const bp = m.filt('bandpass', f, q * 1.3), g = m.gain(a); src.connect(bp); bp.connect(g); g.connect(e); } e.connect(radio); t += d + m.r(0.01, 0.03); } t += m.r(0.08, 0.16); }
+  const n = m.noise(0, t + 0.2), nf = m.filt('bandpass', 2400, 0.5), ng = m.gain(0.03); n.connect(nf); nf.connect(ng); ng.connect(dest); m.hit(t, 0.07, 'bandpass', 1500, 1, 0.3, dest);
+}
+function megafonSnd(m) {                                                           // Megafon: tiefer, lauter, mehr Hall
+  const dest = m.bus(0, 1, 0.45), radio = m.gain(1), hp = m.filt('highpass', 300), lp = m.filt('lowpass', 2800), sh = m.drive(8); radio.connect(hp); hp.connect(lp); lp.connect(sh); sh.connect(dest);
+  const VOW = [[[730, 8, 1], [1090, 10, 0.6], [2440, 12, 0.3]], [[270, 8, 1], [2290, 12, 0.5]], [[300, 8, 1], [870, 10, 0.5]], [[530, 8, 1], [1840, 10, 0.55]]]; let t = 0.05;
+  for (let w = 0; w < 3; w++) { for (let i = 0; i < 3; i++) { const d = m.r(0.1, 0.18), src = m.osc('square', t, d); src.frequency.value = m.r(88, 104); const e = m.env([[t, 0], [t + 0.01, 0.4], [t + d - 0.01, 0.35], [t + d, 0.0001]]); for (const [f, q, a] of m.pick(VOW)) { const bp = m.filt('bandpass', f, q * 1.4), g = m.gain(a); src.connect(bp); bp.connect(g); g.connect(e); } e.connect(radio); t += d + 0.015; } t += 0.16; }
+  m.hit(0, 0.04, 'highpass', 3000, 0.7, 0.3, dest);
+}
+function stingHeat(m) { const dest = m.bus(0, 1, 0.2); [[0, 523], [0.11, 659], [0.22, 784]].forEach(([t, f]) => { const o = m.osc('square', t, 0.14), lp = m.filt('lowpass', 2400), e = m.env([[t, 0], [t + 0.005, 0.2], [t + 0.12, 0.0001]]); o.frequency.value = f; o.connect(lp); lp.connect(e); e.connect(dest); }); m.thump(0.3, 90, 40, 0.4, 0.8, dest); }
+function stingBusted(m) { const dest = m.bus(0, 1, 0.35); m.thump(0, 70, 30, 0.5, 1.0, dest); m.hit(0, 0.25, 'lowpass', 500, 0.8, 0.5, dest, 100); [[0.1, 196], [0.1, 233], [0.1, 311]].forEach(([t, f]) => { const o = m.osc('sawtooth', t, 1.4), lp = m.filt('lowpass', 800), e = m.env([[t, 0], [t + 0.05, 0.14], [t + 1.3, 0.0001]]); o.frequency.value = f; o.connect(lp); lp.connect(e); e.connect(dest); }); m.clicks(0.6, 0.62, 3, 1500, 3000, 0.3, dest); m.hit(0.65, 0.1, 'bandpass', 1200, 2, 0.4, dest); }
+function stingWasted(m) { const dest = m.bus(0, 1, 0.4); m.thump(0, 55, 25, 0.8, 1.0, dest); m.hit(0, 0.7, 'lowpass', 400, 0.8, 0.5, dest, 80); const o = m.osc('sine', 0.5, 1.6), e = m.env([[0.5, 0], [0.6, 0.16], [2.0, 0.0001]]); o.frequency.value = 1000; o.connect(e); e.connect(dest); }   // Flatline
+function stingClear(m) { const dest = m.bus(0, 1, 0.25); [[0, 659], [0.12, 523], [0.24, 392]].forEach(([t, f]) => { const o = m.osc('triangle', t, 0.3), e = m.env([[t, 0], [t + 0.005, 0.22], [t + 0.28, 0.0001]]); o.frequency.value = f; o.connect(e); e.connect(dest); }); }
+function droneShot(m) { const dest = m.bus(0, 1, 0.1); m.hit(0, 0.03, 'highpass', 3000, 0.7, 0.5, dest); const o = m.osc('square', 0, 0.08), e = m.env([[0, 0], [0.003, 0.15], [0.07, 0.0001]]); o.frequency.setValueAtTime(1500, 0); o.frequency.exponentialRampToValueAtTime(500, 0.07); o.connect(e); e.connect(dest); }
+
 // ------------------------------------------------------------------
 // Klangbank-Definitionen: id -> { len (s), variants, cat (Stimmen-Limit), bus, gain, first (zuerst backen), fn(m, variantIndex) }
 // "first" = was das Spiel sofort braucht (Explosion + Schreie); der Rest wird im Hintergrund nachgebacken.
@@ -383,6 +404,13 @@ const SOUND_DEFS = {
   alarm:   { len: 2.4, variants: 1, cat: 'sfx', bus: 'ambience', noiseLen: 2, fn: alarmSnd },
   feuer_loop: { len: 6.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 8, fn: fireLoop },
   skid_loop:  { len: 4.8, variants: 1, loop: true, peak: 0.45, bus: 'sfx', cat: 'ambience', noiseLen: 6, fn: skidLoop },
+  funk:          { len: 2.2, variants: 3, cat: 'sfx', bus: 'stimmen', noiseLen: 4, fn: funkSnd },
+  megafon:       { len: 2.2, variants: 2, cat: 'sfx', bus: 'stimmen', noiseLen: 4, fn: megafonSnd },
+  sting_heat:    { len: 1.2, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: stingHeat },
+  sting_busted:  { len: 2.4, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: stingBusted },
+  sting_wasted:  { len: 2.6, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: stingWasted },
+  sting_clear:   { len: 0.8, variants: 1, cat: 'ui', bus: 'ui', noiseLen: 2, fn: stingClear },
+  drohne_schuss: { len: 0.3, variants: 2, cat: 'schuss', bus: 'sfx', noiseLen: 2, fn: droneShot },
   schlag:        { len: 0.3, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: schlagSnd },
   faustschlag:   { len: 0.4, variants: 3, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: faustHit },
   pistole:       { len: 0.9, variants: 3, cat: 'schuss', bus: 'sfx', noiseLen: 3, fn: pistolSnd },
