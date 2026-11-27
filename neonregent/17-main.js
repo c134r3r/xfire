@@ -225,7 +225,7 @@ window.NR_TEST = {
   const t0 = performance.now(); World.init(genCity(+Q.get('seed') || C.CITY_SEED)); populateVehicles(+Q.get('seed') || C.CITY_SEED); Interiors.init(); G.cityMs = performance.now() - t0; HUD.init();
   Lightmap.build(G.ambient, C.LIGHTMAP_SCALE); G.rafMs = 16.7;
   G.state = 'menu';
-  $('startBtn').addEventListener('click', () => startGame());
+  $('startBtn').addEventListener('click', () => { if (Q.get('nointro') || Q.get('autostart') === '1') startGame(); else Intro.play(() => startGame()); });
   if (isTouch && !Settings.d.driveSet) { Settings.d.drive = 'direct'; }
   const driveLabel = () => { $('driveBtn').textContent = 'STEUERUNG: ' + (Settings.d.drive === 'direct' ? 'DIREKT' : 'KLASSISCH'); };
   $('driveBtn').addEventListener('click', () => { Settings.d.drive = Settings.d.drive === 'direct' ? 'classic' : 'direct'; Settings.d.driveSet = true; Settings.save(); driveLabel(); }); driveLabel();

@@ -109,6 +109,9 @@ body.debug #debugBox { display: block; }
 .tbtn { position: absolute; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: rgba(8,10,18,0.6); color: var(--accent); pointer-events: auto; }
 body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
 
+#intro { position: fixed; inset: 0; z-index: 50; background: #000; display: none; align-items: center; justify-content: center; cursor: pointer; } #intro.on { display: flex; }
+#introCanvas { width: min(100vw, 177.7vh); height: min(56.25vw, 100vh); image-rendering: auto; }
+#introSkip { position: absolute; right: 18px; bottom: 14px; font-family: var(--font-ui); font-size: 12px; letter-spacing: 3px; color: var(--muted); opacity: 0; transition: opacity 0.6s; }
 /* Missionen (MS8) */
 #mis { display: none; flex-direction: column; align-items: flex-start; gap: 2px; border-color: var(--mag); max-width: 300px; }
 #mis.on { display: flex; }
@@ -128,6 +131,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
 </head>
 <body>
 
+<div id="intro"><canvas id="introCanvas"></canvas><div id="introSkip">ÜBERSPRINGEN · Leertaste / Klick</div></div>
 <div id="wrap">
   <canvas id="gameCanvas"></canvas>
   <div id="hud">
@@ -223,6 +227,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
 <script src="neonregent/10-combat.js?v=20261127a"></script>
 <script src="neonregent/11-police.js?v=20261127a"></script>
 <script src="neonregent/12-missions.js?v=20261127a"></script>
+<script src="neonregent/12b-intro.js?v=20261127a"></script>
 <script src="neonregent/13-story.js?v=20261127a"></script>
 <script src="neonregent/14-render.js?v=20261127a"></script>
 <script src="neonregent/14b-facades.js?v=20261127a"></script>

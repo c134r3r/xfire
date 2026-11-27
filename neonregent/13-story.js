@@ -101,3 +101,12 @@ const MISSIONS = {
     reward: { cr: 1500, flags: ['M02'] }, outro: [['MANDAT', 'Mandat erfüllt. Die Regentensteuer sichert unser aller Zukunft.']] }
 };
 const MIS_ORDER = ['M00', 'M01', 'M02'];
+
+// Vorspann (12b-intro.js): fünf Bilder à ~3 s. Kein Wort zur Wendung.
+STR.intro = { beats: [
+  ['FEUERTAG', 'Acht Stunden Krieg. Die Welt draußen verbrannte.'],
+  ['41 JAHRE SPÄTER', 'HALOGEN: eine Stadt unter Dauerregen,', 'gebaut aus allem, was übrig blieb.'],
+  ['DER REGENT WACHT', 'Er hat sich zurückgezogen. Seine Stimme regiert weiter:', 'MANDAT.'],
+  ['TREUECHIP', 'Jeder Bürger trägt einen. Erfüllte Mandate zahlen sich aus.', 'Gescheiterte werden vollstreckt.'],
+  ['NUMMER 7741', 'Das bist du. Dein erstes Mandat beginnt jetzt.']
+] };
