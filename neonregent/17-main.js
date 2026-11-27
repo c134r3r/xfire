@@ -7,7 +7,7 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; Police.init(); G.weapon = 'faust'; G.own = { faust: true, pistole: false }; G.ammo = { pistole: 0 }; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; Police.init(); G.weapon = 'faust'; G.own = { faust: true }; G.ammo = {}; G.armor = 0; G.pu = { rapid: 0, shield: 0, slowmo: 0, drones: 0 }; G.grenades.length = 0; G.allyDrones.length = 0; initProps(); initCrates(); G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
   G.vehicles = G.vehicles.filter(v => !v.ai);
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
@@ -72,6 +72,7 @@ function step() {
   G.time++;
   G.trauma = Math.max(0, G.trauma - 0.024); G.hurtFlash *= 0.9; G.zoomPunch *= 0.9; G.kickX *= 0.75; G.kickY *= 0.75;
   if (G.freeze > 0) { G.freeze--; return; }
+  if (G.pu.slowmo > 0 && (G.time & 1)) { G.pu.slowmo--; return; }
   Input.poll(); if (G.respawn) G.in = Input.neutral(G.in);
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
@@ -81,7 +82,7 @@ function step() {
   Interiors.update();
   updateVehicles();
   if (!ABL.has('nosim')) { updateTraffic(); updatePeds(); }
-  updatePickups();
+  updatePickups(); updateCrates();
   updateParticles();
   updateCamera();
   updateDistrict(false);
@@ -185,8 +186,11 @@ window.NR_TEST = {
   interiorInfo: () => Interiors.list.map(b => ({ id: b.id, kind: b._kind, d: districtAt(b.x0 / C.TILE).id })),
   heat: () => ({ pts: G.wanted.pts, level: G.wanted.level, seen: G.wanted.seen, units: Police.count() }),
   crime: (k, n) => crime(k, n),
-  give: (w, n = 24) => { G.own[w] = true; if (w === 'pistole') G.ammo.pistole = Math.min(99, G.ammo.pistole + n); setWeapon(w); },
-  weapon: () => ({ w: G.weapon, ammo: G.ammo.pistole, own: G.own }),
+  give: (w, n) => { giveWeapon(w, n); setWeapon(w); },
+  weapon: () => ({ w: G.weapon, ammo: G.ammo[G.weapon] || 0, own: G.own, armor: G.armor, pu: G.pu }),
+  powerup: t => takePowerup(t),
+  crates: () => G.crates.map(c => ({ x: c.x, y: c.y, type: c.type })),
+  props: () => G.props.length,
   blockedAt: (x, y) => World.blocked(x, y, C.PED_R),
   tileAt: (x, y) => World.tile(x, y),
   explosion(x, y, s) { explosion(x, y, s); },

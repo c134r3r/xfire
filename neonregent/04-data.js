@@ -144,11 +144,24 @@ const LOOT = {
   kasse:        { n: 'Kasse', cr: [15, 60], f: 0.15 }
 };
 
-// ---- Waffen (MS7 Einstieg): Fäuste sind immer da; die Pistole kauft man beim Waffenhändler (WORLD.md §6) ----
-// cd = Ticks zwischen zwei Aktionen, dmg = Schaden, range = Reichweite (px), speed = Geschossgeschwindigkeit (px/Tick), spread = Streuung (rad)
+// ---- Waffen (WORLD.md §6): Fäuste immer; Pistole/MP/Schrot/Flammenwerfer/Rakete/EMP per Händler oder Mission ----
+// cd = Ticks zwischen Aktionen, dmg = Schaden (Schrot: je Kugel), speed = Geschossgeschwindigkeit (px/Tick), spread = Streuung (rad), range = Reichweite (px),
+// max = Munitionsgrenze, price/ammoPrice/pack = Händlerpreis, Preis je Munitionspaket, Paketgröße; act = ab diesem Akt im Angebot
 const WEAPONS = {
-  faust:   { name: 'FAUST', melee: true, cd: 15, dmg: 7, range: 40, arc: 1.0 },
-  pistole: { name: 'PISTOLE', cd: 13, dmg: 14, speed: 15, range: 560, spread: 0.035, price: 120, ammoPrice: 40, pack: 24, maxAmmo: 99 }
+  faust:   { name: 'FAUST', melee: true, cd: 15, dmg: 7, range: 40, arc: 1.0, slot: 1 },
+  pistole: { name: 'PISTOLE', cd: 16, dmg: 12, speed: 15, range: 600, spread: 0.03, max: 240, maxAmmo: 240, price: 120, ammoPrice: 40, pack: 24, slot: 2, drive: true, snd: 'pistole' },
+  smg:     { name: 'MP „HORNISSE“', cd: 5, dmg: 7, speed: 16, range: 520, spread: 0.09, max: 400, maxAmmo: 400, price: 1500, ammoPrice: 300, pack: 200, slot: 3, drive: true, snd: 'smg' },
+  shotgun: { name: 'SCHROTFLINTE', cd: 42, dmg: 6, pellets: 7, speed: 13, range: 300, spread: 0.32, max: 60, maxAmmo: 60, price: 2500, ammoPrice: 300, pack: 30, slot: 4, snd: 'schrot' },
+  flamer:  { name: 'FLAMMENWERFER', beam: true, cd: 2, dmg: 1.4, range: 140, max: 400, maxAmmo: 400, price: 4000, ammoPrice: 400, pack: 200, slot: 5 },
+  rocket:  { name: 'RAKETENWERFER', cd: 70, dmg: 70, speed: 9, range: 900, max: 10, maxAmmo: 10, price: 8000, ammoPrice: 1000, pack: 5, slot: 6, act: 2 },
+  emp:     { name: 'EMP-GRANATE', cd: 40, range: 300, max: 10, maxAmmo: 10, price: 300, ammoPrice: 300, pack: 1, slot: 7 }
+};
+const WEAPON_ORDER = ['faust', 'pistole', 'smg', 'shotgun', 'flamer', 'rocket', 'emp'];
+// Power-ups (WORLD.md §7): Dauer in Sekunden (0 = sofort), Kurzname fürs HUD
+const POWERUPS = {
+  rapid: { name: 'FEUERRATE', dur: 10, color: '#ffd84a' }, shield: { name: 'PANZERFELD', dur: 8, color: '#3fe8ff' }, slowmo: { name: 'REFLEX', dur: 7, color: '#a66bff' },
+  drones: { name: 'KAMPFDROHNEN', dur: 15, color: '#9dff4a' }, repair: { name: 'MEDIKIT', dur: 0, color: '#7dffd8' }, empwave: { name: 'EMP-WELLE', dur: 0, color: '#3fe8ff' },
+  bribe: { name: 'BESTECHUNGSCHIP', dur: 0, color: '#ffd84a' }, vest: { name: 'PANZERWESTE', dur: 0, color: '#9fb4d8' }
 };
 const COMIC = ['PAFF!', 'WUMM!', 'KLATSCH!', 'ZACK!', 'BAMM!', 'PENG!'];
 

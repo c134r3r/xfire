@@ -56,7 +56,7 @@ Bus.on('boom', (x, y, s) => { let n = 0; for (const p of G.peds) if (p.team !== 
 
 // ---- Spieler: Schaden, Regeneration, Verhaftet / Ausgelöscht ----
 function damagePlayer(dmg, src) {
-  const p = G.player; if (!p || G.respawn) return; p.hp -= dmg; p.lastHit = G.time; G.hurtFlash = Math.max(G.hurtFlash, Math.min(0.7, dmg / 20)); addTrauma(0.08);
+  const p = G.player; if (!p || G.respawn) return; if (G.pu.shield > 0) { sparks(p.x, p.y, 3, '#3fe8ff', 3); return; } if (G.armor > 0) { const ab = Math.min(G.armor, dmg * 0.7); G.armor -= ab; dmg -= ab; } p.hp -= dmg; p.lastHit = G.time; G.hurtFlash = Math.max(G.hurtFlash, Math.min(0.7, dmg / 20)); addTrauma(0.08);
   Aud.playRec('treffer', 'mann', { gain: 0.7, speaker: Aud.speakerFor('mann', 'treffer') });
   if (p.hp <= 0) playerDown('wasted');
 }
@@ -78,7 +78,7 @@ function updateRespawn() {
   G.fadeA = R_.t < 80 ? 0 : R_.t < 110 ? (R_.t - 80) / 30 : R_.t < 150 ? 1 - (R_.t - 110) / 40 : 0;
   if (R_.t === 110) {                                                             // unter Schwarz: umsetzen, Strafe, Fahndung 0
     const loss = Math.min(G.credits || 0, Math.max(100, Math.floor((G.credits || 0) * 0.1))); G.credits = (G.credits || 0) - loss;
-    if (R_.kind === 'busted') { G.own.pistole = false; G.ammo.pistole = 0; G.weapon = 'faust'; }
+    if (R_.kind === 'busted') { G.own = { faust: true }; G.ammo = {}; G.weapon = 'faust'; G.armor = 0; }
     const f = respawnTarget(R_.kind); p.x = f.x; p.y = f.y; p.vx = p.vy = 0; p.hp = p.maxHp; p.dodge = 0; G.cam.x = p.x; G.cam.y = p.y;
     Police.standDown(true); G.wanted.pts = 0; G.wanted.level = 0; G.hurtFlash = 0;
     HUD.say(R_.kind === 'busted' ? 'OD · WACHE' : 'KLINIK', R_.kind === 'busted' ? `Kaution ${loss} CR einbehalten. Waffen konfisziert (Fäuste dürfen Sie behalten). Bitte keine Wiederholung.` : `Behandlung abgeschlossen. Gebühr ${loss} CR. Der Regent wünscht gute Besserung.`, '#4a8cff');
@@ -168,7 +168,7 @@ const Police = {
   updateDrones() {
     const p = G.player;
     for (let i = G.drones.length - 1; i >= 0; i--) {
-      const d = G.drones[i]; d.t++; d.ang += 0.012; const tx = p.x + Math.cos(d.ang) * 150, ty = p.y + Math.sin(d.ang) * 110; d.x += clamp(tx - d.x, -3.2, 3.2) * 0.06 * 2; d.y += clamp(ty - d.y, -3.2, 3.2) * 0.06 * 2;
+      const d = G.drones[i]; if (d.stun > 0) { d.stun--; d.y += 0.3; if (d.hp <= 0) { explosion(d.x, d.y, 0.8); crime('drone'); G.drones.splice(i, 1); } continue; } d.t++; d.ang += 0.012; const tx = p.x + Math.cos(d.ang) * 150, ty = p.y + Math.sin(d.ang) * 110; d.x += clamp(tx - d.x, -3.2, 3.2) * 0.06 * 2; d.y += clamp(ty - d.y, -3.2, 3.2) * 0.06 * 2;
       const dist = Math.hypot(p.x - d.x, p.y - d.y);
       if (--d.cd <= 0 && dist < 420 && !G.inside && !G.respawn) { d.cd = 55; const a = Math.atan2(p.y - d.y, p.x - d.x) + rand(-0.12, 0.12); G.ebullets.push({ x: d.x, y: d.y, vx: Math.cos(a) * 8, vy: Math.sin(a) * 8, life: 70, dmg: 4, air: true }); Aud.play('drohne_schuss', { x: d.x, y: d.y, gain: 0.5, cat: 'sfx' }); }
       if (d.hp <= 0) { explosion(d.x, d.y, 0.8); crime('drone'); G.drones.splice(i, 1); }

@@ -242,7 +242,7 @@ function updatePickups() {
     const k = G.pickups[i]; k.bob += 0.1; if (--k.life <= 0) { G.pickups.splice(i, 1); continue; }
     if (Math.hypot(k.x - p.x, k.y - p.y) < (p.veh ? 30 : 20)) {
       G.pickups.splice(i, 1);
-      if (k.type === 'gun') { G.own.pistole = true; G.ammo.pistole = Math.min(99, G.ammo.pistole + k.v); floatText(k.x, k.y - 8, 'DIENSTWAFFE +' + k.v, '#ffd84a', 12); Aud.play('klick', { gain: 0.8, cat: 'ui', bus: 'ui' }); if (G.weapon === 'faust') setWeapon('pistole'); }
+      if (k.type === 'gun') { giveWeapon('pistole', k.v); floatText(k.x, k.y - 8, 'DIENSTWAFFE +' + k.v, '#ffd84a', 12); Aud.play('klick', { gain: 0.8, cat: 'ui', bus: 'ui' }); if (G.weapon === 'faust') setWeapon('pistole'); }
       else if (k.type === 'cr') { G.credits = (G.credits || 0) + k.v; floatText(k.x, k.y - 8, STR.loot.cr(k.v), '#ffd84a', 13); Aud.play('kasse', { gain: 0.7, cat: 'ui', bus: 'ui' }); }
     }
   }

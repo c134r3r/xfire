@@ -198,6 +198,8 @@ function updateVehicles() {
   if (p && G.in.enterP) { if (p.veh) { if (Math.hypot(p.veh.vx, p.veh.vy) < 14) exitVehicle(p); } else if (near && Math.hypot(near.vx, near.vy) < (near.ai ? 4.5 : 2.5)) enterVehicle(p, near); }
   for (const v of G.vehicles) {
     if (v.alarm > 0) v.alarm--;
+    if (v.flameT > 0) v.flameT -= 0.5;
+    if (v.empT > 0) { v.empT--; v.vx *= 0.94; v.vy *= 0.94; if (!v.driver) { if (G.time % 20 === 0) sparks(v.x, v.y, 2, '#3fe8ff', 3); updateBurning(v); continue; } }
     if (v.breaking > 0) { if (!near || near !== v || nd > 40) v.breaking = 0; else if (--v.breaking === 0) { v.unlocked = true; Bus.emit('crime', 'breakin'); if (p && !p.veh) enterVehicle(p, v); } }
     const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai;
     if (!active) { updateBurning(v); continue; }

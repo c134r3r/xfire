@@ -237,7 +237,7 @@ function render() {
   // 2. Innenböden offener Gebäude, 3. Entitäten: Behälter, Bewohner, Fahrzeuge (Lack), Spieler, Trümmer; danach die Innenwände
   const p = G.player, openI = Interiors.open();
   Interiors.drawFloors(openI);
-  drawPickups('body'); if (!ABL.has('nopeds')) drawPeds(); Interiors.drawEntities(openI); if (!ABL.has('novehicles')) drawVehicles('body');
+  drawPickups('body'); drawCrates('body'); drawProps(); if (!ABL.has('nopeds')) drawPeds(); Interiors.drawEntities(openI); if (!ABL.has('novehicles')) drawVehicles('body');
   if (p && G.state !== 'menu' && !p.veh) drawPlayer(p);
   for (const q of G.parts) {
     if (q.kind !== 'debris' || !onScreen(q.x, q.y, 30)) continue;
@@ -266,7 +266,7 @@ function render() {
 
   drawDrones();                                                                // Luftschicht: Drohnen über den Dächern
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; drawBullets(); drawEBullets(); drawDroneGlow(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; drawBullets(); drawGrenades(); drawAllyDrones(); drawEBullets(); drawDroneGlow(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); drawCrates('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {

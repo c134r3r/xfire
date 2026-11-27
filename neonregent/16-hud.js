@@ -4,6 +4,7 @@
 
 const $ = id => document.getElementById(id);
 
+function puText() { let t = ''; for (const k in G.pu) if (G.pu[k] > 0) t += ' · ' + POWERUPS[k].name + ' ' + Math.ceil(G.pu[k] / 60) + 's'; return t; }
 const HUD = {
   bannerT: 0, pager: { q: [], cur: null, i: 0, hold: 0 },
   init() {
@@ -79,7 +80,7 @@ const HUD = {
     const v = p.veh, vc = $('vehCard'); vc.style.display = v ? 'flex' : 'none';
     if (v) { $('vehName').textContent = VEHICLES[v.cls].name; $('vehFill').style.width = clamp(v.hp / v.maxHp, 0, 1) * 100 + '%'; $('boostFill').style.width = v.boost + '%'; }
     $('tbEnter').textContent = v ? 'AUSSTEIGEN' : (G.nearVeh ? 'EINSTEIGEN' : 'EIN / AUS'); $('tbAct').textContent = v ? 'BREMSE' : 'ROLLE'; $('tbSprint').textContent = v ? 'BOOST' : 'SPRINT'; $('tbHorn').style.display = v ? '' : 'none';
-    const W = WEAPONS[G.weapon]; $('wpnName').textContent = W.name; $('wpnAmmo').textContent = W.melee ? (isTouch ? '' : '[LMB / J]') : '▮ ' + G.ammo.pistole; $('tbFire').textContent = W.melee ? 'SCHLAG' : 'FEUER'; $('tbSwap').style.display = G.own.pistole && isTouch ? 'flex' : 'none';
+    const W = WEAPONS[G.weapon]; $('wpnName').textContent = W.name; $('wpnAmmo').textContent = (W.melee ? (isTouch ? '' : '[LMB / J]') : '▮ ' + (G.ammo[G.weapon] || 0)) + (G.armor > 0 ? ' · WESTE ' + Math.ceil(G.armor) : '') + puText(); $('tbFire').textContent = W.melee ? 'SCHLAG' : 'FEUER'; $('tbSwap').style.display = Object.keys(G.own).length > 1 && isTouch ? 'flex' : 'none';
     const I = Interiors.cur; $('place').classList.toggle('on', !!I); if (I) $('placeName').textContent = I.name;
     const nf = Object.keys(G.finds).length; $('findVal').textContent = nf + '/' + FUNDE.length; $('tbUse').style.display = G.near && isTouch ? 'flex' : 'none';
     this.radar();

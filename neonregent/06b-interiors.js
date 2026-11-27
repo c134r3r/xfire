@@ -211,6 +211,15 @@ const Interiors = {
     for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y) - 8; if (d < bd) { bd = d; best = { k: 'npc', o: n, x: n.x, y: n.y - 10, label: n.role === 'empfang' && I.kind === 'chipwaesche' ? `CHIP WASCHEN · ${300 + 400 * G.wanted.level} CR` : n.role === 'haendler' ? (G.own.pistole ? `MUNITION KAUFEN · ${WEAPONS.pistole.ammoPrice} CR` : `PISTOLE KAUFEN · ${WEAPONS.pistole.price} CR`) : n.role === 'wirt' ? 'NUDELSUPPE · 8 CR' : 'ANSPRECHEN' }; } }
     return best;
   },
+  // Händler: bietet die aktuell gewählte (oder nächste fehlende) Waffe an. Reihenfolge: gewählte Waffe auffüllen, sonst nächste unbesessene, sonst Weste.
+  dealerOffer() {
+    const act = G.actNo || 1, cur = WEAPONS[G.weapon];
+    if (cur && !cur.melee && (G.ammo[G.weapon] || 0) < cur.max) return { kind: 'ammo', id: G.weapon, w: cur };
+    for (const id of WEAPON_ORDER) { const w = WEAPONS[id]; if (!G.own[id] && !w.melee && (w.act || 1) <= act) return { kind: 'weapon', id, w }; }
+    if ((G.armor || 0) < 100) return { kind: 'vest' };
+    for (const id of WEAPON_ORDER) { const w = WEAPONS[id]; if (G.own[id] && !w.melee && (G.ammo[id] || 0) < w.max) return { kind: 'ammo', id, w }; }
+    return { kind: 'full', w: cur };
+  },
   interact(I) {
     const t = this.nearest(I); if (!t) return; this.talkCd = 24;
     if (t.k === 'npc') {
@@ -220,12 +229,14 @@ const Interiors = {
         if (lvl === 0) line = 'Ihr Chip ist sauber. Zu sauber. Das fällt auf. Kommen Sie wieder, wenn Sie etwas getan haben.';
         else if ((G.credits || 0) >= price) { G.credits -= price; G.wanted.pts = 0; G.wanted.level = 0; Police.standDown(true); line = barkPick(STR.police.chipwash); Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); Aud.play('sting_clear', { gain: 0.7, cat: 'ui', bus: 'ui' }); HUD.banner('CHIP GEWASCHEN', 'Fahndung gelöscht', 1800); }
         else line = `Chip-Wäsche kostet ${price} CR. Kreditkarten nehmen wir nicht – wir kennen unsere Kunden.`;
-      } else if (n.role === 'haendler') {                                              // Pistole 120 CR, Munition 40 CR je 24 Schuss
-        const w = WEAPONS.pistole;
-        if (!G.own.pistole) { if ((G.credits || 0) >= w.price) { G.credits -= w.price; G.own.pistole = true; G.ammo.pistole = w.pack; setWeapon('pistole'); line = 'Pistole, geölt, 24 Schuss. Garantie: bis zur Tür. Viel Spaß – und nicht auf mich zielen.'; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); } else line = `Pistole: ${w.price} CR. Ohne Credits gibt es nur Prospekte und gute Ratschläge.`; }
-        else if (G.ammo.pistole >= w.maxAmmo) line = 'Du hast schon mehr Munition als Freunde. Geh nach Hause.';
-        else if ((G.credits || 0) >= w.ammoPrice) { G.credits -= w.ammoPrice; G.ammo.pistole = Math.min(w.maxAmmo, G.ammo.pistole + w.pack); line = `${w.pack} Schuss, ${w.ammoPrice} CR. Der Regent dankt für deinen Beitrag zur Ordnung.`; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); }
-        else line = `Munition: ${w.ammoPrice} CR für ${w.pack} Schuss. Kreide gibt es bei mir nicht.`;
+      } else if (n.role === 'haendler') {                                              // Waffenhändler: nächste fehlende Waffe kaufen, sonst Munition auffüllen (Heat >= 2: verweigert)
+        if (G.wanted.level >= 2) line = 'Komm wieder, wenn die Ordner weg sind.';
+        else { const buy = this.dealerOffer(); const w = buy.w, id = buy.id;
+          if (buy.kind === 'full') line = 'Du hast schon mehr Munition als Freunde. Geh nach Hause.';
+          else if (buy.kind === 'weapon') { if ((G.credits || 0) >= w.price) { G.credits -= w.price; giveWeapon(id); setWeapon(id); line = `${w.name}, geölt, ${w.pack} Schuss. Garantie: bis zur Tür. Und nicht auf mich zielen.`; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); } else line = `${w.name}: ${w.price} CR. Ohne Credits gibt es nur Prospekte und gute Ratschläge.`; }
+          else if (buy.kind === 'vest') { if ((G.credits || 0) >= 500) { G.credits -= 500; G.armor = 100; line = 'Panzerweste. Hält alles auf, außer Wahrheit.'; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); } else line = 'Panzerweste: 500 CR. Der Tod ist billiger, aber nicht besser.'; }
+          else if ((G.credits || 0) >= w.ammoPrice) { G.credits -= w.ammoPrice; giveWeapon(id); line = `${w.pack} Schuss für ${w.name}, ${w.ammoPrice} CR. Der Regent dankt für deinen Beitrag zur Ordnung.`; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); }
+          else line = `Munition: ${w.ammoPrice} CR für ${w.pack} Schuss. Kreide gibt es bei mir nicht.`; }
       } else if (n.role === 'wirt') {                                                  // Nudelsuppe: 8 CR, +25 Vital
         if ((G.credits || 0) >= 8) { G.credits -= 8; G.player.hp = Math.min(G.player.maxHp, G.player.hp + 25); line = 'Nudelsuppe? Acht Credits. Schmeckt nach Salz, wirkt wie Medizin.'; Aud.play('kasse', { gain: 0.7, cat: 'ui', bus: 'ui' }); floatText(G.player.x, G.player.y - 18, '+25 VITAL · −8 CR', '#7dffd8', 12); }
         else line = 'Ohne Credits keine Suppe. Das ist keine Willkür. Das ist Ordnung.';

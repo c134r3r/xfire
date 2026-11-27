@@ -93,17 +93,20 @@ function updateParticles() {
 // Ohne Waffe boxt der Held: Jab, Jab, Haken (dritter Schlag kräftiger). Passanten gehen k.o. statt zu sterben; Kugeln töten.
 // Exportiert: updateCombat, setWeapon, drawBullets, punch, shoot
 // ------------------------------------------------------------------
+function giveWeapon(id, n) { const w = WEAPONS[id]; if (!w) return; G.own[id] = true; if (!w.melee) G.ammo[id] = Math.min(w.max, (G.ammo[id] || 0) + (n === undefined ? w.pack : n)); }
 function setWeapon(id) {
   if (!G.own[id] || G.weapon === id) return; G.weapon = id; if (G.player) { G.player.cd = 8; }
   Aud.play('klick', { gain: 0.6, cat: 'ui', bus: 'ui' }); HUD.weaponFlash();
 }
+function cycleWeapon(dir) { const own = WEAPON_ORDER.filter(k => G.own[k]); if (own.length < 2) return; setWeapon(own[(own.indexOf(G.weapon) + dir + own.length) % own.length]); }
 function updateCombat() {
   const p = G.player, i = G.in; if (!p || G.state !== 'play') return;
   if (p.cd > 0) p.cd--; if (p.punchT > 0) p.punchT--; if (p.recoil > 0) p.recoil--;
-  if (i.weaponSlot === 1) setWeapon('faust'); else if (i.weaponSlot === 2) setWeapon('pistole');
-  if (i.swapP || i.weaponNextP || i.weaponPrevP) setWeapon(G.weapon === 'faust' ? 'pistole' : 'faust');
-  if (i.fire && p.cd <= 0 && !G.mapOpen) { if (WEAPONS[G.weapon].melee) punch(p); else shoot(p); }
-  updateBullets();
+  if (i.weaponSlot) { const k = WEAPON_ORDER.find(k => WEAPONS[k].slot === i.weaponSlot); if (k) setWeapon(k); }
+  if (i.swapP || i.weaponNextP) cycleWeapon(1); else if (i.weaponPrevP) cycleWeapon(-1);
+  const W = WEAPONS[G.weapon];
+  if (i.fire && p.cd <= 0 && !G.mapOpen && !G.respawn) { if (W.melee) punch(p); else if (p.veh && !W.drive) { p.cd = 20; floatText(p.x, p.y - 20, 'Nicht aus dem Auto.', '#8a93a6', 11); } else shoot(p); }
+  updatePowerups(); updateBullets(); updateGrenades(); updateProps(); updateAllyDrones();
 }
 // Faustschlag: Kegel vor dem Helden. Treffer: Rückstoß, Treffer-Laut aus den Aufnahmen, Comic-Wort. Dritter Schlag (Haken) = mehr Schaden.
 function punch(p) {
@@ -121,21 +124,133 @@ function punch(p) {
   if (!hits) for (const I of Interiors.cur ? [Interiors.cur] : []) for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < w.range + 8 && Math.abs(angDiff(p.a, Math.atan2(n.y - p.y, n.x - p.x))) < 0.7) { Aud.play('faustschlag', { x: n.x, y: n.y, gain: 0.9, cat: 'sfx' }); bark(n, 'Hey! Hier drin wird nicht geboxt! Nur gegessen.', 180); G.shake = 1; hits++; break; } }
   if (hits) { G.freeze = Math.max(G.freeze, p.combo === 2 ? 4 : 2); addTrauma(p.combo === 2 ? 0.2 : 0.1); const fx = p.x + dx * 26, fy = p.y + dy * 26; glow(fx, fy, 14, '#fff1c0', 5); sparks(fx, fy, 4, '#ffd27a', 4, p.a, 0.8); floatText(fx, fy - 12, p.combo === 2 ? 'WUMM!' : COMIC[Math.floor(R.fn() * COMIC.length)], '#ffe48a', 12); }
 }
+function fireSound(id, p, o = {}) { Aud.play('pistole', Object.assign({ x: p.x, y: p.y, gain: 1, cat: 'schuss' }, o)); }
 function shoot(p) {
-  const w = WEAPONS.pistole;
-  if (G.ammo.pistole <= 0) { p.cd = 22; Aud.play('klick', { x: p.x, y: p.y, gain: 0.8, cat: 'sfx' }); floatText(p.x, p.y - 20, 'KEINE MUNITION', '#ff3b4a', 11); return; }
-  G.ammo.pistole--; p.cd = w.cd; p.recoil = 5;
-  const sp = w.spread * (p.veh ? 1.6 : 1), a = p.a + (R.fn() - 0.5) * 2 * sp, c = Math.cos(p.a), s = Math.sin(p.a), ox = p.x + c * 16 - s * 4, oy = p.y + s * 16 + c * 4;
-  G.bullets.push({ x: ox, y: oy, vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed, life: Math.round(w.range / w.speed), dmg: w.dmg });
-  muzzleFlash(ox, oy, p.a, 1); addTrauma(0.05);
-  part({ kind: 'debris', x: p.x + c * 6 - s * 8, y: p.y + s * 6 + c * 8, z: 6, vx: -s * 1.6 + rand(-0.3, 0.3), vy: c * 1.6 + rand(-0.3, 0.3), vz: rand(2, 3.5), size: 1.4, life: 40, rot: 0, vr: 0.4, color: '#c9a227', burning: false, drag: 0.97 });   // Hülse
-  Aud.play('pistole', { x: p.x, y: p.y, gain: 1, cat: 'schuss' }); Bus.emit('gunshot', p.x, p.y);
+  const id = G.weapon, w = WEAPONS[id], pu = G.pu;
+  if ((G.ammo[id] || 0) <= 0) { p.cd = 22; Aud.play('klick', { x: p.x, y: p.y, gain: 0.8, cat: 'sfx' }); floatText(p.x, p.y - 20, 'KEINE MUNITION', '#ff3b4a', 11); return; }
+  G.ammo[id]--; p.cd = Math.max(1, Math.round(w.cd * (pu.rapid > 0 ? 0.5 : 1))); p.recoil = 5;
+  const c = Math.cos(p.a), s = Math.sin(p.a), ox = p.x + c * 16 - s * 4, oy = p.y + s * 16 + c * 4, sp = w.spread * (p.veh ? 1.5 : 1);
+  if (id === 'flamer') { flameTick(p, ox, oy); return; }
+  if (id === 'emp') { G.grenades.push({ x: ox, y: oy, a: p.a, t: 0, T: 36, d: Math.min(w.range, Math.hypot((G.in.mx || 0) - 0, 0) || w.range) }); Aud.play('klick', { x: p.x, y: p.y, gain: 1, cat: 'sfx', rate: 0.7 }); return; }
+  if (id === 'rocket') { G.bullets.push({ x: ox, y: oy, vx: c * w.speed, vy: s * w.speed, life: Math.round(w.range / w.speed), dmg: w.dmg, rocket: true });
+    Aud.play('pistole', { x: p.x, y: p.y, gain: 1.1, cat: 'schuss', rate: 0.38 }); addTrauma(0.2); muzzleFlash(ox, oy, p.a, 1.6, '#ffb060'); smoke(p.x - c * 10, p.y - s * 10, 10, 'light', 30); Bus.emit('gunshot', p.x, p.y); return; }
+  const n = w.pellets || 1;
+  for (let k = 0; k < n; k++) { const a = p.a + (R.fn() - 0.5) * 2 * sp; G.bullets.push({ x: ox, y: oy, vx: Math.cos(a) * w.speed * (n > 1 ? 0.85 + R.fn() * 0.3 : 1), vy: Math.sin(a) * w.speed * (n > 1 ? 0.85 + R.fn() * 0.3 : 1), life: Math.round(w.range / w.speed), dmg: w.dmg }); }
+  muzzleFlash(ox, oy, p.a, id === 'shotgun' ? 1.5 : 1); addTrauma(id === 'shotgun' ? 0.16 : 0.05);
+  if (id !== 'smg' || G.time % 2 === 0) part({ kind: 'debris', x: p.x + c * 6 - s * 8, y: p.y + s * 6 + c * 8, z: 6, vx: -s * 1.6 + rand(-0.3, 0.3), vy: c * 1.6 + rand(-0.3, 0.3), vz: rand(2, 3.5), size: id === 'shotgun' ? 2 : 1.4, life: 40, rot: 0, vr: 0.4, color: id === 'shotgun' ? '#c0392b' : '#c9a227', burning: false, drag: 0.97 });
+  fireSound(id, p, id === 'smg' ? { rate: 1.35, gain: 0.8 } : id === 'shotgun' ? { rate: 0.55, gain: 1.25 } : {}); Bus.emit('gunshot', p.x, p.y);
+}
+// Flammenwerfer: Kegel (140 px). Personen brennen (2 Schaden/Tick-Intervall, 2 s), Fahrzeuge fangen nach 1 s Beschuss Feuer.
+function flameTick(p, ox, oy) {
+  const w = WEAPONS.flamer, ang = p.a;
+  for (let k = 0; k < 2; k++) { const a = ang + rand(-0.14, 0.14), sp = rand(4, 6.5); part({ kind: 'glow', x: ox, y: oy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size: rand(10, 16), color: pick(['#ff8a2a', '#ffd27a', '#ff5a1a']), life: 16, grow: 0.9, drag: 0.93 }); }
+  if (G.time % 3 === 0) smoke(ox + Math.cos(ang) * 60, oy + Math.sin(ang) * 60, 8, 'dark', 26, 0, -0.3, 0.5);
+  Lights.add(ox + Math.cos(ang) * 50, oy + Math.sin(ang) * 50, 120, '#ff8a2a', 0.8);
+  if (G.time % 8 === 0) Aud.play('pistole', { x: p.x, y: p.y, gain: 0.45, cat: 'sfx', rate: 0.22 });
+  const inCone = (x, y, r) => { const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy); return d < w.range + r && d > 0.1 && Math.abs(angDiff(ang, Math.atan2(dy, dx))) < 0.28 + r / Math.max(d, 20); };
+  for (const q of G.peds) if (q.state !== 'dead' && inCone(q.x, q.y, 8)) { q.burnT = 120; if (!q.fireSrc) { q.fireSrc = true; Bus.emit('assault', q, 'fire'); } }
+  for (const v of G.vehicles) if (!v.dead && v !== p.veh && inCone(v.x, v.y, 20)) { v.flameT = (v.flameT || 0) + 2; damageVeh(v, 0.4, 'fire'); if (v.flameT > 60 && !v.burn) { v.hp = 0; damageVeh(v, 1, 'fire'); } }
+  for (const b of G.props) if (!b.dead && inCone(b.x, b.y, 10)) b.hp -= 3;
+  for (const d of G.drones) if (inCone(d.x, d.y, 8)) d.hp -= 0.5;
+}
+// Brennende Personen: Schaden alle 10 Ticks, panisch
+function burnPeds() {
+  for (const q of G.peds) if (q.burnT > 0) {
+    q.burnT--; if (q.state === 'dead') { q.burnT = 0; continue; }
+    if (G.time % 8 === 0) { smoke(q.x, q.y - 6, 5, 'dark', 20, 0, -0.4, 0.3); glow(q.x + rand(-3, 3), q.y - rand(2, 8), 8, '#ff8a2a', 10); if (q.state !== 'down') { q.state = 'flee'; q.panic = 200; } hurtPedBurn(q); }
+    if (q.burnT === 0) q.fireSrc = false;
+  }
+}
+function hurtPedBurn(q) { q.hp -= 2; if (q.hp <= 0) killPed(q, null); }
+function updatePowerups() {
+  const pu = G.pu; for (const k in pu) if (pu[k] > 0) pu[k]--;
+  burnPeds();
+}
+// ---- EMP-Granate: Bogenwurf, lähmt Drohnen/Fahrzeuge in 110 px für 4 s (15 Schaden an Drohnen) ----
+function updateGrenades() {
+  for (let i = G.grenades.length - 1; i >= 0; i--) {
+    const g = G.grenades[i]; g.t++; const k = g.t / g.T, sp = WEAPONS.emp.range / g.T; g.x += Math.cos(g.a) * sp; g.y += Math.sin(g.a) * sp; g.z = Math.sin(k * Math.PI) * 26;
+    if (g.t >= g.T) { G.grenades.splice(i, 1); empBurst(g.x, g.y, 110); }
+  }
+}
+function empBurst(x, y, r) {
+  for (let k = 0; k < 24; k++) { const a = k / 24 * TAU; sparks(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9, 2, '#3fe8ff', 3); }
+  glow(x, y, r * 1.6, '#3fe8ff', 14, 0, 0, 1.2); Lights.add(x, y, r * 2, '#3fe8ff', 1); addTrauma(0.15); Aud.play('querschlaeger', { x, y, gain: 1, cat: 'sfx', rate: 0.6 });
+  for (const d of G.drones) if (Math.hypot(d.x - x, d.y - y) < r) { d.hp -= 15; d.stun = 240; }
+  for (const v of G.vehicles) if (!v.dead && Math.hypot(v.x - x, v.y - y) < r && v !== G.player.veh) { v.empT = 240; v.vx *= 0.4; v.vy *= 0.4; v.engine = false; floatText(v.x, v.y - 20, 'SYSTEM AUS', '#3fe8ff', 11); }
+  for (const q of G.peds) if (q.team === 'od' && q.state !== 'dead' && Math.hypot(q.x - x, q.y - y) < r) { q.frozen = 120; }
+}
+// ---- Rote Fässer (Kettenreaktion) ----
+function initProps() {
+  G.props.length = 0; const rng = mulberry(C.CITY_SEED ^ 0x5bd1);
+  let n = 0, tries = 0; while (n < 60 && tries++ < 4000) {
+    const tx = 4 + Math.floor(rng() * (World.W - 8)), ty = 4 + Math.floor(rng() * (World.H - 8)); if (World.tiles[ty * World.W + tx] !== TK.SIDEWALK) continue;
+    const x = (tx + 0.5) * C.TILE + (rng() - 0.5) * 20, y = (ty + 0.5) * C.TILE + (rng() - 0.5) * 20; if (World.blocked(x, y, 8)) continue;
+    G.props.push({ x, y, hp: 24, kind: 'barrel' }); n++; if (rng() < 0.45 && !World.blocked(x + 14, y + 6, 8)) G.props.push({ x: x + 14, y: y + 6, hp: 24, kind: 'barrel' });
+  }
+}
+function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function updateProps() {
+  for (let i = G.props.length - 1; i >= 0; i--) { const b = G.props[i];
+    if (b.hp < 24 && b.hp > 0 && G.time % 6 === 0) smoke(b.x, b.y - 6, 5, 'dark', 24, 0, -0.4, 0.3);
+    if (b.hp <= 0) { b.dead = true; G.props.splice(i, 1); explosion(b.x, b.y, 1.1); blast(b.x, b.y, 90, 60); Bus.emit('boom', b.x, b.y, 1.1); propBlast(b.x, b.y, 90, 40); } }
+}
+function propBlast(x, y, r, dmg) {
+  for (const q of G.peds) { const d = Math.hypot(q.x - x, q.y - y); if (q.state !== 'dead' && d < r) { hurtPed(q, null, dmg * (1 - d / r) + 6, (q.x - x) / (d + 1), (q.y - y) / (d + 1)); q.burnT = 60; } }
+  for (const b of G.props) { const d = Math.hypot(b.x - x, b.y - y); if (d < r && d > 0) b.hp -= 14 + 20 * (1 - d / r); }
+  for (const d of G.drones) if (Math.hypot(d.x - x, d.y - y) < r) d.hp -= dmg;
+}
+function drawProps() {
+  for (const b of G.props) { if (!onScreen(b.x, b.y, 20)) continue;
+    ctx.globalAlpha = 0.5; ctx.drawImage(shadowSprite(6, 4), b.x - 18 + 2, b.y - 16 + 5); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#7a1620'; ctx.fillRect(b.x - 6, b.y - 8, 12, 14); ctx.fillStyle = '#c42a38'; ctx.fillRect(b.x - 5, b.y - 9, 10, 4); ctx.fillStyle = '#2a0a10'; ctx.fillRect(b.x - 6, b.y - 3, 12, 1.4); ctx.fillRect(b.x - 6, b.y + 2, 12, 1.4);
+    ctx.fillStyle = '#ffd84a'; ctx.fillRect(b.x - 2, b.y - 6.5, 4, 1.6); }
+}
+// ---- Verbündete Kampfdrohnen (Power-up) ----
+function updateAllyDrones() {
+  const p = G.player, A = G.allyDrones; if (!p) return;
+  if (G.pu.drones > 0 && !A.length) for (let k = 0; k < 2; k++) A.push({ x: p.x, y: p.y, a: k * Math.PI, cd: 10 + k * 8 });
+  if (G.pu.drones <= 0 && A.length) A.length = 0;
+  for (const d of A) { d.a += 0.05; const tx = p.x + Math.cos(d.a) * 40, ty = p.y + Math.sin(d.a) * 40; d.x += (tx - d.x) * 0.15; d.y += (ty - d.y) * 0.15;
+    if (--d.cd <= 0) { let best = null, bd = 300; for (const q of G.peds) if (q.team === 'od' && q.state !== 'dead' && q.state !== 'down') { const dd = Math.hypot(q.x - d.x, q.y - d.y); if (dd < bd) { bd = dd; best = q; } } for (const e of G.drones) { const dd = Math.hypot(e.x - d.x, e.y - d.y); if (dd < bd) { bd = dd; best = e; } }
+      if (best) { d.cd = 22; const a = Math.atan2(best.y - d.y, best.x - d.x); G.bullets.push({ x: d.x, y: d.y, vx: Math.cos(a) * 14, vy: Math.sin(a) * 14, life: 30, dmg: 8 }); Aud.play('pistole', { x: d.x, y: d.y, gain: 0.4, cat: 'sfx', rate: 1.6 }); } else d.cd = 10; } }
+}
+function drawAllyDrones() { for (const d of G.allyDrones) { ctx.globalAlpha = 0.9; ctx.drawImage(glowSprite('#9dff4a'), d.x - 8, d.y - 12, 16, 16); ctx.globalAlpha = 1; ctx.fillStyle = '#101a10'; ctx.fillRect(d.x - 3, d.y - 8, 6, 3); } }
+function drawGrenades() { for (const g of G.grenades) { ctx.globalAlpha = 0.9; ctx.drawImage(glowSprite('#3fe8ff'), g.x - 6, g.y - 6 - g.z, 12, 12); ctx.globalAlpha = 1; } }
+// Power-up einsammeln
+function takePowerup(type) {
+  const P = POWERUPS[type], p = G.player; floatText(p.x, p.y - 20, P.name, P.color, 13);
+  if (P.dur) G.pu[type] = P.dur * 60;
+  else if (type === 'repair') p.hp = Math.min(p.maxHp, p.hp + 40);
+  else if (type === 'vest') G.armor = 100;
+  else if (type === 'bribe') { if (G.wanted.level > 0) { G.wanted.pts = Math.max(0, G.wanted.pts - 1); G.wanted.level = Math.max(0, G.wanted.level - 1); } }
+  else if (type === 'empwave') empBurst(p.x, p.y, 220);
+  Aud.play('kasse', { gain: 0.6, cat: 'ui', bus: 'ui', rate: 1.4 });
+}
+function initCrates() {
+  const rng = mulberry(C.CITY_SEED ^ 0x77aa), types = Object.keys(POWERUPS); G.crates = [];
+  for (const d of ['docks', 'neon', 'krone']) { let n = 0, tries = 0; while (n < 6 && tries++ < 2000) {
+    const tx = 4 + Math.floor(rng() * (World.W - 8)), ty = 4 + Math.floor(rng() * (World.H - 8)); if (World.tiles[ty * World.W + tx] !== TK.SIDEWALK || districtAt(tx).id !== d) continue;
+    const x = (tx + 0.5) * C.TILE, y = (ty + 0.5) * C.TILE; if (World.blocked(x, y, 10)) continue; G.crates.push({ x, y, type: types[Math.floor(rng() * types.length)], on: true, t: 0, bob: rng() * 6 }); n++; } }
+}
+function updateCrates() {
+  const p = G.player; if (!p) return;
+  for (const c of G.crates || []) { c.bob += 0.08; if (!c.on) { if (--c.t <= 0) c.on = true; continue; }
+    if (Math.hypot(c.x - p.x, c.y - p.y) < (p.veh ? 30 : 18)) { c.on = false; c.t = 3 * 60 * 60; takePowerup(c.type); } }
+}
+function drawCrates(layer) {
+  for (const c of G.crates || []) { if (!c.on || !onScreen(c.x, c.y, 24)) continue; const y = c.y + Math.sin(c.bob) * 1.5;
+    if (layer === 'body') { ctx.globalAlpha = 0.5; ctx.drawImage(shadowSprite(7, 5), c.x - 19 + 2, y - 17 + 6); ctx.globalAlpha = 1; ctx.fillStyle = '#1a1230'; ctx.fillRect(c.x - 7, y - 7, 14, 14); ctx.strokeStyle = POWERUPS[c.type] ? '#ffd84a' : '#fff'; ctx.lineWidth = 1.4; ctx.strokeRect(c.x - 6.3, y - 6.3, 12.6, 12.6); ctx.fillStyle = '#ffd84a'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.fillText('?', c.x, y + 4); }
+    else { ctx.globalAlpha = 0.45 + 0.2 * Math.sin(c.bob * 1.5); ctx.drawImage(glowSprite('#ffd84a'), c.x - 16, y - 16, 32, 32); ctx.globalAlpha = 1; } }
 }
 function updateBullets() {
   for (let i = G.bullets.length - 1; i >= 0; i--) {
     const b = G.bullets[i]; let dead = --b.life <= 0;
+    if (b.rocket && G.time % 2 === 0) { smoke(b.x, b.y, 6, 'light', 22, 0, 0, 0.4); glow(b.x, b.y, 10, '#ffb060', 6); }
     for (let k = 0; k < 2 && !dead; k++) {
       b.x += b.vx / 2; b.y += b.vy / 2;
+      for (const pr of G.props) if (Math.abs(pr.x - b.x) < 9 && Math.abs(pr.y - b.y) < 10) { pr.hp -= b.dmg; sparks(b.x, b.y, 3, '#ffd27a', 3); dead = true; break; }
+      if (dead) break;
       if (World.blocked(b.x, b.y, 1)) { sparks(b.x, b.y, 4, '#ffd27a', 3, Math.atan2(-b.vy, -b.vx), 0.9); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; }
       for (const q of G.peds) { if (q.state === 'dead' || Math.abs(q.x - b.x) > 11 || Math.abs(q.y - b.y) > 11) continue;
         if (Math.hypot(q.x - b.x, q.y - b.y) < (q.state === 'down' ? 6 : 9)) { const m = Math.hypot(b.vx, b.vy); damagePed(q, b.dmg, b.vx / m, b.vy / m, 'bullet'); dead = true; break; } }
@@ -144,7 +259,7 @@ function updateBullets() {
       if (dead) break;
       for (const v of G.vehicles) { if (Math.abs(v.x - b.x) > 90 || Math.abs(v.y - b.y) > 90 || (v.driver === G.player)) continue; if (vehDist(v, b.x, b.y) < 2) { damageVeh(v, b.dmg * 0.4, 'bullet'); sparks(b.x, b.y, 4, '#ffd27a', 3, Math.atan2(-b.vy, -b.vx), 0.9); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; } }
     }
-    if (dead) G.bullets.splice(i, 1);
+    if (dead) { if (b.rocket) { explosion(b.x, b.y, 1.7); blast(b.x, b.y, 130, 90); propBlast(b.x, b.y, 120, 70); Bus.emit('boom', b.x, b.y, 1.7); } G.bullets.splice(i, 1); }
   }
 }
 function drawBullets() {                                                       // Leuchtspur (additiv)
