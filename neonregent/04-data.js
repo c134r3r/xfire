@@ -139,3 +139,11 @@ const LOOT = {
   truhe:        { n: 'Truhe', cr: [30, 90], f: 0.5 },
   kasse:        { n: 'Kasse', cr: [15, 60], f: 0.15 }
 };
+
+// ---- Waffen (MS7 Einstieg): Fäuste sind immer da; die Pistole kauft man beim Waffenhändler (WORLD.md §6) ----
+// cd = Ticks zwischen zwei Aktionen, dmg = Schaden, range = Reichweite (px), speed = Geschossgeschwindigkeit (px/Tick), spread = Streuung (rad)
+const WEAPONS = {
+  faust:   { name: 'FAUST', melee: true, cd: 15, dmg: 7, range: 40, arc: 1.0 },
+  pistole: { name: 'PISTOLE', cd: 13, dmg: 14, speed: 15, range: 560, spread: 0.035, price: 120, ammoPrice: 40, pack: 24, maxAmmo: 99 }
+};
+const COMIC = ['PAFF!', 'WUMM!', 'KLATSCH!', 'ZACK!', 'BAMM!', 'PENG!'];

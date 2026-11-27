@@ -265,7 +265,7 @@ function render() {
   }
 
   // 7. Additiver FX-Pass: Glows, Funken, Ringe, Glut (über den Dächern: Explosionen sollen sichtbar bleiben)
-  ctx.globalCompositeOperation = 'lighter'; if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter'; drawBullets(); if (!ABL.has('novehicles')) drawVehicles('glow'); drawPickups('glow'); if (!ABL.has('nopeds')) drawPedGlow(); drawFx(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
   // 8. Rauch (normal geblendet)
   for (const q of G.parts) {
@@ -320,10 +320,27 @@ function drawFx() {
   ctx.globalAlpha = 1;
 }
 
-// Spieler zu Fuß: Rig mit Beinen/Armen, Blickrichtung = Zielrichtung, Laufphase aus zurückgelegter Strecke; Ausweichrolle = Salto
+// Spieler zu Fuß: Rig mit Beinen/Armen, Blickrichtung = Zielrichtung, Laufphase aus zurückgelegter Strecke.
+// Abrollen: Körper streckt/staucht sich in Rollrichtung (Abrollen von oben = Vor-/Rückkippen), niedrige Haltung, Nachbilder, Schatten.
+// Schlag: der Schlagarm streckt sich mit Faust aus dem Torso.
 function drawPlayer(p) {
+  const des = G.weapon === 'pistole' ? PLAYER_ARMED : PLAYER_DESIGN, f = Math.floor(p.walk / 7.5) & 7;
+  if (p.dodge > 0) {
+    const N = Math.round(C.DODGE_S * 60), k = 1 - p.dodge / N, ang = Math.atan2(p.rdy, p.rdx), ph = k * TAU * 1.5, sq = 0.5 + 0.5 * Math.abs(Math.cos(ph));
+    ctx.globalAlpha = 0.45; ctx.drawImage(shadowSprite(9, 6), p.x - 12 + 3, p.y - 9 + 5); 
+    for (const tr of p.trail || []) { ctx.globalAlpha = 0.16 * (1 - k) + 0.05; ctx.save(); ctx.translate(tr.x, tr.y); ctx.rotate(ang); ctx.scale(0.9, 1.1); ctx.drawImage(personFrame(des, 3), -22, -22, 44, 44); ctx.restore(); }
+    ctx.globalAlpha = 1; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang); ctx.scale(sq * 1.25, 1.12 - 0.12 * sq);                                       // x = Rollrichtung
+    ctx.drawImage(personFrame(des, 2), -22, -22, 44, 44); ctx.restore(); ctx.globalAlpha = 1; return;
+  }
   ctx.globalAlpha = 0.7; ctx.drawImage(shadowSprite(9, 6), p.x - 12 + 3, p.y - 9 + 5); ctx.globalAlpha = 1;
-  const f = Math.floor(p.walk / 7.5) & 7;
-  if (p.dodge > 0) { const k = 1 - p.dodge / Math.round(C.DODGE_S * 60); drawPerson(p.x, p.y, p.a + k * TAU * (Math.cos(p.a) * p.dvx + Math.sin(p.a) * p.dvy >= 0 ? 1 : -1), PLAYER_DESIGN, f, { scale: 1.0, alpha: 0.9 }); }
-  else drawPerson(p.x, p.y, p.a, PLAYER_DESIGN, f, { scale: 1.3 });
+  const rec = p.recoil > 0 ? p.recoil * 0.35 : 0;
+  drawPerson(p.x - Math.cos(p.a) * rec, p.y - Math.sin(p.a) * rec, p.a, des, f, { scale: 1.3 });
+  if (p.punchT > 0) {                                                                                                                     // Schlagarm mit Faust (Handschuh in Neon-Cyan)
+    const t = 1 - p.punchT / 9, ext = Math.sin(t * Math.PI), len = (p.punchHook ? 12 : 10) * ext;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a + (p.punchHook ? -p.punchSide * 0.35 * (1 - t) : 0)); ctx.scale(1.3, 1.3);
+    ctx.fillStyle = shade(des.coat, -22); ctx.fillRect(0, p.punchSide * 6.8 - 1.8, 4 + len, 3.6);
+    ctx.fillStyle = '#3fe8ff'; ctx.beginPath(); ctx.arc(5 + len, p.punchSide * 6.8, 2.7, 0, TAU); ctx.fill(); ctx.fillStyle = des.skin; ctx.beginPath(); ctx.arc(4 + len, p.punchSide * 6.8, 1.6, 0, TAU); ctx.fill();
+    if (ext > 0.8) { ctx.globalAlpha = 0.5; ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-1, p.punchSide * 5); ctx.lineTo(3 + len, p.punchSide * 6.8); ctx.stroke(); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
 }

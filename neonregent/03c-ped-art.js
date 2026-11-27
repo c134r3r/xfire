@@ -22,7 +22,8 @@ const PED_DESIGNS = (() => {
   }
   return out;
 })();
-const PLAYER_DESIGN = { id: 'p', voice: 'mann', coat: '#34455f', pants: '#1a2230', skin: '#d9b08a', hair: '#0c0e14', shoe: '#0a0c12', hat: 'visor', pack: false, umb: null, glow: '#3fe8ff', trim: '#3fe8ff', scale: 1.08, wide: 1.1, gun: true };
+const PLAYER_DESIGN = { id: 'p', gun: false, voice: 'mann', coat: '#34455f', pants: '#1a2230', skin: '#d9b08a', hair: '#0c0e14', shoe: '#0a0c12', hat: 'visor', pack: false, umb: null, glow: '#3fe8ff', trim: '#3fe8ff', scale: 1.08, wide: 1.1 };
+const PLAYER_ARMED = Object.assign({}, PLAYER_DESIGN, { id: 'pg', gun: true });     // Pistole in der rechten Hand
 function pickDesign(rnd) { return PED_DESIGNS[Math.floor(rnd() * PED_DESIGNS.length)]; }
 
 function pRect(g, x, y, w, h, c, r = 1.2) { g.fillStyle = c; g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); g.fill(); }

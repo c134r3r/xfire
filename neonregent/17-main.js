@@ -7,7 +7,7 @@
 // ------------------------------------------------------------------
 // Spielstart: Stadt steht (Boot), Spieler auf dem Terminalplatz (Landmarke t)
 function startGame(scene) {
-  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
+  G.parts.length = 0; G.texts.length = 0; G.trauma = 0; G.zoomPunch = 0; G.time = 0; G.freeze = 0; G.heat = 0; G.credits = 0; G.sceneEvents = null; G.mapOpen = false; G.peds.length = 0; G.pickups.length = 0; G.barks.length = 0; G.stats = { peds: 0, finds: 0, cr: 0 }; G.finds = {}; G.bullets.length = 0; G.weapon = 'faust'; G.own = { faust: true, pistole: false }; G.ammo = { pistole: 0 }; G.inside = null; Interiors.cur = null; for (const b of Interiors.list) b.cut = 1; for (const I of Interiors.gen.values()) for (const l of I.loot) l.opened = false; for (const v of G.vehicles) { v.driver = null; }
   G.vehicles = G.vehicles.filter(v => !v.ai);
   const c = G.city.landmarks.t.center, f = World.freeSpot(c.x, c.y);
   G.player = newPlayer(f.x, f.y); G.zoomBase = C.ZOOM_FOOT; G.sceneLabel = '';
@@ -76,6 +76,7 @@ function step() {
   if (G.in.mapP) { setMap(true); return; }
   if (G.sceneEvents) for (const e of G.sceneEvents) if (e[0] === G.time) e[1]();
   updatePlayer();
+  updateCombat();
   Interiors.update();
   updateVehicles();
   if (!ABL.has('nosim')) { updateTraffic(); updatePeds(); }
@@ -181,6 +182,8 @@ window.NR_TEST = {
   interiors: () => Interiors.list.length,
   genInterior: i => { const b = Interiors.list[i]; return Interiors.ensure(b); },
   interiorInfo: () => Interiors.list.map(b => ({ id: b.id, kind: b._kind, d: districtAt(b.x0 / C.TILE).id })),
+  give: (w, n = 24) => { G.own[w] = true; if (w === 'pistole') G.ammo.pistole = Math.min(99, G.ammo.pistole + n); setWeapon(w); },
+  weapon: () => ({ w: G.weapon, ammo: G.ammo.pistole, own: G.own }),
   blockedAt: (x, y) => World.blocked(x, y, C.PED_R),
   tileAt: (x, y) => World.tile(x, y),
   explosion(x, y, s) { explosion(x, y, s); },

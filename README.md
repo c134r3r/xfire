@@ -474,18 +474,21 @@ Plan, world data and story live in `docs/neon-regent/` (`PLAN.md` is the entry p
 - **Buildings:** about 40 buildings are enterable (all services, story places and ~10 % of the rest, spread over all districts). Their doors glow
   warm. Walking in lifts the roof and shows the floor plan (rooms, doors, furniture, residents, shop keepers). `E` searches lockers, drawers,
   fridges, safes and tills and talks to residents; 29 collectable finds with their own jokes (list in the pause menu).
+- **Fighting:** without a weapon the hero boxes (jab, jab, hook; fire = left mouse button, `J`, or the touch fire button): pedestrians get knocked
+  out and drop pocket money. A pistol (120 CR at the weapon dealer, `E` in his shop) adds shooting incl. drive-by; gunshots panic the crowd.
+  `Q`/`1`/`2` switch weapons. The dodge is now a proper low roll (tumbling squash, afterimages, splash, recovery).
 - **Vehicles:** ten retro-futuristic cyberpunk classes incl. light-cycle courier bike and hoverboards, arcade physics, drift, crashes, fire,
   chain explosions, parked cars (`F` breaks in), boost, horn.
 - **Sound:** per-class engines, tyres, crashes, rain, per-district hum, footsteps, room atmospheres (bar bass leaks through the door), and
   five dystopian 80s synth tracks (`U` = next).
 - **Touch:** floating twin sticks plus context buttons (incl. a "take" button); driving uses the direct mode (stick = heading).
-Keyboard: `WASD` move/drive, mouse aim, `Shift` sprint/boost, `Space` roll/handbrake, `F` enter/exit/carjack, `E` search/talk, `H` horn, `Tab` map,
+Keyboard: `WASD` move/drive, mouse aim, `LMB`/`J` punch/shoot, `Q` weapon, `Shift` sprint/boost, `Space` roll/handbrake, `F` enter/exit/carjack, `E` search/talk, `H` horn, `Tab` map,
 `U` next track, `P` pause, `M` mute. Gates are closed unless `?debug=1` or `?gates=open`.
 Open `neonregent.html` directly (works from `file://`; no build step). `?debug=1`: `F8` spawn vehicle, `B` explosion, `V` scream, `N` run-over,
 `Z` panic, `X` execution, `K` MANDAT. `?scene=<name>` (e.g. `cars`, `drive`, `hover`, `interior`) loads a deterministic test scene; hash `#nosim`,
 `#nopeds`, `#novehicles`, `#norain`, `#nolightmap` switch passes off for measurements.
 Tests (all headless): `smoke.mjs` (scenes, errors, timing), `walk.mjs` (zone plan, reachability), `vehicles.mjs` (physics, crashes, touch),
-`peds.mjs` (population, run-over, panic, traffic flow, carjack), `interiors.mjs` (floor plans reachable, enter/exit, loot), `audio.mjs` (all sounds + tracks as WAV).
+`peds.mjs` (population, run-over, panic, traffic flow, carjack), `interiors.mjs` (floor plans reachable, enter/exit, loot), `combat.mjs` (punches, KO, pistol, shop, roll, drive-by, touch fire), `audio.mjs` (all sounds + tracks as WAV).
 
 ## Releasing
 

@@ -208,14 +208,20 @@ const Interiors = {
   nearest(I) {
     const p = G.player; let best = null, bd = 34;
     for (const l of I.loot) { if (l.opened) continue; const d = Math.hypot(Math.max(l.x - p.x, 0, p.x - (l.x + l.w)), Math.max(l.y - p.y, 0, p.y - (l.y + l.h))); if (d < bd) { bd = d; best = { k: 'loot', o: l, x: l.x + l.w / 2, y: l.y, label: LOOT[l.type].n }; } }
-    for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y) - 8; if (d < bd) { bd = d; best = { k: 'npc', o: n, x: n.x, y: n.y - 10, label: n.role === 'wirt' || n.role === 'haendler' ? 'ANSPRECHEN · ' + n.role.toUpperCase() : 'ANSPRECHEN' }; } }
+    for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y) - 8; if (d < bd) { bd = d; best = { k: 'npc', o: n, x: n.x, y: n.y - 10, label: n.role === 'haendler' ? (G.own.pistole ? `MUNITION KAUFEN · ${WEAPONS.pistole.ammoPrice} CR` : `PISTOLE KAUFEN · ${WEAPONS.pistole.price} CR`) : n.role === 'wirt' ? 'NUDELSUPPE · 8 CR' : 'ANSPRECHEN' }; } }
     return best;
   },
   interact(I) {
     const t = this.nearest(I); if (!t) return; this.talkCd = 24;
     if (t.k === 'npc') {
       const n = t.o; let line;
-      if (n.role === 'wirt') {                                                  // Nudelsuppe: 8 CR, +25 Vital
+      if (n.role === 'haendler') {                                              // Pistole 120 CR, Munition 40 CR je 24 Schuss
+        const w = WEAPONS.pistole;
+        if (!G.own.pistole) { if ((G.credits || 0) >= w.price) { G.credits -= w.price; G.own.pistole = true; G.ammo.pistole = w.pack; setWeapon('pistole'); line = 'Pistole, geölt, 24 Schuss. Garantie: bis zur Tür. Viel Spaß – und nicht auf mich zielen.'; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); } else line = `Pistole: ${w.price} CR. Ohne Credits gibt es nur Prospekte und gute Ratschläge.`; }
+        else if (G.ammo.pistole >= w.maxAmmo) line = 'Du hast schon mehr Munition als Freunde. Geh nach Hause.';
+        else if ((G.credits || 0) >= w.ammoPrice) { G.credits -= w.ammoPrice; G.ammo.pistole = Math.min(w.maxAmmo, G.ammo.pistole + w.pack); line = `${w.pack} Schuss, ${w.ammoPrice} CR. Der Regent dankt für deinen Beitrag zur Ordnung.`; Aud.play('kasse', { gain: 0.8, cat: 'ui', bus: 'ui' }); }
+        else line = `Munition: ${w.ammoPrice} CR für ${w.pack} Schuss. Kreide gibt es bei mir nicht.`;
+      } else if (n.role === 'wirt') {                                                  // Nudelsuppe: 8 CR, +25 Vital
         if ((G.credits || 0) >= 8) { G.credits -= 8; G.player.hp = Math.min(G.player.maxHp, G.player.hp + 25); line = 'Nudelsuppe? Acht Credits. Schmeckt nach Salz, wirkt wie Medizin.'; Aud.play('kasse', { gain: 0.7, cat: 'ui', bus: 'ui' }); floatText(G.player.x, G.player.y - 18, '+25 VITAL · −8 CR', '#7dffd8', 12); }
         else line = 'Ohne Credits keine Suppe. Das ist keine Willkür. Das ist Ordnung.';
       } else line = barkPick(STR.barks[I.kind === 'wohnung' || I.kind === 'villa' || I.kind === 'huette' ? 'home' : ROOM_SOUND[I.leaves[0].type] === 'bar' ? 'guest' : 'shop']);

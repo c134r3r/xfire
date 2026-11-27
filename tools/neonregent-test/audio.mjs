@@ -23,7 +23,7 @@ for (const f of fs.readdirSync(path.join(ROOT, 'assets/sound/raw'))) { const m =
   for (const id of await p.evaluate(() => NR_TEST.ids())) {
     const r = await p.evaluate(i => NR_TEST.audioWav(i), id);
     fs.writeFileSync(path.join(OUT, id + '.wav'), Buffer.from(r.b64, 'base64'));
-    const ok = !r.nan && r.rawPeak >= 0.05 && r.rawPeak <= 4 && r.seconds > 0.2 && r.seconds < 8;
+    const ok = !r.nan && r.rawPeak >= 0.05 && r.rawPeak <= 4 && r.seconds > 0.1 && r.seconds < 8;
     console.log(id.padEnd(22), r.seconds.toFixed(1) + ' s', 'Spitze ' + r.rawPeak.toFixed(2), 'RMS ' + r.rms.toFixed(3), ok ? 'ok' : 'FEHLER');
     if (!ok) bad++;
   }

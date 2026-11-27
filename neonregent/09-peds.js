@@ -6,7 +6,7 @@
 
 let PED_ID = 1;
 function newPlayer(x, y) {
-  return { x, y, vx: 0, vy: 0, a: 0, r: C.PED_R, hp: 100, maxHp: 100, walk: 0, stride: 0, stamina: C.STAMINA, dodge: 0, dodgeCd: 0, veh: null, surface: 'beton', design: PLAYER_DESIGN };
+  return { x, y, vx: 0, vy: 0, a: 0, r: C.PED_R, hp: 100, maxHp: 100, walk: 0, stride: 0, stamina: C.STAMINA, dodge: 0, dodgeCd: 0, veh: null, cd: 0, punchT: 0, recoil: 0, surface: 'beton', design: PLAYER_DESIGN };
 }
 
 function updatePlayer() {
@@ -17,9 +17,18 @@ function updatePlayer() {
   const sp = sprint ? C.PLAYER_SPRINT : C.PLAYER_WALK;
   p.stamina = clamp(p.stamina + (sprint ? -C.STAMINA_DRAIN : C.STAMINA_REGEN), 0, C.STAMINA);
   if (p.dodgeCd > 0) p.dodgeCd--;
-  if (i.dodgeP && p.dodgeCd <= 0 && p.dodge <= 0) { p.dodge = Math.round(C.DODGE_S * 60); p.dodgeCd = Math.round(C.DODGE_CD_S * 60); p.dvx = (i.mx || Math.cos(p.a)) * 5.2; p.dvy = (i.my || Math.sin(p.a)) * 5.2; Bus.emit('dodge', p); }
-  if (p.dodge > 0) { p.dodge--; p.vx = p.dvx; p.vy = p.dvy; }
-  else { p.vx += (i.mx * sp - p.vx) * 0.2; p.vy += (i.my * sp - p.vy) * 0.2; }
+  const N = Math.round(C.DODGE_S * 60);
+  if (i.dodgeP && p.dodgeCd <= 0 && p.dodge <= 0) {                                    // Abrollen: Richtung = Bewegung (sonst Blick), Tempo fällt über die Rolle ab
+    let rx = i.mx, ry = i.my; const m = Math.hypot(rx, ry); if (m < 0.1) { rx = Math.cos(p.a); ry = Math.sin(p.a); } else { rx /= m; ry /= m; }
+    p.dodge = N; p.dodgeCd = Math.round(C.DODGE_CD_S * 60); p.rdx = rx; p.rdy = ry; p.trail = []; p.recover = 0; Bus.emit('dodge', p);
+    for (let k = 0; k < 4; k++) glow(p.x + rand(-4, 4), p.y + rand(-4, 4), rand(3, 6), '#9fd0ff', 12, -rx * rand(0.4, 1.2), -ry * rand(0.4, 1.2), 0.3);   // Wasserspritzer beim Abdruck
+  }
+  if (p.dodge > 0) {
+    const t = p.dodge / N, sp = 5.6 * (0.42 + 0.58 * t); p.vx = p.rdx * sp; p.vy = p.rdy * sp; p.dodge--;
+    if (p.dodge % 3 === 0) { p.trail.push({ x: p.x, y: p.y, k: t }); if (p.trail.length > 4) p.trail.shift(); }
+    if (p.dodge === 0) { p.recover = 8; for (let k = 0; k < 5; k++) glow(p.x + rand(-5, 5), p.y + rand(-5, 5), rand(3, 7), '#9fd0ff', 14, p.rdx * rand(0.3, 1.5), p.rdy * rand(0.3, 1.5), 0.3); if (World.surface(p.x, p.y) === 'pfuetze') Aud.play('spritzer', { x: p.x, y: p.y, gain: 0.6, cat: 'sfx' }); else Aud.play('schritt_' + (G.inside ? 'platte' : World.surface(p.x, p.y)), { gain: 1.3, rate: 0.8, cat: 'schritt' }); }
+  }
+  else { if (p.recover > 0) { p.recover--; p.vx *= 0.6; p.vy *= 0.6; } p.vx += (i.mx * sp * (p.recover > 0 ? 0.4 : 1) - p.vx) * 0.2; p.vy += (i.my * sp * (p.recover > 0 ? 0.4 : 1) - p.vy) * 0.2; }
   const x0 = p.x, y0 = p.y;
   World.move(p, p.vx, p.vy);
   const v = Math.hypot(p.x - x0, p.y - y0);
@@ -141,6 +150,24 @@ function pedVehicleContacts() {
 
 // ---- Aufnahmen-Ereignisse und Schleife ----
 Bus.on('boom', (x, y, s) => panicAt(x, y, 600, 480));
+Bus.on('gunshot', (x, y) => panicAt(x, y, 400, 420));
+// Allgemeiner Schaden an Personen. src: 'fist' (k.o. statt Tod, Rückstoß), 'bullet' (tötet)
+const KO_BARKS = ['Aua! Ich bin Pazifist!', 'Dafür gibt es Punktabzug!', 'Mein Schirm! Mein Gesicht! In dieser Reihenfolge!', 'Ich habe ein Abo auf Unversehrtheit!', 'Das sage ich dem Regenten!'];
+function damagePed(q, dmg, dx, dy, src) {
+  if (q.state === 'dead') return;
+  pedStopScream(q, 0.03); q.hasT = false; q.umb = null; q.fx = q.x - dx * 40; q.fy = q.y - dy * 40;
+  if (src === 'fist') {
+    q.hp -= dmg; q.vx = dx * 3.4; q.vy = dy * 3.4; q.hitCool = 10; Aud.play('faustschlag', { x: q.x, y: q.y, gain: 1, cat: 'sfx' });
+    Aud.playRec('treffer', q.d.voice, { x: q.x, y: q.y, speaker: q.speaker, gain: 0.9 });
+    if (q.hp <= 0) {                                                                         // K.O.: bewusstlos, Taschengeld, Sternchen
+      q.state = 'down'; q.downT = randi(420, 700); q.ko = true; q.hp = 4; q.painT = 0; q.groanT = 0; G.stats.ko = (G.stats.ko || 0) + 1;
+      if (!q.robbed) { q.robbed = true; G.pickups.push({ x: q.x + rand(-6, 6), y: q.y + rand(-6, 6), type: 'cr', v: Math.max(2, Math.floor(q.cr * 0.5)), life: 1500, bob: 0 }); }
+      witness(q.x, q.y); if (R.fn() < 0.5) bark(q, barkPick(KO_BARKS), 150);
+    } else { q.state = 'flee'; q.panic = 360; q.frozen = 12; q.fx = q.x - dx * 40; q.fy = q.y - dy * 40; if (R.fn() < 0.6) bark(q, barkPick(KO_BARKS), 120); witness(q.x, q.y); }
+    Bus.emit('assault', q, 'fist'); return;
+  }
+  if (src === 'bullet') { if (q.state === 'down' && q.ko) q.ko = false; hurtPed(q, null, dmg, dx, dy); Bus.emit('assault', q, 'bullet'); }
+}
 Bus.on('crash', (v, k) => { if (k > 5) panicAt(v.x, v.y, 200, 300); });
 
 function updatePeds() {
@@ -157,7 +184,7 @@ function updatePeds() {
       p.x += p.vx; p.y += p.vy; p.vx *= 0.86; p.vy *= 0.86; if (World.blocked(p.x, p.y, 4)) { p.x -= p.vx; p.y -= p.vy; p.vx = p.vy = 0; }
       if (p.painT > 0 && --p.painT === 0) Aud.playRec('schmerz', p.d.voice, { x: p.x, y: p.y, speaker: p.speaker, gain: 0.85 });
       if (p.groanT > 0 && --p.groanT === 0 && p.hp < p.maxHp) { Aud.playRec('stoehnen', p.d.voice, { x: p.x, y: p.y, speaker: p.speaker, gain: 0.8 }); p.groanT = randi(120, 240); }
-      if (--p.downT <= 0) { p.state = 'flee'; p.panic = 300; p.hp = Math.max(p.hp, 6); p.hasT = false; p.fx = p.x - Math.cos(p.a) * 40; p.fy = p.y - Math.sin(p.a) * 40; if (R.fn() < 0.5) bark(p, barkPick(STR.barks.getup), 140); }
+      if (--p.downT <= 0) { p.ko = false; p.state = 'flee'; p.panic = 300; p.hp = Math.max(p.hp, 6); p.hasT = false; p.fx = p.x - Math.cos(p.a) * 40; p.fy = p.y - Math.sin(p.a) * 40; if (R.fn() < 0.5) bark(p, barkPick(STR.barks.getup), 140); }
       continue;
     }
     if (p.frozen > 0) { p.frozen--; continue; }

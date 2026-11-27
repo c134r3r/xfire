@@ -39,9 +39,9 @@ const Input = {
     const up = e => { e.preventDefault(); for (const t of e.changedTouches) for (const s of [T.move, T.aim]) if (s.id === t.identifier) s.id = null; };
     c.addEventListener('touchend', up, { passive: false }); c.addEventListener('touchcancel', up, { passive: false });
     // Kontextknöpfe (DOM): halten = Zustand, Antippen = Flanke
-    for (const [id, name] of [['tbEnter', 'enter'], ['tbAct', 'act'], ['tbSprint', 'sprint'], ['tbHorn', 'horn'], ['tbMap', 'map'], ['tbUse', 'use']]) {
+    for (const [id, name] of [['tbEnter', 'enter'], ['tbAct', 'act'], ['tbSprint', 'sprint'], ['tbHorn', 'horn'], ['tbMap', 'map'], ['tbUse', 'use'], ['tbFire', 'fire'], ['tbSwap', 'swap']]) {
       const el = document.getElementById(id); if (!el) continue;
-      el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); T.on = true; T.btn[name] = true; if (name === 'enter') this.edge.KeyF = true; if (name === 'map') this.edge.Tab = true; if (name === 'act') this.edge.Space = true; if (name === 'use') this.edge.KeyE = true; if (typeof Aud !== 'undefined') Aud.init(); }, { passive: false });
+      el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); T.on = true; T.btn[name] = true; if (name === 'enter') this.edge.KeyF = true; if (name === 'map') this.edge.Tab = true; if (name === 'act') this.edge.Space = true; if (name === 'use') this.edge.KeyE = true; if (name === 'swap') this.edge.KeyQ = true; if (typeof Aud !== 'undefined') Aud.init(); }, { passive: false });
       const end = e => { e.preventDefault(); T.btn[name] = false; };
       el.addEventListener('touchend', end, { passive: false }); el.addEventListener('touchcancel', end, { passive: false });
     }
@@ -63,7 +63,7 @@ const Input = {
     o.mx = dx / n; o.my = dy / n;                                   // Laufen, bildschirmrelativ
     o.throttle = k.KeyW || k.ArrowUp ? 1 : 0; o.brake = k.KeyS || k.ArrowDown ? 1 : 0; o.steer = dx;   // Auto "Klassisch" (MS2)
     o.aimMode = 'mouse'; o.ax = m.x; o.ay = m.y;                   // Bildschirmpunkt; aimPoint() macht Welt daraus
-    o.fire = m.down; o.alt = m.right;
+    o.fire = m.down || !!k.KeyJ; o.alt = m.right; o.swapP = this.took('KeyQ');
     o.sprint = !!(k.ShiftLeft || k.ShiftRight); o.boost = o.sprint; o.handbrake = !!k.Space; o.horn = !!k.KeyH;
     o.enterP = this.took('KeyF'); o.interactP = this.took('KeyE') || this.took('Enter'); o.dodgeP = this.took('Space');
     o.weaponNextP = this.wheel > 0; o.weaponPrevP = this.wheel < 0; this.wheel = 0;
@@ -75,8 +75,8 @@ const Input = {
       o.mx = mv.mag > dead ? mv.x : 0; o.my = mv.mag > dead ? mv.y : 0; o.touchDrive = true;
       if (am && am.mag > 0.2) { T.aim.ang = Math.atan2(am.y, am.x); o.fire = am.mag > 0.35; } else if (mv.mag > dead) T.aim.ang = Math.atan2(mv.y, mv.x);
       o.aimMode = 'stick'; o.ax = VIEW_W / 2 + Math.cos(T.aim.ang) * 220; o.ay = VIEW_H / 2 + Math.sin(T.aim.ang) * 220;
-      o.sprint = o.boost = !!T.btn.sprint || mv.mag > 0.96; o.handbrake = !!T.btn.act; o.horn = !!T.btn.horn; o.alt = false;
-      o.throttle = o.brake = o.steer = 0;
+      o.sprint = o.boost = !!T.btn.sprint || mv.mag > 0.96; if (T.btn.fire) o.fire = true; o.handbrake = !!T.btn.act; o.horn = !!T.btn.horn; o.alt = false;
+      o.throttle = o.brake = o.steer = 0; o.swapP = o.swapP || this.took('KeyQ');
     }
     if (this.forced) Object.assign(o, this.forced);
     G.in = o; return o;

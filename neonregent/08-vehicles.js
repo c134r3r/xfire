@@ -168,7 +168,7 @@ function enterVehicle(p, v) {
   if (v.locked && !v.unlocked) {                // Aufbrechen: 1 s, Alarm
     if (!v.breaking) { v.breaking = 60; v.alarm = 240; Bus.emit('alarm', v); } return;
   }
-  v.driver = p; p.veh = v; v.engine = true; v.breaking = 0; p.vx = p.vy = 0; p.stride = 0; p.dodge = 0;
+  v.driver = p; p.veh = v; p.x = v.x; p.y = v.y; v.engine = true; v.breaking = 0; p.vx = p.vy = 0; p.stride = 0; p.dodge = 0;
   Bus.emit('door', v, true);
   HUD.banner(D.name, D.sub, 1500);
 }

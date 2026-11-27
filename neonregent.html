@@ -76,6 +76,9 @@ body.touch .hud-card { padding: 4px 8px; gap: 6px; } body.touch .lbl { font-size
 body.touch .hud-tl, body.touch .hud-tr { top: 6px; gap: 3px; } body.touch .hud-tl { left: 6px; } body.touch .hud-tr { right: 6px; } body.touch #chipTag { font-size: 8px; letter-spacing: 2px; }
 body.touch .tctl { width: 54px; height: 54px; font-size: 9px; } body.touch #tbMap { top: 84px; right: 10px; width: 40px; height: 40px; } body.touch #tbEnter { right: 10px; bottom: 46%; } body.touch #tbAct { right: 76px; bottom: 30%; } body.touch #tbHorn { right: 10px; bottom: 27%; width: 42px; height: 42px; } body.touch #tbSprint { left: 10px; bottom: 50%; } body.touch #tbUse { right: 76px; bottom: 46%; }
 #tbUse { right: 96px; bottom: 44%; }
+#tbFire { right: 16px; bottom: 6%; width: 72px; height: 72px; border-color: rgba(255,59,74,0.6); color: #ffb3ba; } #tbSwap { right: 98px; bottom: 6%; }
+body.touch #tbFire { right: 8px; bottom: 5%; width: 62px; height: 62px; } body.touch #tbSwap { right: 76px; bottom: 6%; }
+#wpnCard.flash { border-color: var(--gold); box-shadow: 0 0 18px rgba(255,216,74,0.6); }
 body.touch #banner { font-size: 30px; letter-spacing: 5px; }
 #debugBox { position: absolute; left: 12px; top: 120px; font: 11px/1.45 ui-monospace, 'DejaVu Sans Mono', monospace; color: #9dff4a;
   background: rgba(0,0,0,0.55); padding: 6px 8px; border-radius: 4px; white-space: pre; display: none; }
@@ -113,6 +116,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
     <div class="hud-tl">
       <div class="hud-card"><span class="lbl">VITAL</span><div class="bar"><i id="hpGhost" style="width:100%"></i><i id="hpFill" style="width:100%"></i></div></div>
       <div class="hud-card"><span id="chipTag">● TREUECHIP AKTIV</span></div>
+      <div class="hud-card" id="wpnCard"><span class="lbl">WAFFE</span><span class="val" id="wpnName" style="min-width:0;text-align:left">FAUST</span><span class="lbl" id="wpnAmmo"></span></div>
       <div class="hud-card" id="vehCard" style="display:none"><span class="lbl" id="vehName">FZ</span><div class="bar"><i id="vehFill" style="width:100%;background:linear-gradient(90deg,#ff3fa4,#ffb3d9)"></i></div><div class="bar" style="width:60px;height:5px"><i id="boostFill" style="width:100%;background:linear-gradient(90deg,#3aa8ff,#9fe6ff)"></i></div></div>
     </div>
     <div class="hud-tr">
@@ -125,7 +129,7 @@ body:not(.ingame) .tbtn, body:not(.touch) .tbtn { display: none !important; }
     <div id="pager"></div>
     <div id="nowPlaying"></div>
     <div id="place" class="hud-card"><span class="lbl">INNENRAUM</span><span class="val" id="placeName"></span></div>
-    <button class="tctl" id="tbEnter">EIN / AUS</button><button class="tctl" id="tbAct">ROLLE</button><button class="tctl" id="tbSprint">SPRINT</button><button class="tctl" id="tbUse" style="display:none">NEHMEN</button><button class="tctl" id="tbHorn">HUPE</button><button class="tctl" id="tbMap">KARTE</button>
+    <button class="tctl" id="tbEnter">EIN / AUS</button><button class="tctl" id="tbAct">ROLLE</button><button class="tctl" id="tbSprint">SPRINT</button><button class="tctl" id="tbFire">SCHLAG</button><button class="tctl" id="tbSwap" style="width:40px;height:40px">WAFFE</button><button class="tctl" id="tbUse" style="display:none">NEHMEN</button><button class="tctl" id="tbHorn">HUPE</button><button class="tctl" id="tbMap">KARTE</button>
     <div id="hint"></div>
     <div id="radarBox"><canvas id="radar" width="168" height="168"></canvas></div>
     <div id="debugBox"></div>

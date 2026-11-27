@@ -343,6 +343,16 @@ function kistaAuf(m) { const dest = m.bus(0, 1, 0.12); m.thump(0, 150, 70, 0.06,
 function fundSnd(m) { const dest = m.bus(0, 1, 0.3); [[0, 784], [0.07, 988], [0.14, 1319]].forEach(([t, f]) => { const o = m.osc('triangle', t, 0.3), e = m.env([[t, 0], [t + 0.005, 0.2], [t + 0.28, 0.0001]]); o.frequency.value = f; o.connect(e); e.connect(dest); }); }
 function kasseSnd(m) { const dest = m.bus(0, 1, 0.2); m.hit(0, 0.02, 'highpass', 3000, 0.7, 0.3, dest); [[0.04, 2200], [0.1, 3300]].forEach(([t, f]) => { const o = m.osc('sine', t, 0.7), e = m.env([[t, 0], [t + 0.003, 0.25], [t + 0.65, 0.0001]]); o.frequency.value = f; o.connect(e); e.connect(dest); }); m.clicks(0.0, 0.1, 6, 2000, 6000, 0.15, dest); }
 
+// ---- Kampf (MS7-Einstieg): Schlag-Luftzug, Faust-Treffer, Pistolenschuss, Klick, Querschläger ----
+function schlagSnd(m) { const dest = m.bus(0, 1, 0.03); m.hit(0, 0.16, 'bandpass', 800, 1.3, 0.5, dest, 2600); m.hit(0.01, 0.1, 'highpass', 3200, 0.7, 0.1, dest); }
+function faustHit(m) { const dest = m.bus(0, 1, 0.06); m.thump(0, 170, 70, 0.1, 0.95, dest); m.hit(0, 0.05, 'lowpass', 700, 0.9, 0.85, dest); m.hit(0, 0.025, 'bandpass', 2400, 2, 0.45, dest); m.clicks(0, 0.04, 3, 1500, 4000, 0.2, dest); }
+function pistolSnd(m) {
+  const dest = m.bus(0, 1, 0.28); m.hit(0, 0.035, 'highpass', 2000, 0.7, 1.0, dest); m.thump(0, 240, 60, 0.12, 0.95, dest);
+  m.hit(0, 0.22, 'bandpass', 1600, 0.8, 0.38, dest, 500); m.hit(0.04, 0.4, 'lowpass', 1300, 0.7, 0.16, dest, 200); m.clicks(0, 0.03, 4, 3000, 8000, 0.2, dest);
+}
+function klickSnd(m) { const dest = m.bus(0, 1, 0.02); m.hit(0, 0.012, 'bandpass', 3200, 3, 0.6, dest); m.hit(0.03, 0.01, 'bandpass', 2400, 3, 0.4, dest); }
+function querschlaegerSnd(m) { const dest = m.bus(0, 1, 0.2); m.hit(0, 0.02, 'highpass', 3000, 0.7, 0.4, dest); const o = m.osc('sine', 0.005, 0.35), e = m.env([[0.005, 0], [0.01, 0.18], [0.3, 0.0001]]); o.frequency.setValueAtTime(m.r(2500, 3600), 0.005); o.frequency.exponentialRampToValueAtTime(m.r(1100, 1700), 0.3); o.connect(e); e.connect(dest); }
+
 // ------------------------------------------------------------------
 // Klangbank-Definitionen: id -> { len (s), variants, cat (Stimmen-Limit), bus, gain, first (zuerst backen), fn(m, variantIndex) }
 // "first" = was das Spiel sofort braucht (Explosion + Schreie); der Rest wird im Hintergrund nachgebacken.
@@ -373,6 +383,11 @@ const SOUND_DEFS = {
   alarm:   { len: 2.4, variants: 1, cat: 'sfx', bus: 'ambience', noiseLen: 2, fn: alarmSnd },
   feuer_loop: { len: 6.6, variants: 1, loop: true, peak: 0.5, bus: 'ambience', cat: 'ambience', noiseLen: 8, fn: fireLoop },
   skid_loop:  { len: 4.8, variants: 1, loop: true, peak: 0.45, bus: 'sfx', cat: 'ambience', noiseLen: 6, fn: skidLoop },
+  schlag:        { len: 0.3, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: schlagSnd },
+  faustschlag:   { len: 0.4, variants: 3, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: faustHit },
+  pistole:       { len: 0.9, variants: 3, cat: 'schuss', bus: 'sfx', noiseLen: 3, fn: pistolSnd },
+  klick:         { len: 0.15, variants: 1, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: klickSnd },
+  querschlaeger: { len: 0.45, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 2, fn: querschlaegerSnd },
   koerper_toedlich: { len: 1.2, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 3, fn: m => bodyImpact(m, true) },
   koerper_verletzt: { len: 1.2, variants: 2, cat: 'sfx', bus: 'sfx', noiseLen: 3, fn: m => bodyImpact(m, false) },
   raum_hum:    { len: 7.6, variants: 1, loop: true, peak: 0.4, bus: 'ambience', cat: 'ambience', noiseLen: 9, fn: m => roomLoop(m, 'hum') },

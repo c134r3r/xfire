@@ -43,6 +43,7 @@ const HUD = {
     const el = $('findsList'), n = Object.keys(G.finds).length;
     el.innerHTML = `<b>FUNDSTÜCKE ${n}/${FUNDE.length}</b> · Credits gesamt aus Beute: ${G.stats.cr}<br>` + (n ? FUNDE.filter(f => G.finds[f.id]).map(f => `<i>${f.n}</i> ×${G.finds[f.id]} – ${f.t}`).join('<br>') : 'Noch nichts gefunden. Durchsuche Spinde, Schubladen und Kühlschränke in begehbaren Gebäuden (Türen leuchten warm).');
   },
+  weaponFlash() { const c = $('wpnCard'); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 400); },
   track(name) { const el = $('nowPlaying'); el.textContent = '♪ ' + name; el.classList.add('on'); clearTimeout(this._tt); this._tt = setTimeout(() => el.classList.remove('on'), 5000); },
   radar() {
     const p = G.player, cv = $('radar'); if (!p || !World.mini) return;
@@ -76,6 +77,7 @@ const HUD = {
     const v = p.veh, vc = $('vehCard'); vc.style.display = v ? 'flex' : 'none';
     if (v) { $('vehName').textContent = VEHICLES[v.cls].name; $('vehFill').style.width = clamp(v.hp / v.maxHp, 0, 1) * 100 + '%'; $('boostFill').style.width = v.boost + '%'; }
     $('tbEnter').textContent = v ? 'AUSSTEIGEN' : (G.nearVeh ? 'EINSTEIGEN' : 'EIN / AUS'); $('tbAct').textContent = v ? 'BREMSE' : 'ROLLE'; $('tbSprint').textContent = v ? 'BOOST' : 'SPRINT'; $('tbHorn').style.display = v ? '' : 'none';
+    const W = WEAPONS[G.weapon]; $('wpnName').textContent = W.name; $('wpnAmmo').textContent = W.melee ? (isTouch ? '' : '[LMB / J]') : '▮ ' + G.ammo.pistole; $('tbFire').textContent = W.melee ? 'SCHLAG' : 'FEUER'; $('tbSwap').style.display = G.own.pistole && isTouch ? 'flex' : 'none';
     const I = Interiors.cur; $('place').classList.toggle('on', !!I); if (I) $('placeName').textContent = I.name;
     const nf = Object.keys(G.finds).length; $('findVal').textContent = nf + '/' + FUNDE.length; $('tbUse').style.display = G.near && isTouch ? 'flex' : 'none';
     this.radar();

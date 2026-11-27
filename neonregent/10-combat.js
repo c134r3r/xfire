@@ -87,3 +87,69 @@ function updateParticles() {
   ps.length = w;
   for (let i = G.texts.length - 1; i >= 0; i--) { const t = G.texts[i]; t.y -= 0.7; if (--t.life <= 0) G.texts.splice(i, 1); }
 }
+
+// ------------------------------------------------------------------
+// Kampf (MS7-Einstieg): Fäuste (immer), Pistole (kaufbar), Geschosse, Drive-by, Waffenwechsel. Feuern = Maus links, J, Touch-Knopf/rechter Stick.
+// Ohne Waffe boxt der Held: Jab, Jab, Haken (dritter Schlag kräftiger). Passanten gehen k.o. statt zu sterben; Kugeln töten.
+// Exportiert: updateCombat, setWeapon, drawBullets, punch, shoot
+// ------------------------------------------------------------------
+function setWeapon(id) {
+  if (!G.own[id] || G.weapon === id) return; G.weapon = id; if (G.player) { G.player.cd = 8; }
+  Aud.play('klick', { gain: 0.6, cat: 'ui', bus: 'ui' }); HUD.weaponFlash();
+}
+function updateCombat() {
+  const p = G.player, i = G.in; if (!p || G.state !== 'play') return;
+  if (p.cd > 0) p.cd--; if (p.punchT > 0) p.punchT--; if (p.recoil > 0) p.recoil--;
+  if (i.weaponSlot === 1) setWeapon('faust'); else if (i.weaponSlot === 2) setWeapon('pistole');
+  if (i.swapP || i.weaponNextP || i.weaponPrevP) setWeapon(G.weapon === 'faust' ? 'pistole' : 'faust');
+  if (i.fire && p.cd <= 0 && !G.mapOpen) { if (WEAPONS[G.weapon].melee) punch(p); else shoot(p); }
+  updateBullets();
+}
+// Faustschlag: Kegel vor dem Helden. Treffer: Rückstoß, Treffer-Laut aus den Aufnahmen, Comic-Wort. Dritter Schlag (Haken) = mehr Schaden.
+function punch(p) {
+  const w = WEAPONS.faust;
+  if (p.veh) { p.cd = 30; floatText(p.x, p.y - 20, 'Fahr lieber.', '#8a93a6', 11); return; }
+  p.cd = w.cd; p.combo = G.time - (p.lastPunch || -99) < 28 ? ((p.combo || 0) + 1) % 3 : 0; p.lastPunch = G.time; p.punchSide = p.combo % 2 ? -1 : 1; p.punchT = 9; p.punchHook = p.combo === 2;
+  const dx = Math.cos(p.a), dy = Math.sin(p.a); p.vx += dx * 1.4; p.vy += dy * 1.4;                           // kleiner Ausfallschritt
+  Aud.play('schlag', { x: p.x, y: p.y, gain: 0.7, cat: 'sfx' });
+  let hits = 0;
+  for (const q of G.peds) {
+    if (q.state === 'dead' || q.npc && false) continue; const rx = q.x - p.x, ry = q.y - p.y, d = Math.hypot(rx, ry);
+    if (d > w.range + q.r || d < 0.01 || Math.abs(angDiff(p.a, Math.atan2(ry, rx))) > w.arc / 2 + (d < 16 ? 1 : 0)) continue;
+    damagePed(q, p.combo === 2 ? 12 : w.dmg, rx / d, ry / d, 'fist'); hits++; if (hits >= 2) break;
+  }
+  if (!hits) for (const I of Interiors.cur ? [Interiors.cur] : []) for (const n of I.people || []) { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < w.range + 8 && Math.abs(angDiff(p.a, Math.atan2(n.y - p.y, n.x - p.x))) < 0.7) { Aud.play('faustschlag', { x: n.x, y: n.y, gain: 0.9, cat: 'sfx' }); bark(n, 'Hey! Hier drin wird nicht geboxt! Nur gegessen.', 180); G.shake = 1; hits++; break; } }
+  if (hits) { G.freeze = Math.max(G.freeze, p.combo === 2 ? 4 : 2); addTrauma(p.combo === 2 ? 0.2 : 0.1); const fx = p.x + dx * 26, fy = p.y + dy * 26; glow(fx, fy, 14, '#fff1c0', 5); sparks(fx, fy, 4, '#ffd27a', 4, p.a, 0.8); floatText(fx, fy - 12, p.combo === 2 ? 'WUMM!' : COMIC[Math.floor(R.fn() * COMIC.length)], '#ffe48a', 12); }
+}
+function shoot(p) {
+  const w = WEAPONS.pistole;
+  if (G.ammo.pistole <= 0) { p.cd = 22; Aud.play('klick', { x: p.x, y: p.y, gain: 0.8, cat: 'sfx' }); floatText(p.x, p.y - 20, 'KEINE MUNITION', '#ff3b4a', 11); return; }
+  G.ammo.pistole--; p.cd = w.cd; p.recoil = 5;
+  const sp = w.spread * (p.veh ? 1.6 : 1), a = p.a + (R.fn() - 0.5) * 2 * sp, c = Math.cos(p.a), s = Math.sin(p.a), ox = p.x + c * 16 - s * 4, oy = p.y + s * 16 + c * 4;
+  G.bullets.push({ x: ox, y: oy, vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed, life: Math.round(w.range / w.speed), dmg: w.dmg });
+  muzzleFlash(ox, oy, p.a, 1); addTrauma(0.05);
+  part({ kind: 'debris', x: p.x + c * 6 - s * 8, y: p.y + s * 6 + c * 8, z: 6, vx: -s * 1.6 + rand(-0.3, 0.3), vy: c * 1.6 + rand(-0.3, 0.3), vz: rand(2, 3.5), size: 1.4, life: 40, rot: 0, vr: 0.4, color: '#c9a227', burning: false, drag: 0.97 });   // Hülse
+  Aud.play('pistole', { x: p.x, y: p.y, gain: 1, cat: 'schuss' }); Bus.emit('gunshot', p.x, p.y);
+}
+function updateBullets() {
+  for (let i = G.bullets.length - 1; i >= 0; i--) {
+    const b = G.bullets[i]; let dead = --b.life <= 0;
+    for (let k = 0; k < 2 && !dead; k++) {
+      b.x += b.vx / 2; b.y += b.vy / 2;
+      if (World.blocked(b.x, b.y, 1)) { sparks(b.x, b.y, 4, '#ffd27a', 3, Math.atan2(-b.vy, -b.vx), 0.9); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; }
+      for (const q of G.peds) { if (q.state === 'dead' || Math.abs(q.x - b.x) > 11 || Math.abs(q.y - b.y) > 11) continue;
+        if (Math.hypot(q.x - b.x, q.y - b.y) < (q.state === 'down' ? 6 : 9)) { const m = Math.hypot(b.vx, b.vy); damagePed(q, b.dmg, b.vx / m, b.vy / m, 'bullet'); dead = true; break; } }
+      if (dead) break;
+      for (const v of G.vehicles) { if (Math.abs(v.x - b.x) > 90 || Math.abs(v.y - b.y) > 90 || (v.driver === G.player)) continue; if (vehDist(v, b.x, b.y) < 2) { damageVeh(v, b.dmg * 0.4, 'bullet'); sparks(b.x, b.y, 4, '#ffd27a', 3, Math.atan2(-b.vy, -b.vx), 0.9); Aud.play('querschlaeger', { x: b.x, y: b.y, gain: 0.5, cat: 'sfx' }); dead = true; break; } }
+    }
+    if (dead) G.bullets.splice(i, 1);
+  }
+}
+function drawBullets() {                                                       // Leuchtspur (additiv)
+  ctx.lineCap = 'round';
+  for (const b of G.bullets) {
+    if (!onScreen(b.x, b.y, 40)) continue; ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffe8a0'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(b.x - b.vx * 1.8, b.y - b.vy * 1.8); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.drawImage(glowSprite('#ffd27a'), b.x - 5, b.y - 5, 10, 10);
+  }
+  ctx.globalAlpha = 1;
+}
