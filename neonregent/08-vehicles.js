@@ -204,7 +204,7 @@ function updateVehicles() {
     const moving = v.vx * v.vx + v.vy * v.vy > 0.0025 || v.w2, active = v.driver || v.burn > 0 || moving || v.ai || (v.mis && v.mis.mode === 'ram');
     if (!active) { updateBurning(v); continue; }
     if (v.dead) { v.vx *= 0.9; v.vy *= 0.9; moveVehicle(v); vehPairs(v); continue; }
-    const ctl = v.driver === p ? driveCtl(v) : v.mis && v.mis.mode === 'ram' ? missionCtl(v) : v.od ? odCarCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
+    const ctl = v.driver === p ? driveCtl(v) : v.mis && (v.mis.mode === 'ram' || v.mis.mode === 'flee') ? missionCtl(v) : v.od ? odCarCtl(v) : v.ai ? trafficCtl(v) : { thr: 0, steer: 0, hb: false, boost: false };
     if (v.driver === p) v.engine = true;
     stepVehicle(v, ctl);
     if (v.driver !== p && !v.ai) { v.vx *= 0.97; v.vy *= 0.97; }

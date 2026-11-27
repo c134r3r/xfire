@@ -294,6 +294,14 @@ const Missions = {
 
 // Steuerung für Mandats-Fahrzeuge: 'ram' (Plünderer rammen das Ziel); 'flee' nutzt den Verkehrsregler (v.ai.fast) in 08-vehicles.js
 function missionCtl(v) {
+  if (v.mis.mode === 'flee') {                                                   // Flucht: auf der Straße dem Verkehrsregler folgen (schneller), sonst zur nächsten Fahrbahn lenken
+    const L = tileLane(v.x, v.y), spd0 = Math.hypot(v.vx, v.vy);
+    if (L && !(v.mfree > 0)) return trafficCtl(v);
+    if (v.mfree === undefined || v.mfree <= 0) { let best = null, bd = 1e9; for (let dy = -7; dy <= 7; dy++) for (let dx = -7; dx <= 7; dx++) { const x = v.x + dx * C.TILE, y = v.y + dy * C.TILE, Lk = tileLane(x, y); if (Lk && !Lk.junction && !World.blocked(x, y, 20, true)) { const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = { x, y }; } } } v.mgo = best; v.mfree = 20; }
+    v.mfree--; const tg = v.mgo || { x: v.x + Math.cos(v.a) * 100, y: v.y + Math.sin(v.a) * 100 }, e = angDiff(v.a, Math.atan2(tg.y - v.y, tg.x - v.x)); v.mstuck = spd0 < 0.4 ? (v.mstuck || 0) + 1 : 0;
+    if (v.mstuck > 50) { v.mrev = 45; v.mstuck = 0; } if (v.mrev > 0) { v.mrev--; return { thr: -1, steer: e > 0 ? -1 : 1, hb: false, boost: false }; }
+    return { thr: spd0 < 3.5 ? 0.9 : 0, steer: clamp(e * 2.2, -1, 1), hb: false, boost: false };
+  }
   const m = v.mis, D = VEHICLES[v.cls], spd = Math.hypot(v.vx, v.vy), tgt0 = G.tags[m.target] || (G.player.veh || G.player), tgt = { x: tgt0.x + (tgt0.vx || 0) * 10, y: tgt0.y + (tgt0.vy || 0) * 10 };
   const dist = Math.hypot(tgt.x - v.x, tgt.y - v.y); v.mrev = v.mrev || 0; v.mstuck = v.mstuck || 0;
   if (G.time - Flow.t >= 15) Flow.build(G.player.x, G.player.y);
