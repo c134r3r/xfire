@@ -11,9 +11,50 @@ const Intro = {
     try { Aud.init(); } catch (e) {}
     this.key = e => { if (['Space', 'Enter', 'Escape', 'KeyE'].includes(e.code)) { e.preventDefault(); this.end(); } };
     this.click = () => this.end(); addEventListener('keydown', this.key, true); el.addEventListener('pointerdown', this.click);
-    this.loop();
+    this.score(); this.loop();
   },
-  end() { if (!this.on) return; this.on = false; cancelAnimationFrame(this.raf); removeEventListener('keydown', this.key, true); const el = document.getElementById('intro'); el.removeEventListener('pointerdown', this.click); el.classList.remove('on'); const cb = this.cb; this.cb = null; if (cb) cb(); },
+  end() { if (!this.on) return; this.on = false; this.scoreStop(); cancelAnimationFrame(this.raf); removeEventListener('keydown', this.key, true); const el = document.getElementById('intro'); el.removeEventListener('pointerdown', this.click); el.classList.remove('on'); const cb = this.cb; this.cb = null; if (cb) cb(); },
+  // Partitur ohne Schlagwerk (15,5 s): Feuer-Rauschen und Drohne in A, Moll-Pad, dissonante Sekunde (B) beim Auge, schneller werdendes Tremolo mit steigendem Glissando,
+  // am Ende leere Quinte A-E-A als breite Fläche, die ausklingt. Läuft über den Musikkanal; die Spielmusik ist währenddessen stumm.
+  score() {
+    const ac = Aud.ac; if (!ac || !Aud.bus.musik) return; const t0 = ac.currentTime + 0.05, T = 15.5, nodes = [], mus = Aud.bus.musik;
+    mus.gain.cancelScheduledValues(t0); mus.gain.setValueAtTime(0, t0);
+    const out = ac.createGain(); out.gain.setValueAtTime(0.0001, t0); out.gain.exponentialRampToValueAtTime(1, t0 + 1.2); out.gain.setValueAtTime(1, t0 + T - 1.6); out.gain.exponentialRampToValueAtTime(0.0001, t0 + T + 0.4);
+    const dl = ac.createDelay(1); dl.delayTime.value = 0.43; const fb = ac.createGain(); fb.gain.value = 0.45; const wet = ac.createGain(); wet.gain.value = 0.4; const lpd = ac.createBiquadFilter(); lpd.type = 'lowpass'; lpd.frequency.value = 1800;
+    out.connect(dl); dl.connect(lpd); lpd.connect(fb); fb.connect(dl); lpd.connect(wet); const master = ac.createGain(); master.gain.value = 0.85 * (Settings.d.vol.musik === undefined ? 0.7 : Settings.d.vol.musik); out.connect(master); wet.connect(master); master.connect(ac.destination);
+    nodes.push(out, master);
+    const env = (g, pts) => { g.gain.setValueAtTime(0.0001, t0); for (const [t, v] of pts) g.gain.linearRampToValueAtTime(Math.max(0.0001, v), t0 + t); };
+    const osc = (type, f, a, b, pts, lp, q = 1, detune = 0) => {                  // Oszillator mit Filter und Hüllkurve; f kann (von,bis) sein
+      const o = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter(); o.type = type; o.detune.value = detune; fl.type = 'lowpass'; fl.Q.value = q;
+      if (Array.isArray(f)) { o.frequency.setValueAtTime(f[0], t0 + a); o.frequency.exponentialRampToValueAtTime(f[1], t0 + b); } else o.frequency.value = f;
+      if (Array.isArray(lp)) { fl.frequency.setValueAtTime(lp[0], t0 + a); fl.frequency.exponentialRampToValueAtTime(lp[1], t0 + b); } else fl.frequency.value = lp;
+      env(g, pts); o.connect(fl); fl.connect(g); g.connect(out); o.start(t0 + a); o.stop(t0 + b + 0.1); nodes.push(o); return g;
+    };
+    // 1 Feuertag (0-3.1): Rumpeln aus Rauschen + tiefe Drohne
+    { const len = ac.sampleRate * 4, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0); let y = 0; for (let i = 0; i < len; i++) { y = y * 0.985 + (Math.random() * 2 - 1) * 0.06; d[i] = y; }
+      const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(900, t0); fl.frequency.exponentialRampToValueAtTime(120, t0 + 3.4); const g = ac.createGain(); env(g, [[0.05, 2.2], [3.2, 0.4], [6, 0.12], [T - 2, 0.1], [T, 0.0001]]); s.connect(fl); fl.connect(g); g.connect(out); s.start(t0); s.stop(t0 + T); nodes.push(s); }
+    osc('sawtooth', 55, 0, T, [[0.3, 0.12], [3, 0.16], [10, 0.22], [T - 1.4, 0.28], [T, 0.0001]], [140, 1500], 2);
+    osc('sawtooth', 55, 0, T, [[0.3, 0.1], [T - 1.4, 0.2], [T, 0.0001]], [140, 1200], 2, 9);
+    osc('sine', 27.5, 0, T, [[0.5, 0.35], [T - 1, 0.4], [T, 0.0001]], 200);
+    // 2 41 Jahre später (3.1-6.2): Moll-Pad A-C-E
+    for (const [f, v] of [[110, 0.07], [130.8, 0.06], [164.8, 0.06], [220, 0.04]]) osc('triangle', f, 3.1, T, [[3.1, 0.0001], [5.5, v], [T - 1.4, v * 1.3], [T, 0.0001]], [300, 2600], 1, (f % 7) - 3);
+    // 3 Auge (6.2-9.3): dissonante kleine Sekunde A-B♭, hohes Glissando
+    osc('sawtooth', 116.5, 6.2, T, [[6.2, 0.0001], [8.2, 0.07], [T - 1.4, 0.1], [T, 0.0001]], [400, 3000], 3);
+    osc('sine', [880, 1760], 6.4, 11, [[6.4, 0.0001], [8.5, 0.05], [11, 0.0001]], 6000);
+    osc('sine', [932, 1865], 6.9, 11.5, [[6.9, 0.0001], [9, 0.04], [11.5, 0.0001]], 6000);
+    // 4 Treuechip (9.3-12.4): Tremolo wird schneller (Streicher-Ostinato ohne Anschlag), Riser
+    { const g = osc('sawtooth', [110, 330], 9.3, 13.2, [[9.3, 0.0001], [10.5, 0.07], [13, 0.1], [13.2, 0.0001]], [500, 5200], 4), lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.setValueAtTime(3, t0 + 9.3); lfo.frequency.exponentialRampToValueAtTime(18, t0 + 13.2); lg.gain.value = 0.05; lfo.connect(lg); lg.connect(g.gain); lfo.start(t0 + 9.3); lfo.stop(t0 + 13.3); nodes.push(lfo); }
+    osc('sawtooth', [220, 1760], 10, 14.4, [[10, 0.0001], [13, 0.05], [14.4, 0.0001]], [800, 7000], 5);
+    // 5 Nummer 7741 (12.4-15.5): offene Quinte A-E-A, breite Fläche
+    for (const [f, v] of [[110, 0.12], [164.8, 0.1], [220, 0.1], [329.6, 0.06]]) { osc('sawtooth', f, 13.4, T + 0.3, [[13.4, 0.0001], [14.3, v], [T - 1.1, v], [T + 0.3, 0.0001]], [900, 2400], 1, -6); osc('sawtooth', f, 13.4, T + 0.3, [[13.4, 0.0001], [14.3, v], [T - 1.1, v], [T + 0.3, 0.0001]], [900, 2400], 1, 6); }
+    this._sc = { nodes, out, t0 };
+  },
+  scoreStop() {
+    const S = this._sc; this._sc = null; if (!S || !Aud.ac) { if (Aud.ac && Aud.bus.musik) Aud.setVol('musik', Settings.d.vol.musik); return; }
+    const t = Aud.ac.currentTime; try { S.out.gain.cancelScheduledValues(t); S.out.gain.setValueAtTime(Math.max(0.0001, S.out.gain.value), t); S.out.gain.exponentialRampToValueAtTime(0.0001, t + 0.4); } catch (e) {}
+    setTimeout(() => { for (const n of S.nodes) { try { n.stop && n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} } }, 600);
+    if (Aud.bus.musik) { Aud.bus.musik.gain.cancelScheduledValues(t); Aud.bus.musik.gain.setValueAtTime(0, t); Aud.bus.musik.gain.setTargetAtTime(Settings.d.vol.musik, t + 0.5, 1.2); }   // Spielmusik blendet danach langsam ein
+  },
   loop() {
     if (!this.on) return; const n = performance.now(); this.t += Math.min(0.1, (n - this.last) / 1000); this.last = n; this.draw();
     if (this.t >= 15.5) { this.end(); return; } this.raf = requestAnimationFrame(() => this.loop());
